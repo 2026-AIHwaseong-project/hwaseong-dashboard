@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>스톱워치</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #0f0f13;
+      color: #fff;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 40px;
+    }
+
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 400;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: #888;
+    }
+
+    .display {
+      position: relative;
+      width: 320px;
+      height: 320px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ring {
+      position: absolute;
+      inset: 0;
+    }
+
+    .ring-bg {
+      fill: none;
+      stroke: #1e1e28;
+      stroke-width: 6;
+    }
+
+    .ring-progress {
+      fill: none;
+      stroke: #4f8cff;
+      stroke-width: 6;
+      stroke-linecap: round;
+      stroke-dasharray: 880;
+      stroke-dashoffset: 880;
+      transform: rotate(-90deg);
+      transform-origin: center;
+      transition: stroke-dashoffset 0.1s linear;
+    }
+
+    .time {
+      font-size: 3.2rem;
+      font-weight: 200;
+      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+      z-index: 1;
+    }
+
+    .ms {
+      font-size: 1.4rem;
+      color: #4f8cff;
+      margin-top: 4px;
+      font-variant-numeric: tabular-nums;
+      z-index: 1;
+    }
+
+    .controls {
+      display: flex;
+      gap: 20px;
+    }
+
+    button {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+
+    button:active {
+      transform: scale(0.93);
+    }
+
+    .btn-start {
+      background: #4f8cff;
+      color: #fff;
+      box-shadow: 0 0 24px #4f8cff55;
+    }
+
+    .btn-start.running {
+      background: #ff5f5f;
+      box-shadow: 0 0 24px #ff5f5f55;
+    }
+
+    .btn-lap {
+      background: #1e1e28;
+      color: #aaa;
+    }
+
+    .btn-lap:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+
+    .btn-reset {
+      background: #1e1e28;
+      color: #aaa;
+    }
+
+    .laps {
+      width: 320px;
+      max-height: 240px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .laps::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .laps::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .laps::-webkit-scrollbar-thumb {
+      background: #333;
+      border-radius: 2px;
+    }
+
+    .lap-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: #1e1e28;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .lap-item.best {
+      border-left: 3px solid #4fffb0;
+    }
+
+    .lap-item.worst {
+      border-left: 3px solid #ff5f5f;
+    }
+
+    .lap-num {
+      color: #555;
+      font-size: 0.8rem;
+      min-width: 48px;
+    }
+
+    .lap-split {
+      color: #888;
+      font-size: 0.82rem;
+    }
+
+    .lap-time {
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Stopwatch</h1>
+
+    <div class="display">
+      <svg class="ring" viewBox="0 0 320 320">
+        <circle class="ring-bg" cx="160" cy="160" r="140"/>
+        <circle class="ring-progress" id="ring" cx="160" cy="160" r="140"/>
+      </svg>
+      <div class="time" id="time">00:00</div>
+      <div class="ms" id="ms">.00</div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-reset" id="btnReset">초기화</button>
+      <button class="btn-start" id="btnStart">시작</button>
+      <button class="btn-lap" id="btnLap" disabled>랩</button>
+    </div>
+
+    <div class="laps" id="laps"></div>
+  </div>
+
+  <script>
+    let startTime = 0;
+    let elapsed = 0;
+    let running = false;
+    let rafId = null;
+    let laps = [];
+    let lapStart = 0;
+
+    const timeEl = document.getElementById('time');
+    const msEl = document.getElementById('ms');
+    const ring = document.getElementById('ring');
+    const btnStart = document.getElementById('btnStart');
+    const btnReset = document.getElementById('btnReset');
+    const btnLap = document.getElementById('btnLap');
+    const lapsEl = document.getElementById('laps');
+
+    const RING_LEN = 880; // 2 * Math.PI * 140 ≈ 880
+
+    function pad(n, len = 2) {
+      return String(n).padStart(len, '0');
+    }
+
+    function formatTime(ms) {
+      const totalSec = Math.floor(ms / 1000);
+      const min = Math.floor(totalSec / 60);
+      const sec = totalSec % 60;
+      const cent = Math.floor((ms % 1000) / 10);
+      return { main: `${pad(min)}:${pad(sec)}`, ms: `.${pad(cent)}` };
+    }
+
+    function updateDisplay(ms) {
+      const { main, ms: msStr } = formatTime(ms);
+      timeEl.textContent = main;
+      msEl.textContent = msStr;
+
+      // ring: one full rotation per 60 seconds
+      const progress = (ms % 60000) / 60000;
+      ring.style.strokeDashoffset = RING_LEN * (1 - progress);
+    }
+
+    function tick() {
+      elapsed = Date.now() - startTime;
+      updateDisplay(elapsed);
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function start() {
+      startTime = Date.now() - elapsed;
+      lapStart = lapStart || startTime;
+      running = true;
+      btnStart.textContent = '정지';
+      btnStart.classList.add('running');
+      btnLap.disabled = false;
+      rafId = requestAnimationFrame(tick);
+    }
+
+    function stop() {
+      running = false;
+      cancelAnimationFrame(rafId);
+      btnStart.textContent = '시작';
+      btnStart.classList.remove('running');
+      btnLap.disabled = true;
+    }
+
+    function reset() {
+      stop();
+      elapsed = 0;
+      lapStart = 0;
+      laps = [];
+      updateDisplay(0);
+      ring.style.strokeDashoffset = RING_LEN;
+      lapsEl.innerHTML = '';
+    }
+
+    function addLap() {
+      const now = Date.now();
+      const lapTime = now - lapStart;
+      lapStart = now;
+      laps.unshift({ num: laps.length + 1, time: lapTime, total: elapsed });
+      renderLaps();
+    }
+
+    function renderLaps() {
+      if (laps.length === 0) return;
+      const times = laps.map(l => l.time);
+      const best = Math.min(...times);
+      const worst = Math.max(...times);
+
+      lapsEl.innerHTML = laps.map((lap, i) => {
+        let cls = '';
+        if (laps.length > 1) {
+          if (lap.time === best) cls = 'best';
+          else if (lap.time === worst) cls = 'worst';
+        }
+        const { main: lapMain, ms: lapMs } = formatTime(lap.time);
+        const { main: totMain, ms: totMs } = formatTime(lap.total);
+        return `
+          <div class="lap-item ${cls}">
+            <span class="lap-num">랩 ${lap.num}</span>
+            <span class="lap-split">${totMain}${totMs}</span>
+            <span class="lap-time">${lapMain}${lapMs}</span>
+          </div>`;
+      }).join('');
+    }
+
+    btnStart.addEventListener('click', () => running ? stop() : start());
+    btnReset.addEventListener('click', reset);
+    btnLap.addEventListener('click', addLap);
+
+    // keyboard shortcuts
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space') { e.preventDefault(); running ? stop() : start(); }
+      if (e.code === 'KeyL' && running) addLap();
+      if (e.code === 'KeyR') reset();
+    });
+
+    updateDisplay(0);
+  </script>
+</body>
+</html>
