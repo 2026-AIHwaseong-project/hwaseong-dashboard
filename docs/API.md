@@ -1,0 +1,542 @@
+# 백엔드 연동 규격서
+
+화성시 버스 수요·공급 미스매칭 대시보드 — 프론트엔드 ↔ 백엔드 API 계약
+
+> **이 문서 한 장이면 백엔드 연동이 끝납니다.**
+> 아래 9개 엔드포인트를 구현하고 `assets/js/config.js` 의 값 두 개만 바꾸면 됩니다.
+> 프론트엔드 코드는 한 줄도 수정할 필요가 없습니다.
+
+---
+
+## 0. 3단계 연동 절차
+
+```
+1) 이 문서의 엔드포인트를 구현한다
+2) assets/js/config.js 를 연다
+     BASE_URL : ''  →  'http://localhost:8000'   (백엔드 주소)
+     USE_MOCK : true →  false
+3) 브라우저 새로고침 — 끝
+```
+
+**점진적 연동**도 가능합니다. 격자 API만 먼저 붙였다면:
+
+```js
+ENDPOINT_OVERRIDES: { 'grid.list': false }   // 이 경로만 실서버, 나머지는 목
+```
+
+**목 데이터가 곧 규격입니다.** 응답 형태가 헷갈리면 `assets/js/mock.js` 의
+해당 함수가 무엇을 돌려주는지 보면 됩니다. 브라우저 콘솔에서 바로 확인할 수도 있습니다.
+
+```js
+HW.mock.handle('grid.list', { period: 'am' })      // 격자 응답 예시
+HW.mock.handle('priorities.list', { period:'am' }) // 우선순위 응답 예시
+```
+
+---
+
+## 1. 공통 규칙
+
+| 항목 | 값 |
+|---|---|
+| 기본 경로 | `{BASE_URL}/api/v1` (`API_PREFIX` 로 변경 가능) |
+| 요청/응답 형식 | `application/json`, UTF-8 |
+| 인증 | 기본 없음. 필요하면 `config.js` 의 `AUTH` 활성화 → `Authorization: Bearer <token>` |
+| 타임아웃 | 일반 15초 / 보고서 120초 |
+
+### CORS
+
+프론트엔드를 백엔드와 다른 포트에서 열면 CORS 허용이 필요합니다.
+
+```python
+# FastAPI 예시
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(CORSMiddleware,
+    allow_origins=["http://localhost:5500", "http://127.0.0.1:5500"],
+    allow_methods=["GET", "POST"], allow_headers=["*"])
+```
+
+### 오류 응답
+
+HTTP 상태 코드 + 아래 형태 중 아무거나. 프론트엔드는 `message` / `detail` / `error` 순으로 찾아 표시합니다.
+
+```json
+{ "message": "period 파라미터가 올바르지 않습니다", "code": "INVALID_PERIOD" }
+```
+
+---
+
+## 2. 엔드포인트 목록
+
+| # | 오퍼레이션 ID | 메서드 | 경로 | 용도 | 우선순위 |
+|---|---|---|---|---|---|
+| 1 | `meta.get` | GET | `/meta` | 시간대·지도경계·단가·산식 | **필수** |
+| 2 | `grid.list` | GET | `/grid?period=` | 격자별 수요/공급/MI + KPI | **필수** |
+| 3 | `priorities.list` | GET | `/priorities?period=&limit=` | 노선 조정 우선순위 | **필수** |
+| 4 | `stops.list` | GET | `/stops` | 정류장 목록 | 필수 |
+| 5 | `routes.list` | GET | `/routes` | 노선 목록 | 필수 |
+| 6 | `stops.profile` | GET | `/stops/{stopId}/profile` | 정류장 시간대별 승하차 | 필수 |
+| 7 | `simulations.run` | POST | `/simulations` | 배치 시뮬레이션 | **필수**(시뮬레이션 화면) |
+| 8 | `reports.draft` | POST | `/reports/draft` | AI 보고서 초안 생성 | **필수**(보고서 기능) |
+| 9 | `reports.export` | POST | `/reports/export` | 서버측 파일 생성(.hwpx) | 선택 |
+
+> 9번은 선택입니다. 구현하지 않으면 프론트엔드가 브라우저에서 직접
+> `.xlsx` / `.rtf` 를 만듭니다(현재 기본 동작). 한글 원본 포맷 `.hwpx` 가
+> 필요할 때만 구현하세요.
+
+---
+
+## 3. 엔드포인트 상세
+
+### 3.1 `GET /meta` — 화면 구성 메타
+
+한 번만 호출되며 캐시됩니다. 지도 경계, 시간대 정의, 배치 수단 단가가 들어갑니다.
+
+```json
+{
+  "region": "화성시",
+  "updatedAt": "2026-08-06",
+  "isMockData": false,
+  "periods": [
+    { "id": "am",    "name": "출근", "label": "07–09", "hours": [7, 9] },
+    { "id": "day",   "name": "낮",   "label": "09–17", "hours": [9, 17] },
+    { "id": "pm",    "name": "퇴근", "label": "17–19", "hours": [17, 19] },
+    { "id": "night", "name": "심야", "label": "22–24", "hours": [22, 24] }
+  ],
+  "grid": {
+    "sizeMeters": 250,
+    "displaySizeMeters": 1000,
+    "crs": "EPSG:4326",
+    "bbox": [126.62, 36.97, 127.17, 37.33],
+    "cellCount": 389
+  },
+  "map": {
+    "viewBox": [0, 0, 960, 640],
+    "boundary": [[152, 96], [214, 84], "… SVG 좌표 폴리곤 …"],
+    "islands": [[[52, 306], "…"]],
+    "labels": {
+      "regions":    [["동탄", 788, 262], "…"],
+      "industrial": [["기아공장", 268, 466], "…"],
+      "neighbors":  [["수원시", 592, 52], "…"]
+    },
+    "scaleBar": { "px": 120, "meters": 5000 }
+  },
+  "cost": { "stop": 42000000, "drt": 180000000, "freq": 95000000, "defaultBudget": 3000000000 },
+  "formula": {
+    "demand":    "D = 0.5·norm(교통카드 승하차) + 0.5·norm(통신 유동인구)",
+    "supply":    "S = 0.78·norm(운행빈도) + 0.22·정류장 커버리지 + 배치효과",
+    "mismatch":  "MI = z(D) − z(S), 수요가중 감쇠 적용",
+    "priority":  "우선순위 = MI⁺ × 수요규모 × (1 + 1.6·고령인구비)"
+  },
+  "effects": [
+    { "type": "stop", "label": "정류장 신설", "icon": "●", "radiusKm": 1.9, "unitKrw": 42000000 },
+    { "type": "drt",  "label": "똑버스 배치", "icon": "◆", "radiusKm": 3.0, "unitKrw": 180000000 },
+    { "type": "freq", "label": "배차 증편",   "icon": "▲", "radiusKm": 2.2, "unitKrw": 95000000 }
+  ]
+}
+```
+
+#### ⚠️ 지도 좌표에 관한 중요한 안내
+
+현재 목 데이터의 `map.boundary` 는 **개략도용 SVG 좌표**입니다.
+실데이터로 바꿀 때 선택지는 두 가지입니다.
+
+| 방식 | 하는 일 | 권장 |
+|---|---|---|
+| **A. 경위도 그대로 보내기** | `boundary` 를 실제 행정경계 GeoJSON 의 `[lon, lat]` 배열로 보내고, 셀에서 `x`/`y` 를 **빼고** `lon`/`lat` 만 보냅니다. 프론트엔드가 `grid.bbox` 기준으로 자동 투영합니다. | ✅ |
+| B. 서버가 투영 | 서버가 SVG 좌표(`x`,`y`)까지 계산해 보냅니다. | 기존 목과 동일 |
+
+> 방식 A를 쓰려면 `boundary` 좌표도 경위도여야 합니다.
+> 프론트엔드의 투영 함수는 `assets/js/core.js` 의 `project()` 이며,
+> `bbox` 를 `viewBox` 에 맞춰 등장방형으로 맞춥니다(화성시 규모에서 충분).
+
+---
+
+### 3.2 `GET /grid?period=am` — 격자 + KPI
+
+지도·산점도·표의 원천 데이터입니다. **가장 중요한 엔드포인트**입니다.
+
+```json
+{
+  "period": "am",
+  "scale": { "miThresholds": [-1.5, -0.75, -0.25, 0.25, 0.75, 1.5], "tripCoef": 3200 },
+  "kpi": {
+    "needCells": 13, "drtCells": 57, "overCells": 0, "totalCells": 389,
+    "needShare": 3.3, "potentialTripsPerDay": 36336,
+    "elderlyTripsPerDay": 2934, "avgMi": 0.002
+  },
+  "cells": [
+    {
+      "id": "G-100",
+      "name": "새솔동 북부",
+      "region": "새솔동",
+      "direction": "북부",
+      "lon": 126.66154, "lat": 37.282568,
+      "x": 162, "y": 90, "size": 24,
+      "demand": 31, "supply": 28,
+      "zDemand": 0.056, "zSupply": -0.129,
+      "mi": 0.185,
+      "flow": 0.3445, "flowTripsPerDay": 1102,
+      "elderlyRatio": 0.06,
+      "coverage": 0.628,
+      "quadrant": "mid", "quadrantLabel": "균형권",
+      "action": "ADD_FREQ", "actionLabel": "증차",
+      "priorityScore": 0,
+      "nearestStopId": "S-021",
+      "adjusted": false,
+      "bins": { "mi": 3, "demand": 3, "supply": 2, "flow": 3 }
+    }
+  ]
+}
+```
+
+#### 셀 필드 명세
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `id` | string | 격자 고유 ID. 시뮬레이션 요청에서 이 값을 씁니다 |
+| `name` / `region` / `direction` | string | 화면 표기용 이름 |
+| `lon` / `lat` | number | 격자 중심 경위도 |
+| `x` / `y` / `size` | number | SVG 좌표(선택). 없으면 `lon/lat` 로 자동 투영 |
+| `demand` / `supply` | number | 0~100 정규화 지수 (화면 표시용) |
+| `zDemand` / `zSupply` | number | 표준화값. **산점도 축이 이 값입니다** |
+| `mi` | number | 미스매칭 지수. `-2.6 ~ +2.6` 로 클리핑 |
+| `flow` | number | 0~1 정규화 유동인구 |
+| `flowTripsPerDay` | number | 일 통행량 환산값 |
+| `elderlyRatio` | number | 0~1 고령인구 비율 |
+| `coverage` | number | 0~1 정류장 커버리지. **0.5 미만이면 배차 증편 불가** |
+| `quadrant` | enum | `need` / `over` / `drt` / `ok` / `mid` |
+| `action` | enum | `NEW_STOP` / `ADD_FREQ` / `DRT` |
+| `priorityScore` | number | 우선순위 점수. `need` 가 아니면 0 |
+| `adjusted` | boolean | 시뮬레이션 배치 효과가 반영된 셀인지 |
+| **`bins`** | object | **채색 등급.** 아래 참고 |
+
+#### `bins` — 서버가 등급까지 계산해야 하는 이유
+
+지도 채색은 `bins` 값으로만 결정됩니다. 프론트엔드는 임계값을 모릅니다.
+
+- `bins.mi` : **0~6** (7단계 발산형). `scale.miThresholds` 로 구간을 나눔
+  - `0~2` = 공급 여유(파랑), `3` = 균형(중립), `4~6` = 공급 부족(빨강)
+- `bins.demand` / `bins.supply` / `bins.flow` : **0~4** (5분위)
+
+> **주의: 분위 기준은 "배치 없음" 상태에서 한 번 고정하고 재사용하세요.**
+> 시간대마다 또는 시뮬레이션마다 다시 잡으면 전후 비교가 서로 다른 자로 재는 셈이 됩니다.
+> 목 구현은 `mock.js` 의 `NORM` 변수가 이 역할을 합니다.
+
+#### 사분면(`quadrant`) 판정 기준 (목 구현 기준)
+
+```
+need : zD ≥  0.20  AND  MI ≥ 0.55            → 고수요·저공급 (증차/신설)
+over : zD ≤ -0.30  AND  zS ≥ 0.30            → 저수요·고공급 (효율화)
+drt  : zD ≤ -0.35  AND  zS ≤ -0.35  AND 유동인구 ≥ 30분위 → 수요응답형
+ok   : zD ≥  0.25  AND  zS ≥ 0.25            → 적정
+mid  : 그 외                                   → 균형권
+```
+
+---
+
+### 3.3 `GET /priorities?period=am&limit=10` — 우선순위
+
+```json
+{
+  "period": "am",
+  "items": [
+    {
+      "rank": 1,
+      "cellId": "G-453",
+      "name": "향남산단 중심",
+      "mi": 1.02,
+      "priorityScore": 1.1398,
+      "demand": 72, "supply": 44,
+      "flowTripsPerDay": 2558,
+      "elderlyRatio": 0.127,
+      "coverage": 0.361,
+      "action": "NEW_STOP", "actionLabel": "신설",
+      "nearestStopId": "S-015",
+      "reason": "수요지수 72 대비 공급지수 44, 가장 가까운 정류장까지 도보권 밖"
+    }
+  ]
+}
+```
+
+`reason` 은 화면과 AI 보고서에 그대로 인용됩니다. **사람이 읽을 문장**으로 만들어 주세요.
+
+---
+
+### 3.4 `GET /stops` · `GET /routes`
+
+```json
+// GET /stops
+{ "stops": [
+  { "id": "S-001", "name": "병점역", "lon": 127.0446, "lat": 37.1856,
+    "x": 622, "y": 132, "kind": "hub", "routes": ["A", "B"] }
+]}
+
+// GET /routes
+{ "routes": [
+  { "id": "A", "name": "간선 A · 병점–동탄2", "type": "trunk",
+    "stopIds": ["S-001", "S-002"],
+    "path":   [[127.0446, 37.1856], [127.0759, 37.1685]],
+    "pathXY": [[622, 132], [668, 162]] }
+]}
+```
+
+`kind` 는 `hub` / `ind`(산단) / `res`(주거) / `rural`. 지도 마커 크기에만 씁니다.
+`pathXY` 는 선택 — 없으면 `path`(경위도)를 투영합니다.
+
+---
+
+### 3.5 `GET /stops/{stopId}/profile?period=am`
+
+```json
+{
+  "stopId": "S-001", "stopName": "병점역", "kind": "hub",
+  "routes": ["A", "B"],
+  "hours": [5, 6, 7, 8, "…23까지"],
+  "boardings":  [12, 48, 210, 305, "…"],
+  "alightings": [ 9, 31, 178, 288, "…"],
+  "summary": { "boardingsPerDay": 3658, "alightingsPerDay": 3521, "peakSharePct": 41.2 }
+}
+```
+
+`hours`·`boardings`·`alightings` 는 **길이가 같아야** 합니다.
+`peakSharePct` = 출퇴근 첨두(07–09, 17–19) 승하차 ÷ 전체 승하차 × 100.
+
+---
+
+### 3.6 `POST /simulations` — 배치 시뮬레이션 ★
+
+시뮬레이션 화면의 심장부입니다. 배치를 바꿀 때마다 호출됩니다.
+
+#### 요청
+
+```json
+{
+  "name": "향남 우선 배치안",
+  "period": "am",
+  "budgetKrw": 3000000000,
+  "placements": [
+    { "type": "stop", "cellId": "G-453", "count": 1 },
+    { "type": "drt",  "cellId": "G-312", "count": 1 }
+  ]
+}
+```
+
+`type` 은 `meta.effects[].type` 중 하나 (`stop` / `drt` / `freq`).
+
+#### 응답
+
+```json
+{
+  "id": "SIM-0001",
+  "name": "향남 우선 배치안",
+  "createdAt": "2026-08-06 14:22",
+  "placements": [
+    { "type": "stop", "typeLabel": "정류장 신설", "cellId": "G-453",
+      "cellName": "향남산단 중심", "count": 1, "radiusKm": 1.9, "unitKrw": 42000000 }
+  ],
+  "cost": {
+    "totalKrw": 222000000,
+    "breakdown": [
+      { "type": "stop", "label": "정류장 신설", "unitKrw": 42000000,  "amountKrw": 42000000 },
+      { "type": "drt",  "label": "똑버스 배치", "unitKrw": 180000000, "amountKrw": 180000000 }
+    ]
+  },
+  "budgetKrw": 3000000000,
+  "periods": [
+    {
+      "period": "am", "periodName": "출근",
+      "kpi":      { "needCells": 6,  "potentialTripsPerDay": 21400, "elderlyTripsPerDay": 1720, "avgMi": -0.04, "drtCells": 55, "overCells": 0, "totalCells": 389, "needShare": 1.5 },
+      "baseline": { "needCells": 13, "potentialTripsPerDay": 36336, "elderlyTripsPerDay": 2934, "avgMi": 0.002, "drtCells": 57, "overCells": 0, "totalCells": 389, "needShare": 3.3 },
+      "delta":    { "needCells": -7, "potentialTripsPerDay": -14936, "elderlyTripsPerDay": -1214, "avgMi": -0.042, "drtCells": -2 }
+    }
+  ],
+  "effectiveness": {
+    "resolvedNeedCells": 21,
+    "resolvedTripsPerDay": 90914,
+    "resolvedElderlyTripsPerDay": 7180,
+    "krwPerTripPerDay": 3366
+  },
+  "cellsByPeriod": {
+    "am":    "[ /grid 의 cells 와 완전히 같은 형식 ]",
+    "day":   "[ … ]",
+    "pm":    "[ … ]",
+    "night": "[ … ]"
+  }
+}
+```
+
+**규칙**
+
+- `periods` 는 **4개 시간대를 모두** 담아야 합니다(전후 비교 차트가 전 시간대를 그림).
+- `baseline` 은 **배치가 하나도 없는 상태**의 값. 항상 같은 값이어야 합니다.
+- `delta` = `kpi` − `baseline`. 음수가 "개선"입니다.
+- `effectiveness.krwPerTripPerDay` = 총 사업비 ÷ 전 시간대 해소 통행 합.
+  해소된 통행이 0이면 **`null`** 을 보내세요(프론트엔드가 `–` 로 표시).
+- `placements` 가 빈 배열이면 `kpi === baseline`, `cost.totalKrw === 0` 이어야 합니다.
+
+**배치 효과 모델(목 구현 — 실데이터에서 반드시 보정 필요)**
+
+| 수단 | 반경 | 효과 |
+|---|---|---|
+| `stop` 정류장 신설 | 1.9km | 커버리지 `+0.34 × (1 − d/R)`, 공급 `+0.05 × (1 − d/R)` |
+| `drt` 똑버스 | 3.0km | 공급 `+0.13 × (1 − d/R)` — 넓지만 얕게 |
+| `freq` 배차 증편 | 2.2km | 인접 격자 `+0.20`, 그 외 `+0.09`. **`coverage ≥ 0.5` 인 격자만 허용** |
+
+> 이 계수는 시연용 가정값입니다. 실데이터에서는 유사 사례의 실측 승하차 증가율로
+> 보정해야 하며, 그 지점이 이 모델의 신뢰도를 좌우합니다.
+
+---
+
+### 3.7 `POST /reports/draft` — AI 보고서 초안 ★
+
+**Claude API 호출 규격은 별도 문서 → [`AI-REPORT.md`](AI-REPORT.md)**
+
+#### 요청
+
+```json
+{
+  "period": "am",
+  "format": "sections",
+  "tone": "공문",
+  "sections": ["summary", "status", "problem", "plan", "effect", "next"],
+  "context": {
+    "org": "화성시", "dept": "교통정책과",
+    "kpi": { "needCells": 13, "…": "/grid 의 kpi 그대로" },
+    "priorities": [ "/priorities 의 items 그대로" ],
+    "simulation": { "…": "POST /simulations 응답 그대로 (없으면 null)" }
+  }
+}
+```
+
+#### 응답
+
+```json
+{
+  "title": "화성시 대중교통 수급 불일치 분석 및 노선 조정 검토(안)",
+  "subtitle": "출근 시간대(07–09) 기준 · 시나리오 「향남 우선 배치안」",
+  "org": "화성시", "dept": "교통정책과",
+  "period": "am",
+  "generatedAt": "2026-08-06 14:25",
+  "model": "claude-opus-5",
+  "sections": [
+    {
+      "key": "summary",
+      "heading": "1. 검토 개요",
+      "body": "본 자료는 …\n두 번째 문단은 \\n 으로 구분합니다.",
+      "bullets": ["분석 시간대: 출근 07–09", "고수요·저공급 격자: 13개 / 전체 389개"]
+    }
+  ],
+  "tables": [
+    {
+      "key": "priority",
+      "title": "노선 조정 우선순위 (상위 10개 격자)",
+      "columns": ["순위", "격자", "권역", "수요 D", "공급 S", "MI", "고령비", "잠재수요(통행/일)", "조치"],
+      "rows": [[1, "G-453", "향남산단 중심", 72, 44, "+1.02", "13%", "2,558", "신설"]]
+    }
+  ],
+  "disclaimer": "본 문서는 자동 생성된 초안입니다. 담당자 검토 후 활용하시기 바랍니다."
+}
+```
+
+**규칙**
+
+- `sections[].body` 안의 `\n` 은 문단 구분으로 렌더링됩니다.
+- `tables[].rows` 의 각 행 길이는 `columns` 길이와 같아야 합니다.
+- `tables[].title` 은 **엑셀 시트명**이 됩니다. 31자 초과·`[]:*?/\` 는 프론트엔드가 자동 정리합니다.
+- 숫자를 `"2,558"` 처럼 콤마 문자열로 보내도 엑셀에서는 숫자 셀로 복원됩니다.
+
+---
+
+### 3.8 `POST /reports/export` — 서버측 파일 생성 (선택)
+
+`config.js` 의 `EXPORT_MODE` 를 `'server'` 또는 `'auto'` 로 바꿨을 때만 호출됩니다.
+
+```
+요청  : { "format": "xlsx" | "hwpx" | "docx", "draft": { …3.7 의 응답 그대로… } }
+응답  : 파일 바이너리 (Content-Type: application/octet-stream 등)
+```
+
+한글 `.hwpx` 생성은 파이썬 [`python-hwpx`], [`pyhwpx`] 또는 한컴 오피스 SDK 를 검토하세요.
+구현 전까지는 `EXPORT_MODE: 'client'` 로 두면 브라우저가 `.xlsx` / `.rtf` 를 만듭니다.
+
+---
+
+## 4. 백엔드 스켈레톤 (FastAPI)
+
+```python
+from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Literal, Optional, List
+
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+Period = Literal["am", "day", "pm", "night"]
+
+@app.get("/api/v1/meta")
+def get_meta():
+    return {...}
+
+@app.get("/api/v1/grid")
+def get_grid(period: Period = "am"):
+    return {"period": period, "scale": {...}, "kpi": {...}, "cells": [...]}
+
+@app.get("/api/v1/priorities")
+def get_priorities(period: Period = "am", limit: int = 10):
+    return {"period": period, "items": [...]}
+
+@app.get("/api/v1/stops")
+def get_stops(): ...
+
+@app.get("/api/v1/stops/{stop_id}/profile")
+def get_profile(stop_id: str, period: Period = "am"): ...
+
+@app.get("/api/v1/routes")
+def get_routes(): ...
+
+class Placement(BaseModel):
+    type: Literal["stop", "drt", "freq"]
+    cellId: str
+    count: int = 1
+
+class SimRequest(BaseModel):
+    name: str = "시나리오"
+    period: Period = "am"
+    budgetKrw: int = 0
+    placements: List[Placement] = []
+
+@app.post("/api/v1/simulations")
+def run_simulation(req: SimRequest):
+    return {...}
+
+class ReportRequest(BaseModel):
+    period: Period = "am"
+    tone: str = "공문"
+    sections: List[str] = []
+    context: dict = {}
+
+@app.post("/api/v1/reports/draft")
+def draft_report(req: ReportRequest):
+    # → AI-REPORT.md 참고 (Claude API 호출)
+    return {...}
+```
+
+---
+
+## 5. 연동 확인 체크리스트
+
+- [ ] `GET /api/v1/meta` 가 200 을 돌려주고 `periods` 4개가 있다
+- [ ] `GET /api/v1/grid?period=am` 의 `cells[].bins.mi` 가 **0~6 정수**다
+- [ ] 4개 시간대의 `kpi.needCells` 가 서로 **다르다** (같으면 시간대 배율 미적용)
+- [ ] 지도에 격자가 칠해진다 (안 칠해지면 `bins` 누락 또는 `lon/lat` 범위 오류)
+- [ ] `POST /simulations` 에 빈 `placements` 를 보내면 `kpi === baseline` 이다
+- [ ] 배치를 추가하면 `delta.needCells` 가 **음수**가 된다
+- [ ] 브라우저 개발자도구 Network 탭에 CORS 오류가 없다
+- [ ] `USE_MOCK: false` 로 바꿔도 화면이 목 모드와 동일하게 보인다
+
+문제가 생기면 브라우저 콘솔에서 목 응답과 실서버 응답을 직접 비교해 보세요.
+
+```js
+HW.CONFIG.USE_MOCK = true;  HW.api.clearCache(); HW.mock.handle('grid.list', {period:'am'})
+```

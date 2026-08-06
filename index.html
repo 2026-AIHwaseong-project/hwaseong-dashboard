@@ -1,341 +1,159 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>스톱워치</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: #0f0f13;
-      color: #fff;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-    }
-
-    .container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 40px;
-    }
-
-    h1 {
-      font-size: 1.1rem;
-      font-weight: 400;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: #888;
-    }
-
-    .display {
-      position: relative;
-      width: 320px;
-      height: 320px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .ring {
-      position: absolute;
-      inset: 0;
-    }
-
-    .ring-bg {
-      fill: none;
-      stroke: #1e1e28;
-      stroke-width: 6;
-    }
-
-    .ring-progress {
-      fill: none;
-      stroke: #4f8cff;
-      stroke-width: 6;
-      stroke-linecap: round;
-      stroke-dasharray: 880;
-      stroke-dashoffset: 880;
-      transform: rotate(-90deg);
-      transform-origin: center;
-      transition: stroke-dashoffset 0.1s linear;
-    }
-
-    .time {
-      font-size: 3.2rem;
-      font-weight: 200;
-      letter-spacing: 0.05em;
-      font-variant-numeric: tabular-nums;
-      z-index: 1;
-    }
-
-    .ms {
-      font-size: 1.4rem;
-      color: #4f8cff;
-      margin-top: 4px;
-      font-variant-numeric: tabular-nums;
-      z-index: 1;
-    }
-
-    .controls {
-      display: flex;
-      gap: 20px;
-    }
-
-    button {
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      border: none;
-      cursor: pointer;
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      transition: transform 0.1s, opacity 0.2s;
-    }
-
-    button:active {
-      transform: scale(0.93);
-    }
-
-    .btn-start {
-      background: #4f8cff;
-      color: #fff;
-      box-shadow: 0 0 24px #4f8cff55;
-    }
-
-    .btn-start.running {
-      background: #ff5f5f;
-      box-shadow: 0 0 24px #ff5f5f55;
-    }
-
-    .btn-lap {
-      background: #1e1e28;
-      color: #aaa;
-    }
-
-    .btn-lap:disabled {
-      opacity: 0.3;
-      cursor: default;
-    }
-
-    .btn-reset {
-      background: #1e1e28;
-      color: #aaa;
-    }
-
-    .laps {
-      width: 320px;
-      max-height: 240px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .laps::-webkit-scrollbar {
-      width: 4px;
-    }
-
-    .laps::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    .laps::-webkit-scrollbar-thumb {
-      background: #333;
-      border-radius: 2px;
-    }
-
-    .lap-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 16px;
-      background: #1e1e28;
-      border-radius: 10px;
-      font-size: 0.9rem;
-      animation: fadeIn 0.2s ease;
-    }
-
-    .lap-item.best {
-      border-left: 3px solid #4fffb0;
-    }
-
-    .lap-item.worst {
-      border-left: 3px solid #ff5f5f;
-    }
-
-    .lap-num {
-      color: #555;
-      font-size: 0.8rem;
-      min-width: 48px;
-    }
-
-    .lap-split {
-      color: #888;
-      font-size: 0.82rem;
-    }
-
-    .lap-time {
-      font-variant-numeric: tabular-nums;
-      font-weight: 500;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-6px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>화성시 버스 수요·공급 미스매칭 대시보드</title>
+<meta name="description" content="교통카드 실현수요와 통신 유동인구 잠재수요를 격자 단위로 대조해 대중교통 사각지대와 노선 조정 우선순위를 도출하는 분석 대시보드">
+<link rel="stylesheet" href="assets/css/app.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Stopwatch</h1>
 
-    <div class="display">
-      <svg class="ring" viewBox="0 0 320 320">
-        <circle class="ring-bg" cx="160" cy="160" r="140"/>
-        <circle class="ring-progress" id="ring" cx="160" cy="160" r="140"/>
-      </svg>
-      <div class="time" id="time">00:00</div>
-      <div class="ms" id="ms">.00</div>
+<header class="topnav" data-topnav></header>
+
+<div class="wrap">
+
+  <div id="bootError" style="display:none;margin-bottom:12px"></div>
+
+  <header class="top">
+    <div>
+      <p class="eyebrow">HWASEONG BUS GAP · 현황 분석</p>
+      <h1>버스 수요·공급 미스매칭 대시보드<span class="badge" id="mockBadge">가상 데이터 목업</span></h1>
+      <p class="sub">교통카드 실현수요 × 통신 유동인구 잠재수요를 같은 격자에서 대조해,
+        어디에 버스가 부족한지와 노선 조정 우선순위를 산출합니다.
+        <span class="mono" style="font-size:11px">최종 갱신 <span id="updatedAt">–</span></span></p>
     </div>
+    <div class="periods" id="periods" role="tablist" aria-label="시간대 선택"></div>
+  </header>
 
-    <div class="controls">
-      <button class="btn-reset" id="btnReset">초기화</button>
-      <button class="btn-start" id="btnStart">시작</button>
-      <button class="btn-lap" id="btnLap" disabled>랩</button>
+  <!-- ─────────────────────────── KPI ─────────────────────────── -->
+  <section class="kpis" aria-label="핵심 지표">
+    <div class="kpi">
+      <div class="lb">고수요·저공급 격자</div>
+      <div class="vl" id="k1">–</div>
+      <div class="sb" id="k1s">–</div>
     </div>
+    <div class="kpi">
+      <div class="lb">사각지대 잠재수요</div>
+      <div class="vl" id="k2">–</div>
+      <div class="sb" id="k2s">–</div>
+    </div>
+    <div class="kpi">
+      <div class="lb">사각지대 고령 통행</div>
+      <div class="vl" id="k3">–</div>
+      <div class="sb" id="k3s">–</div>
+    </div>
+    <div class="kpi">
+      <div class="lb">DRT(똑버스) 후보 격자</div>
+      <div class="vl" id="k4">–</div>
+      <div class="sb">저수요·저공급 — 노선 신설 대신 수요응답형</div>
+    </div>
+  </section>
 
-    <div class="laps" id="laps"></div>
+  <div class="grid">
+
+    <!-- ─────────────────────── 지도 ─────────────────────── -->
+    <section class="card mapcard">
+      <div class="chead">
+        <h2>격자 미스매칭 지도</h2>
+        <span class="hsub">MI = z(수요) − z(공급) · 표시 격자 ≈1km (실구현 250m)</span>
+      </div>
+      <div class="mtools">
+        <div class="lset" id="layers" role="tablist" aria-label="지도 레이어">
+          <button class="lbtn on" data-layer="mi" type="button">미스매칭 MI</button>
+          <button class="lbtn" data-layer="demand" type="button">수요 D</button>
+          <button class="lbtn" data-layer="supply" type="button">공급 S</button>
+          <button class="lbtn" data-layer="flow" type="button">유동인구</button>
+        </div>
+        <div class="tset">
+          <button class="tbtn on" id="tgRoute" type="button" aria-pressed="true">노선·정류장</button>
+          <button class="tbtn on" id="tgLabel" type="button" aria-pressed="true">지명</button>
+        </div>
+      </div>
+      <div class="mapbox">
+        <svg id="map" class="mapsvg" viewBox="0 0 960 640" role="img"
+             aria-label="화성시 격자 미스매칭 지도. 붉을수록 수요 대비 공급이 부족한 격자입니다."></svg>
+        <div class="legend" id="legend"></div>
+        <div class="mock" id="mapMock">개략도 · 가상 수치</div>
+      </div>
+    </section>
+
+    <!-- ───────────────────── 우선순위 ───────────────────── -->
+    <section class="card sidecard">
+      <div class="chead">
+        <h2>노선 조정 우선순위 Top 10</h2>
+        <span class="hsub">MI⁺ × 수요규모 × 교통약자 가중</span>
+      </div>
+      <div class="t10" id="t10"></div>
+      <div class="sidefoot">
+        행을 클릭하면 지도·산점도의 해당 격자가 연동 표시되고, 가장 가까운 정류장 프로파일로 전환됩니다.
+        <a class="btn sm primary" id="simLink" href="simulation.html" style="display:none;margin-top:8px">
+          이 격자로 시뮬레이션 하기 →</a>
+      </div>
+    </section>
+
+    <!-- ───────────────────── 산점도 ───────────────────── -->
+    <section class="card sc-card">
+      <div class="chead">
+        <h2>수요–공급 4분면</h2>
+        <span class="hsub">점 1개 = 격자 1개 · 색 = MI</span>
+        <span class="pchip" id="pchip">–</span>
+      </div>
+      <svg id="scatter" class="chart" viewBox="0 0 520 420" role="img"
+           aria-label="가로축 공급지수, 세로축 수요지수 산점도. 왼쪽 위가 공급 부족 구간입니다."></svg>
+      <details class="tbl">
+        <summary>격자 데이터 표 보기 (미스매칭 상위 40)</summary>
+        <div class="tblwrap"><table id="celltbl"></table></div>
+      </details>
+    </section>
+
+    <!-- ─────────────── 정류장 프로파일 ─────────────── -->
+    <section class="card st-card">
+      <div class="chead">
+        <h2>정류장 시간대 프로파일</h2>
+        <div class="keys">
+          <span><i style="background:var(--c-board)"></i>승차</span>
+          <span><i style="background:var(--c-alight)"></i>하차</span>
+        </div>
+        <select class="stsel" id="stopSelect" aria-label="정류장 선택"></select>
+      </div>
+      <svg id="stchart" class="chart" viewBox="0 0 640 268" role="img"
+           aria-label="선택한 정류장의 시간대별 승차·하차 인원"></svg>
+      <div class="ststats">
+        <span>일 승차<b id="ss1">–</b></span>
+        <span>일 하차<b id="ss2">–</b></span>
+        <span>첨두 집중률<b id="ss3">–</b></span>
+        <span>경유 노선<b id="ss4">–</b></span>
+      </div>
+      <details class="tbl">
+        <summary>시간대별 수치 표 보기</summary>
+        <div class="tblwrap"><table id="sttbl"></table></div>
+      </details>
+    </section>
+
   </div>
 
-  <script>
-    let startTime = 0;
-    let elapsed = 0;
-    let running = false;
-    let rafId = null;
-    let laps = [];
-    let lapStart = 0;
+  <footer class="pg">
+    <div class="fx" id="fxlist"></div>
+    <div class="srcs">
+      <i>교통카드빅데이터 STCIS</i><i>통신사 유동인구</i><i>GBIS 노선·정류장</i><i>SGIS 격자 인구</i>
+      <span>← 실제 구현 시 연동 예정 데이터</span>
+    </div>
+    <div class="dis" id="mockNote">
+      본 화면은 제안용 UI 목업입니다. 지도 경계·격자·노선·정류장·모든 수치는 로직 시연을 위한
+      <b>가상 예시 데이터</b>이며 실제 지리·운행 정보와 다릅니다.
+      실데이터 연동 방법은 <span class="mono">docs/API.md</span> 를 참고하세요.
+    </div>
+  </footer>
+</div>
 
-    const timeEl = document.getElementById('time');
-    const msEl = document.getElementById('ms');
-    const ring = document.getElementById('ring');
-    const btnStart = document.getElementById('btnStart');
-    const btnReset = document.getElementById('btnReset');
-    const btnLap = document.getElementById('btnLap');
-    const lapsEl = document.getElementById('laps');
-
-    const RING_LEN = 880; // 2 * Math.PI * 140 ≈ 880
-
-    function pad(n, len = 2) {
-      return String(n).padStart(len, '0');
-    }
-
-    function formatTime(ms) {
-      const totalSec = Math.floor(ms / 1000);
-      const min = Math.floor(totalSec / 60);
-      const sec = totalSec % 60;
-      const cent = Math.floor((ms % 1000) / 10);
-      return { main: `${pad(min)}:${pad(sec)}`, ms: `.${pad(cent)}` };
-    }
-
-    function updateDisplay(ms) {
-      const { main, ms: msStr } = formatTime(ms);
-      timeEl.textContent = main;
-      msEl.textContent = msStr;
-
-      // ring: one full rotation per 60 seconds
-      const progress = (ms % 60000) / 60000;
-      ring.style.strokeDashoffset = RING_LEN * (1 - progress);
-    }
-
-    function tick() {
-      elapsed = Date.now() - startTime;
-      updateDisplay(elapsed);
-      rafId = requestAnimationFrame(tick);
-    }
-
-    function start() {
-      startTime = Date.now() - elapsed;
-      lapStart = lapStart || startTime;
-      running = true;
-      btnStart.textContent = '정지';
-      btnStart.classList.add('running');
-      btnLap.disabled = false;
-      rafId = requestAnimationFrame(tick);
-    }
-
-    function stop() {
-      running = false;
-      cancelAnimationFrame(rafId);
-      btnStart.textContent = '시작';
-      btnStart.classList.remove('running');
-      btnLap.disabled = true;
-    }
-
-    function reset() {
-      stop();
-      elapsed = 0;
-      lapStart = 0;
-      laps = [];
-      updateDisplay(0);
-      ring.style.strokeDashoffset = RING_LEN;
-      lapsEl.innerHTML = '';
-    }
-
-    function addLap() {
-      const now = Date.now();
-      const lapTime = now - lapStart;
-      lapStart = now;
-      laps.unshift({ num: laps.length + 1, time: lapTime, total: elapsed });
-      renderLaps();
-    }
-
-    function renderLaps() {
-      if (laps.length === 0) return;
-      const times = laps.map(l => l.time);
-      const best = Math.min(...times);
-      const worst = Math.max(...times);
-
-      lapsEl.innerHTML = laps.map((lap, i) => {
-        let cls = '';
-        if (laps.length > 1) {
-          if (lap.time === best) cls = 'best';
-          else if (lap.time === worst) cls = 'worst';
-        }
-        const { main: lapMain, ms: lapMs } = formatTime(lap.time);
-        const { main: totMain, ms: totMs } = formatTime(lap.total);
-        return `
-          <div class="lap-item ${cls}">
-            <span class="lap-num">랩 ${lap.num}</span>
-            <span class="lap-split">${totMain}${totMs}</span>
-            <span class="lap-time">${lapMain}${lapMs}</span>
-          </div>`;
-      }).join('');
-    }
-
-    btnStart.addEventListener('click', () => running ? stop() : start());
-    btnReset.addEventListener('click', reset);
-    btnLap.addEventListener('click', addLap);
-
-    // keyboard shortcuts
-    document.addEventListener('keydown', e => {
-      if (e.code === 'Space') { e.preventDefault(); running ? stop() : start(); }
-      if (e.code === 'KeyL' && running) addLap();
-      if (e.code === 'KeyR') reset();
-    });
-
-    updateDisplay(0);
-  </script>
+<!-- 로드 순서 주의: config → core → mock → api → 컴포넌트 → 페이지 -->
+<script src="assets/js/config.js"></script>
+<script src="assets/js/core.js"></script>
+<script src="assets/js/mock.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/map.js"></script>
+<script src="assets/js/report.js"></script>
+<script src="assets/js/dashboard.js"></script>
 </body>
 </html>

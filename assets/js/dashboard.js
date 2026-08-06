@@ -1,0 +1,414 @@
+/* ============================================================================
+ *  dashboard.js — 분석 화면
+ * ----------------------------------------------------------------------------
+ *  이 화면은 "현황 파악" 전용입니다. 배치 시뮬레이션은 simulation.html 에 있습니다.
+ *  모든 데이터는 HW.api 를 통해서만 가져옵니다.
+ * ========================================================================= */
+(function (global) {
+  'use strict';
+
+  var HW = global.HW;
+  var C = HW.core, api = HW.api;
+  var $ = C.$, $$ = C.$$, esc = C.esc, fmt = C.fmt;
+
+  var S = {
+    meta: null,
+    period: 'am',
+    periodName: '출근',
+    grid: null,          // { cells, kpi, ... }
+    priorities: null,
+    stops: [],
+    routes: [],
+    selectedCellId: null,
+    selectedStopId: null,
+    profile: null,
+    map: null
+  };
+
+  /* =====================================================================
+   * 1. 부팅
+   * =================================================================== */
+  function boot() {
+    C.mountTopnav('dashboard');
+    C.initTheme();
+    HW.report.mount();
+    HW.report.setContextProvider(function () {
+      return {
+        period: S.period,
+        meta: S.meta,
+        kpi: S.grid ? S.grid.kpi : null,
+        priorities: S.priorities ? S.priorities.items : null,
+        simulation: readSavedScenario()
+      };
+    });
+
+    api.meta().then(function (meta) {
+      S.meta = meta;
+      renderPeriodTabs(meta.periods);
+      renderFooter(meta);
+      S.map = HW.createMap({
+        svg: $('#map'), legend: $('#legend'), meta: meta,
+        onCellClick: function (cell) { selectCell(cell.id, true); },
+        onCellHover: function (cell, ev) { C.showTip(cellTip(cell), ev); },
+        onStopClick: function (stop) { selectStop(stop.id); }
+      });
+      return Promise.all([api.stops(), api.routes()]);
+    }).then(function (r) {
+      S.stops = r[0].stops;
+      S.routes = r[1].routes;
+      S.map.setData({ stops: S.stops, routes: S.routes });
+      fillStopSelect();
+      wireControls();
+      return loadPeriod(S.period);
+    }).then(function () {
+      /* 최우선 격자를 초기 선택 */
+      var first = S.priorities && S.priorities.items[0];
+      if (first) selectCell(first.cellId, true);
+      else selectStop(S.stops[0] && S.stops[0].id);
+    }).catch(fail);
+  }
+
+  function fail(err) {
+    console.error(err);
+    var box = $('#bootError');
+    if (box) {
+      box.innerHTML = '<div class="errbox"><b>데이터를 불러오지 못했습니다.</b><br>' +
+        esc(api.humanize(err)) +
+        '<br><span style="font-size:11.5px;opacity:.8">config.js 의 BASE_URL / USE_MOCK 설정을 확인해 주세요.</span></div>';
+      box.style.display = '';
+    }
+    C.toast('데이터 로드 실패 — ' + esc(api.humanize(err)), 'err', 7000);
+  }
+
+  /* =====================================================================
+   * 2. 시간대 전환
+   * =================================================================== */
+  function renderPeriodTabs(periods) {
+    var host = $('#periods');
+    host.innerHTML = periods.map(function (p, i) {
+      return '<button class="pbtn' + (i === 0 ? ' on' : '') + '" data-period="' + esc(p.id) +
+        '" role="tab" aria-selected="' + (i === 0) + '"><b>' + esc(p.name) + '</b><span>' + esc(p.label) + '</span></button>';
+    }).join('');
+    host.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-period]');
+      if (!b) return;
+      loadPeriod(b.getAttribute('data-period'));
+    });
+  }
+
+  function loadPeriod(pid) {
+    S.period = pid;
+    var p = (S.meta.periods || []).filter(function (x) { return x.id === pid; })[0];
+    S.periodName = p ? p.name : pid;
+    $$('#periods [data-period]').forEach(function (b) {
+      var on = b.getAttribute('data-period') === pid;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', String(on));
+    });
+    $('#pchip').textContent = p ? (p.name + ' ' + p.label) : pid;
+
+    return Promise.all([api.grid(pid), api.priorities(pid, 10)]).then(function (r) {
+      S.grid = r[0];
+      S.priorities = r[1];
+      S.map.setData({ cells: S.grid.cells });
+      paintKpi();
+      paintPriorities();
+      drawScatter();
+      paintCellTable();
+      if (S.selectedCellId) S.map.select(S.selectedCellId);
+    }).catch(fail);
+  }
+
+  /* =====================================================================
+   * 3. KPI
+   * =================================================================== */
+  function paintKpi() {
+    var k = S.grid.kpi;
+    var top = S.priorities && S.priorities.items[0];
+    $('#k1').innerHTML = fmt(k.needCells) + '<small>개</small>';
+    $('#k1s').textContent = '전체 ' + fmt(k.totalCells) + '개 중 ' + k.needShare + '%' +
+      (top ? ' · 최우선 ' + top.name : '');
+
+    $('#k2').innerHTML = C.fmt1(k.potentialTripsPerDay / 10000) + '<small>만 통행/일</small>';
+    $('#k2s').textContent = '고수요·저공급 격자의 유동인구 합(추정)';
+
+    $('#k3').innerHTML = fmt(k.elderlyTripsPerDay) + '<small>통행/일</small>';
+    var share = k.potentialTripsPerDay > 0 ? (100 * k.elderlyTripsPerDay / k.potentialTripsPerDay) : 0;
+    $('#k3s').textContent = '사각지대 잠재수요의 ' + share.toFixed(1) + '% · 교통약자 가중 근거';
+
+    $('#k4').innerHTML = fmt(k.drtCells) + '<small>개</small>';
+  }
+
+  /* =====================================================================
+   * 4. 우선순위 Top 10
+   * =================================================================== */
+  function paintPriorities() {
+    var items = S.priorities.items;
+    var host = $('#t10');
+    if (!items.length) {
+      host.innerHTML = '<div class="empty">현재 시간대에 고수요·저공급 격자가 없습니다.<br>다른 시간대를 확인해 보세요.</div>';
+      return;
+    }
+    var mx = items[0].priorityScore || 1;
+    host.innerHTML = items.map(function (r) {
+      var tagClass = r.action === 'DRT' ? 'drt' : (r.action === 'NEW_STOP' ? 'new' : 'add');
+      return '<button class="trow' + (r.cellId === S.selectedCellId ? ' sel' : '') + '" data-cell="' + esc(r.cellId) + '">' +
+        '<span class="rk">' + r.rank + '</span>' +
+        '<span class="nm">' + esc(r.name) + '<span>' + esc(r.cellId) + '</span></span>' +
+        '<span class="mi">MI +' + r.mi.toFixed(2) + '</span>' +
+        '<span class="sub2"><span>잠재 ' + fmt(r.flowTripsPerDay) + '통행/일</span>' +
+        '<em>고령 ' + Math.round(r.elderlyRatio * 100) + '%</em></span>' +
+        '<span class="bar"><i style="width:' + (100 * r.priorityScore / mx).toFixed(0) + '%"></i></span>' +
+        '<span class="tag ' + tagClass + '">' + esc(r.actionLabel) + '</span>' +
+        '</button>';
+    }).join('');
+  }
+
+  /* =====================================================================
+   * 5. 수요–공급 4분면 산점도
+   * =================================================================== */
+  var SC = { l: 56, r: 16, t: 30, b: 48, w: 520, h: 420 };
+  function sx(z) { return SC.l + (C.clamp(z, -2.8, 2.8) + 2.8) / 5.6 * (SC.w - SC.l - SC.r); }
+  function sy(z) { return SC.h - SC.b - (C.clamp(z, -2.8, 2.8) + 2.8) / 5.6 * (SC.h - SC.t - SC.b); }
+
+  function drawScatter() {
+    var cells = S.grid.cells, h = '';
+    [-2, -1, 1, 2].forEach(function (z) {
+      h += '<line class="gl" x1="' + sx(z) + '" y1="' + SC.t + '" x2="' + sx(z) + '" y2="' + (SC.h - SC.b) + '"/>';
+      h += '<line class="gl" x1="' + SC.l + '" y1="' + sy(z) + '" x2="' + (SC.w - SC.r) + '" y2="' + sy(z) + '"/>';
+      h += '<text class="tick" x="' + sx(z) + '" y="' + (SC.h - SC.b + 14) + '" text-anchor="middle">' + (z > 0 ? '+' + z : z) + '</text>';
+      h += '<text class="tick" x="' + (SC.l - 8) + '" y="' + (sy(z) + 3) + '" text-anchor="end">' + (z > 0 ? '+' + z : z) + '</text>';
+    });
+    h += '<line class="zl" x1="' + sx(0) + '" y1="' + SC.t + '" x2="' + sx(0) + '" y2="' + (SC.h - SC.b) + '"/>';
+    h += '<line class="zl" x1="' + SC.l + '" y1="' + sy(0) + '" x2="' + (SC.w - SC.r) + '" y2="' + sy(0) + '"/>';
+    h += '<text class="qlab hot" x="' + (SC.l + 6) + '" y="' + (SC.t + 14) + '">고수요·저공급 → 증차·신설</text>';
+    h += '<text class="qlab" x="' + (SC.w - SC.r - 6) + '" y="' + (SC.t + 14) + '" text-anchor="end">고수요·고공급 · 적정</text>';
+    h += '<text class="qlab" x="' + (SC.l + 6) + '" y="' + (SC.h - SC.b - 8) + '">저수요·저공급 → DRT 검토</text>';
+    h += '<text class="qlab" x="' + (SC.w - SC.r - 6) + '" y="' + (SC.h - SC.b - 8) + '" text-anchor="end">저수요·고공급 → 효율화</text>';
+    h += '<text class="axlab" x="' + ((SC.l + SC.w - SC.r) / 2) + '" y="' + (SC.h - 10) + '" text-anchor="middle">공급지수 S (z)</text>';
+    h += '<text class="axlab" transform="rotate(-90 14 ' + ((SC.t + SC.h - SC.b) / 2) + ')" x="14" y="' +
+      ((SC.t + SC.h - SC.b) / 2) + '" text-anchor="middle">수요지수 D (z)</text>';
+
+    cells.forEach(function (c) {
+      h += '<circle class="dot c m' + c.bins.mi + '" data-cell="' + esc(c.id) + '" cx="' +
+        sx(c.zSupply).toFixed(1) + '" cy="' + sy(c.zDemand).toFixed(1) + '" r="3.8"/>';
+    });
+    h += '<circle class="scatring" data-scatring r="7" cx="-99" cy="-99" visibility="hidden"/>';
+    $('#scatter').innerHTML = h;
+    placeScatterRing();
+  }
+
+  function placeScatterRing() {
+    var ring = $('[data-scatring]');
+    if (!ring) return;
+    var c = S.selectedCellId && cellById(S.selectedCellId);
+    if (!c) { ring.setAttribute('visibility', 'hidden'); return; }
+    ring.setAttribute('cx', sx(c.zSupply).toFixed(1));
+    ring.setAttribute('cy', sy(c.zDemand).toFixed(1));
+    ring.setAttribute('visibility', 'visible');
+  }
+
+  function cellById(id) {
+    if (!S.grid) return null;
+    for (var i = 0; i < S.grid.cells.length; i++) if (S.grid.cells[i].id === id) return S.grid.cells[i];
+    return null;
+  }
+
+  /* =====================================================================
+   * 6. 정류장 시간대 프로파일
+   * =================================================================== */
+  var STC = { l: 44, r: 12, t: 26, b: 34, w: 640, h: 268 };
+
+  function fillStopSelect() {
+    var sel = $('#stopSelect');
+    sel.innerHTML = S.stops.slice().sort(function (a, b) {
+      return a.name.localeCompare(b.name, 'ko');
+    }).map(function (s) {
+      return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>';
+    }).join('');
+    sel.addEventListener('change', function () { selectStop(sel.value); });
+  }
+
+  function selectStop(stopId) {
+    if (!stopId) return;
+    S.selectedStopId = stopId;
+    $('#stopSelect').value = stopId;
+    S.map.highlightStop(stopId);
+    api.stopProfile(stopId, S.period).then(function (p) {
+      S.profile = p;
+      drawProfile(p);
+    }).catch(fail);
+  }
+
+  function drawProfile(p) {
+    var hours = p.hours, B = p.boardings, A = p.alightings;
+    var mid = STC.t + (STC.h - STC.t - STC.b) / 2;
+    var half = (STC.h - STC.t - STC.b) / 2 - 14;
+    var vmax = Math.max.apply(null, B.concat(A).concat([10]));
+    var nice = Math.ceil(vmax / 50) * 50 || 50;
+    var yscale = function (v) { return v / nice * half; };
+    var step = (STC.w - STC.l - STC.r) / hours.length;
+    var bw = Math.min(22, step - 4);
+    var hx = function (hr) { return STC.l + (hr - hours[0]) * step; };
+    var h = '';
+
+    /* 현재 선택된 시간대 음영 */
+    var per = (S.meta.periods || []).filter(function (x) { return x.id === S.period; })[0];
+    if (per) {
+      var b0 = per.hours[0], b1 = Math.min(per.hours[1], hours[hours.length - 1] + 1);
+      h += '<rect class="pband" x="' + hx(b0) + '" y="' + (STC.t - 4) + '" width="' +
+        Math.max(0, (b1 - b0) * step) + '" height="' + (STC.h - STC.t - STC.b + 8) + '" rx="4"/>';
+    }
+
+    h += '<line class="gl" x1="' + STC.l + '" y1="' + (mid - yscale(nice)) + '" x2="' + (STC.w - STC.r) + '" y2="' + (mid - yscale(nice)) + '"/>';
+    h += '<line class="gl" x1="' + STC.l + '" y1="' + (mid + yscale(nice)) + '" x2="' + (STC.w - STC.r) + '" y2="' + (mid + yscale(nice)) + '"/>';
+    h += '<line class="zl" x1="' + STC.l + '" y1="' + mid + '" x2="' + (STC.w - STC.r) + '" y2="' + mid + '"/>';
+    h += '<text class="tick" x="' + (STC.l - 6) + '" y="' + (mid - yscale(nice) + 3) + '" text-anchor="end">' + nice + '</text>';
+    h += '<text class="tick" x="' + (STC.l - 6) + '" y="' + (mid + 3) + '" text-anchor="end">0</text>';
+    h += '<text class="tick" x="' + (STC.l - 6) + '" y="' + (mid + yscale(nice) + 3) + '" text-anchor="end">' + nice + '</text>';
+
+    var mb = 0, mbh = 0, ma = 0, mah = 0;
+    B.forEach(function (v, k) { if (v > mb) { mb = v; mbh = k; } });
+    A.forEach(function (v, k) { if (v > ma) { ma = v; mah = k; } });
+
+    B.forEach(function (v, k) {
+      var x = STC.l + k * step + (step - bw) / 2;
+      if (v > 0) h += '<path class="stbar-b" d="' + C.barUp(x, mid - 1, bw, yscale(v)) + '"/>';
+      if (A[k] > 0) h += '<path class="stbar-a" d="' + C.barDown(x, mid + 1, bw, yscale(A[k])) + '"/>';
+    });
+    /* 최댓값만 직접 라벨 — 모든 점에 숫자를 찍지 않습니다 */
+    h += '<text class="dl2" x="' + (STC.l + mbh * step + step / 2) + '" y="' + (mid - 1 - yscale(mb) - 5) + '" text-anchor="middle">' + mb + '</text>';
+    h += '<text class="dl2" x="' + (STC.l + mah * step + step / 2) + '" y="' + (mid + 1 + yscale(ma) + 12) + '" text-anchor="middle">' + ma + '</text>';
+
+    [6, 9, 12, 15, 18, 21].forEach(function (hr) {
+      if (hr < hours[0] || hr > hours[hours.length - 1]) return;
+      h += '<text class="tick" x="' + (hx(hr) + step / 2) + '" y="' + (STC.h - 8) + '" text-anchor="middle">' + hr + '시</text>';
+    });
+    hours.forEach(function (hr, k) {
+      h += '<rect class="colhit" data-hour="' + k + '" x="' + (STC.l + k * step) + '" y="' + STC.t +
+        '" width="' + step + '" height="' + (STC.h - STC.t - STC.b) + '"/>';
+    });
+
+    $('#stchart').innerHTML = h;
+    $('#ss1').textContent = fmt(p.summary.boardingsPerDay) + '명';
+    $('#ss2').textContent = fmt(p.summary.alightingsPerDay) + '명';
+    $('#ss3').textContent = p.summary.peakSharePct + '%';
+    $('#ss4').textContent = p.routes.join(' · ') + '선';
+
+    $('#sttbl').innerHTML = '<tr><th>시각</th><th>승차</th><th>하차</th></tr>' +
+      hours.map(function (hr, k) {
+        return '<tr><td>' + hr + '시</td><td>' + fmt(B[k]) + '</td><td>' + fmt(A[k]) + '</td></tr>';
+      }).join('');
+  }
+
+  /* =====================================================================
+   * 7. 격자 데이터 표
+   * =================================================================== */
+  function paintCellTable() {
+    var rows = S.grid.cells.slice().sort(function (a, b) { return b.mi - a.mi; }).slice(0, 40);
+    $('#celltbl').innerHTML =
+      '<tr><th>격자</th><th>권역</th><th>수요 D</th><th>공급 S</th><th>고령비</th><th>MI</th><th>분류</th><th>조치</th></tr>' +
+      rows.map(function (c) {
+        return '<tr><td>' + esc(c.id) + '</td><td>' + esc(c.name) + '</td><td>' + c.demand + '</td><td>' + c.supply +
+          '</td><td>' + Math.round(c.elderlyRatio * 100) + '%</td><td>' + (c.mi >= 0 ? '+' : '') + c.mi.toFixed(2) +
+          '</td><td>' + esc(c.quadrantLabel) + '</td><td>' +
+          esc(c.quadrant === 'need' || c.quadrant === 'drt' ? c.actionLabel : '—') + '</td></tr>';
+      }).join('');
+  }
+
+  /* =====================================================================
+   * 8. 선택 연동
+   * =================================================================== */
+  function selectCell(cellId, linkStation) {
+    S.selectedCellId = cellId;
+    S.map.select(cellId);
+    placeScatterRing();
+    paintPriorities();
+    var c = cellById(cellId);
+    if (c) {
+      var simPage = (HW.CONFIG.PAGES && HW.CONFIG.PAGES.simulation) || 'simulation.html';
+      $('#simLink').href = simPage + '?cell=' + encodeURIComponent(cellId) + '&period=' + encodeURIComponent(S.period);
+      $('#simLink').style.display = '';
+      if (linkStation && c.nearestStopId && c.nearestStopId !== S.selectedStopId) selectStop(c.nearestStopId);
+    }
+  }
+
+  function cellTip(c) {
+    var adj = c.adjusted ? '<br><span class="mono" style="color:var(--sel)">배치 효과 반영됨</span>' : '';
+    var qc = c.quadrant === 'need' ? 'new' : c.quadrant === 'drt' ? 'drt' : c.quadrant === 'over' ? 'eff' : 'ok';
+    return '<b>' + esc(c.name) + '</b> <span class="mono">' + esc(c.id) + '</span><br>' +
+      '수요 D <b>' + c.demand + '</b> · 공급 S <b>' + c.supply + '</b> · MI <b>' +
+      (c.mi >= 0 ? '+' : '') + c.mi.toFixed(2) + '</b><br>' +
+      '잠재수요 ' + fmt(c.flowTripsPerDay) + '통행/일 · 고령비 <b>' + Math.round(c.elderlyRatio * 100) + '%</b><br>' +
+      '<span class="tag ' + qc + '">' + esc(c.quadrantLabel) + '</span>' + adj;
+  }
+
+  /* =====================================================================
+   * 9. 컨트롤 배선
+   * =================================================================== */
+  function wireControls() {
+    $('#layers').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-layer]');
+      if (!b) return;
+      $$('#layers [data-layer]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      S.map.setLayer(b.getAttribute('data-layer'));
+    });
+    $('#tgRoute').addEventListener('click', function (e) {
+      var on = e.currentTarget.classList.toggle('on');
+      e.currentTarget.setAttribute('aria-pressed', String(on));
+      S.map.setShowRoutes(on);
+    });
+    $('#tgLabel').addEventListener('click', function (e) {
+      var on = e.currentTarget.classList.toggle('on');
+      e.currentTarget.setAttribute('aria-pressed', String(on));
+      S.map.setShowLabels(on);
+    });
+
+    $('#t10').addEventListener('click', function (e) {
+      var r = e.target.closest('[data-cell]');
+      if (r) selectCell(r.getAttribute('data-cell'), true);
+    });
+    $('#scatter').addEventListener('mousemove', function (e) {
+      var d = e.target.closest('.dot');
+      if (!d) return C.hideTip();
+      var c = cellById(d.getAttribute('data-cell'));
+      if (c) C.showTip(cellTip(c), e);
+    });
+    $('#scatter').addEventListener('mouseleave', C.hideTip);
+    $('#scatter').addEventListener('click', function (e) {
+      var d = e.target.closest('.dot');
+      if (d) selectCell(d.getAttribute('data-cell'), true);
+    });
+    $('#stchart').addEventListener('mousemove', function (e) {
+      var col = e.target.closest('.colhit');
+      if (!col || !S.profile) return C.hideTip();
+      var k = +col.getAttribute('data-hour');
+      C.showTip('<b>' + S.profile.hours[k] + '시</b> · 승차 <b>' + fmt(S.profile.boardings[k]) +
+        '</b> · 하차 <b>' + fmt(S.profile.alightings[k]) + '</b>', e);
+    });
+    $('#stchart').addEventListener('mouseleave', C.hideTip);
+  }
+
+  /* 시뮬레이션 화면이 localStorage 에 저장한 최근 시나리오를 읽습니다.
+     보고서에 "시나리오 포함" 옵션을 쓰기 위한 연결 고리입니다. */
+  function readSavedScenario() {
+    try {
+      var raw = localStorage.getItem('hw.lastSimulation');
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  function renderFooter(meta) {
+    var f = meta.formula || {};
+    $('#fxlist').innerHTML = [f.mismatch, f.demand, f.supply, f.priority]
+      .filter(Boolean).map(function (s) { return '<span>' + esc(s) + '</span>'; }).join('');
+    if (!meta.isMockData) {
+      var d = $('#mockNote'); if (d) d.style.display = 'none';
+      var badge = $('#mockBadge'); if (badge) badge.style.display = 'none';
+      var mk = $('#mapMock'); if (mk) mk.style.display = 'none';
+    }
+    var up = $('#updatedAt'); if (up) up.textContent = meta.updatedAt || '';
+  }
+
+  document.addEventListener('DOMContentLoaded', boot);
+})(window);
