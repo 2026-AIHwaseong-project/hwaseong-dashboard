@@ -24,71 +24,72 @@
   var clamp = C.clamp, mulberry32 = C.mulberry32;
 
   /* ======================================================================
-   * 0. 지도 좌표계 · 지형 (개략도)
-   *    실서버에서는 이 부분이 GeoJSON 행정경계로 대체됩니다.
+   * 0. 지도 좌표계 · 실제 행정경계
+   *    assets/data/boundary.js 가 SGIS 읍면동 경계(경위도)를 실어 옵니다.
+   *    좌표는 전부 경위도(EPSG:4326)이며, 화면 투영은 core.project 가 합니다.
    * ==================================================================== */
-  var VIEW_W = 960, VIEW_H = 640, PAD = 24;
-  /* 화성시 대략 경위도 범위 — 목 데이터에 실데이터와 같은 모양의 lon/lat 를
-     실어 보내기 위한 값입니다(실제 경계와 다름). */
-  var BBOX = [126.62, 36.97, 127.17, 37.33];
+  var VIEW_W = 960, VIEW_H = 640;
+  var BND = HW.BOUNDARY;
+  if (!BND) throw new Error('assets/data/boundary.js 를 먼저 불러와야 합니다.');
+  var BBOX = BND.bbox.slice();
+  var DONGS = BND.dongs;
 
-  /* SVG px → 경위도 역투영 (core.project 의 역함수) */
-  function toLonLat(x, y) {
-    var lon0 = BBOX[0], lat0 = BBOX[1], lon1 = BBOX[2], lat1 = BBOX[3];
-    var kx = Math.cos(((lat0 + lat1) / 2) * Math.PI / 180);
-    var dx = (lon1 - lon0) * kx, dy = (lat1 - lat0);
-    var innerW = VIEW_W - PAD * 2, innerH = VIEW_H - PAD * 2;
-    var scale = Math.min(innerW / dx, innerH / dy);
-    var offX = PAD + (innerW - dx * scale) / 2;
-    var offY = PAD + (innerH - dy * scale) / 2;
-    return {
-      lon: +(lon0 + (x - offX) / scale / kx).toFixed(6),
-      lat: +(lat1 - (y - offY) / scale).toFixed(6)
-    };
-  }
+  C.setProjection(BBOX, VIEW_W, VIEW_H);
 
-  var POLY = [[152, 96], [214, 84], [262, 96], [318, 84], [368, 96], [414, 78], [470, 92], [524, 76], [566, 92], [612, 78], [652, 98], [688, 92], [718, 118], [762, 128], [812, 152], [852, 186], [874, 226], [878, 272], [862, 312], [832, 340], [788, 352], [744, 342], [716, 356], [700, 384], [664, 398], [646, 430], [606, 422], [566, 452], [524, 438], [502, 470], [452, 472], [414, 500], [368, 492], [330, 520], [282, 540], [232, 526], [186, 542], [144, 522], [122, 484], [136, 444], [112, 412], [96, 372], [130, 352], [106, 320], [92, 292], [116, 262], [98, 232], [122, 202], [102, 172], [136, 142]];
-  var ISLE = [[52, 306], [76, 296], [86, 316], [64, 334], [44, 326]];
-
-  function inPoly(x, y, poly) {
+  /* 점-다각형 판정(ray casting). 격자를 어느 읍면동에 넣을지 결정합니다. */
+  function inRing(x, y, ring) {
     var c = false;
-    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      var xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      var xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
       if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) c = !c;
     }
     return c;
   }
+  function dongAt(lon, lat) {
+    for (var i = 0; i < DONGS.length; i++) {
+      var d = DONGS[i], b = d.bbox;
+      if (lon < b[0] || lon > b[2] || lat < b[1] || lat > b[3]) continue;   // bbox 로 먼저 거르기
+      for (var r = 0; r < d.rings.length; r++) {
+        if (inRing(lon, lat, d.rings[r])) return d;
+      }
+    }
+    return null;
+  }
 
-  /* 지도 라벨 — 순수 표시용 */
-  var REGION_LABELS = [['동탄', 788, 262], ['병점', 622, 118], ['봉담', 497, 168], ['매송·비봉', 392, 108], ['새솔동', 196, 112],
-  ['송산·마도', 262, 238], ['남양', 300, 250], ['서신', 142, 276], ['팔탄', 420, 318], ['정남', 524, 288], ['향남', 450, 396],
-  ['양감', 558, 430], ['장안', 348, 458], ['우정', 250, 492], ['제부도', 64, 348]];
-  var IND_MARKS = [['기아공장', 268, 466], ['제약산단', 512, 432], ['송산산단', 242, 192]];
-  var NEIGHBORS = [['안산시', 218, 48], ['수원시', 592, 52], ['용인시', 892, 122], ['오산시', 772, 398], ['평택시', 492, 586]];
+  /* 화면 표시용 좌표(SVG px) — 경위도를 투영해 얻습니다 */
+  function toXY(lon, lat) { return C.project(lon, lat); }
 
   /* ======================================================================
-   * 1. 권역 정의 [이름, x, y, 반경, 수요밀도, 공급, 유형, 고령인구비]
+   * 1. 읍면동별 수요·공급 특성 (시연용 가정값)
+   *    [유형, 수요밀도, 공급수준, 고령인구비]
+   *    경계와 이름은 실제이지만 아래 수치는 가상입니다.
+   *    실데이터 연동 시 이 표가 통째로 교체됩니다.
    * ==================================================================== */
-  var REG = [
-    ['동탄1', 752, 195, 58, .95, .96, 'urban', .08],
-    ['동탄2', 806, 292, 68, .97, .60, 'urbannew', .07],
-    ['병점', 622, 132, 55, .85, .90, 'urban', .12],
-    ['봉담', 498, 152, 55, .68, .58, 'urban', .11],
-    ['매송·비봉', 392, 118, 46, .32, .34, 'rural', .21],
-    ['새솔동', 198, 128, 42, .55, .30, 'urbannew', .06],
-    ['송산·마도', 252, 204, 46, .34, .28, 'ind', .16],
-    ['남양', 300, 262, 56, .58, .50, 'town', .15],
-    ['서신', 148, 292, 46, .17, .14, 'tour', .28],
-    ['팔탄', 420, 330, 46, .30, .30, 'rural', .20],
-    ['정남', 522, 300, 44, .34, .36, 'rural', .19],
-    ['향남', 452, 408, 56, .76, .48, 'town', .12],
-    ['향남산단', 508, 432, 36, .38, .24, 'ind', .10],
-    ['양감', 556, 442, 38, .20, .20, 'rural', .23],
-    ['장안', 350, 468, 44, .24, .22, 'rural', .24],
-    ['우정', 258, 470, 50, .48, .30, 'ind', .17],
-    ['매향·궁평', 172, 482, 40, .15, .12, 'tour', .30]
-  ].map(function (r) {
-    return { n: r[0], x: r[1], y: r[2], r: r[3], p: r[4], s: r[5], t: r[6], e: r[7] };
+  var PROFILE = {
+    '동탄1동': ['urban', .92, .90, .08], '동탄2동': ['urbannew', .95, .62, .07],
+    '동탄3동': ['urban', .88, .84, .08], '동탄4동': ['urbannew', .90, .58, .06],
+    '동탄5동': ['urbannew', .86, .55, .06], '동탄6동': ['urbannew', .93, .60, .06],
+    '동탄7동': ['urbannew', .89, .57, .06], '동탄8동': ['urbannew', .84, .52, .07],
+    '동탄9동': ['urbannew', .81, .50, .07],
+    '병점1동': ['urban', .86, .88, .12], '병점2동': ['urban', .80, .82, .13],
+    '진안동': ['urban', .78, .74, .12], '기배동': ['urban', .66, .70, .14],
+    '화산동': ['urban', .62, .66, .15], '반월동': ['urban', .72, .68, .11],
+    '봉담읍': ['town', .74, .60, .12], '향남읍': ['town', .80, .42, .13],
+    '남양읍': ['town', .62, .50, .15], '우정읍': ['ind', .58, .30, .18],
+    '매송면': ['rural', .34, .36, .20], '비봉면': ['rural', .30, .32, .22],
+    '마도면': ['ind', .34, .28, .19], '송산면': ['rural', .28, .26, .23],
+    '서신면': ['tour', .20, .16, .28], '팔탄면': ['rural', .32, .30, .21],
+    '장안면': ['rural', .24, .22, .25], '양감면': ['rural', .20, .20, .24],
+    '정남면': ['rural', .36, .36, .19], '새솔동': ['urbannew', .58, .30, .06]
+  };
+  var DEFAULT_PROFILE = ['rural', .30, .30, .20];
+
+  /* 읍면동 정보를 이름으로 찾기 쉽게 */
+  var DONG_BY_NAME = {};
+  DONGS.forEach(function (d) {
+    var pf = PROFILE[d.name] || DEFAULT_PROFILE;
+    d.type = pf[0]; d.demand = pf[1]; d.supplyLevel = pf[2]; d.elderly = pf[3];
+    DONG_BY_NAME[d.name] = d;
   });
 
   /* 지역유형별 시간대 배율 [출근, 낮, 퇴근, 심야] */
@@ -107,44 +108,76 @@
     return 0;
   }
 
-  /* 잠재수요(0~1 정규화값) → 일 통행량 환산 계수. 시연용 가정값.
-     실데이터 적용 시 실측 승하차 총량에 맞춰 보정해야 하는 값입니다. */
+  /* 잠재수요(0~1 정규화값) → 일 통행량 환산 계수. 시연용 가정값. */
   var TRIP_COEF = 3200;
 
   /* ======================================================================
    * 2. 노선 · 정류장
+   *    노선망 자체는 가상이지만, 정류장을 실제 읍면동 중심에 배치해
+   *    지도 위에서 위치가 어긋나지 않게 했습니다.
    * ==================================================================== */
-  var ROUTES = [
-    { id: 'A', name: '간선 A · 병점–동탄2', type: 'trunk', pts: [[622, 132, '병점역'], [668, 162, '능동마을'], [716, 190, '반송동'], [752, 214, '동탄중앙'], [788, 240, '동탄역'], [804, 286, '동탄호수공원'], [786, 320, '동탄2남부']] },
-    { id: 'B', name: '간선 B · 남양–병점', type: 'trunk', pts: [[300, 262, '남양시청'], [342, 236, '신남리'], [386, 210, '비봉'], [430, 186, '수영리'], [474, 166, '봉담읍'], [548, 146, '와우리'], [622, 132, '병점역']] },
-    { id: 'C', name: '간선 C · 발안–동탄', type: 'trunk', pts: [[452, 408, '발안터미널'], [494, 382, '향남2지구'], [538, 352, '정남면'], [586, 324, '보통리'], [638, 296, '방교동'], [694, 268, '영천동'], [742, 248, '동탄남부'], [788, 240, '동탄역']] },
-    { id: 'D', name: '지선 D · 새솔–남양', type: 'branch', pts: [[198, 128, '새솔동'], [222, 166, '송산그린시티'], [248, 204, '마도산단'], [274, 234, '마도면'], [300, 262, '남양시청']] },
-    { id: 'E', name: '지선 E · 조암–발안', type: 'branch', pts: [[258, 468, '기아공장'], [296, 456, '조암터미널'], [340, 444, '장안면'], [400, 426, '향남산단'], [452, 408, '발안터미널']] }
+  function centroidOf(name) {
+    var d = DONG_BY_NAME[name];
+    return d ? d.centroid.slice() : [(BBOX[0] + BBOX[2]) / 2, (BBOX[1] + BBOX[3]) / 2];
+  }
+  /** 두 읍면동 중심 사이를 t 비율로 나눈 지점 (중간 정류장을 놓을 때) */
+  function between(a, b, t) {
+    var p = centroidOf(a), q = centroidOf(b);
+    return [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+  }
+
+  var ROUTE_DEFS = [
+    { id: 'A', name: '간선 A · 병점–동탄', type: 'trunk', stops: [
+      ['병점역', '병점1동'], ['진안지구', '진안동'], ['반월동', '반월동'],
+      ['동탄중앙', '동탄1동'], ['동탄역', '동탄3동'], ['동탄호수공원', '동탄6동'], ['동탄2남부', '동탄9동'] ] },
+    { id: 'B', name: '간선 B · 남양–병점', type: 'trunk', stops: [
+      ['남양시청', '남양읍'], ['마도면사무소', '마도면'], ['비봉', '비봉면'],
+      ['매송', '매송면'], ['봉담읍', '봉담읍'], ['기배동', '기배동'], ['병점역', '병점1동'] ] },
+    { id: 'C', name: '간선 C · 발안–동탄', type: 'trunk', stops: [
+      ['발안터미널', '향남읍'], ['향남2지구', '팔탄면'], ['정남면', '정남면'],
+      ['화산동', '화산동'], ['동탄서부', '동탄4동'], ['동탄역', '동탄3동'] ] },
+    { id: 'D', name: '지선 D · 새솔–남양', type: 'branch', stops: [
+      ['새솔동', '새솔동'], ['송산그린시티', '송산면'], ['마도산단', '마도면'], ['남양시청', '남양읍'] ] },
+    { id: 'E', name: '지선 E · 조암–발안', type: 'branch', stops: [
+      ['기아공장', '우정읍'], ['조암터미널', '장안면'], ['양감면', '양감면'], ['발안터미널', '향남읍'] ] },
+    { id: 'F', name: '지선 F · 서신–남양', type: 'branch', stops: [
+      ['제부도입구', '서신면'], ['서신면사무소', '서신면'], ['남양시청', '남양읍'] ] }
   ];
   var STOP_KIND = {
     '병점역': 'hub', '동탄역': 'hub', '발안터미널': 'hub', '조암터미널': 'hub', '남양시청': 'hub',
-    '기아공장': 'ind', '향남산단': 'ind', '마도산단': 'ind',
-    '능동마을': 'res', '반송동': 'res', '동탄중앙': 'res', '동탄호수공원': 'res', '동탄2남부': 'res',
-    '봉담읍': 'res', '향남2지구': 'res', '새솔동': 'res', '송산그린시티': 'res'
+    '기아공장': 'ind', '마도산단': 'ind',
+    '진안지구': 'res', '반월동': 'res', '동탄중앙': 'res', '동탄호수공원': 'res', '동탄2남부': 'res',
+    '봉담읍': 'res', '향남2지구': 'res', '새솔동': 'res', '송산그린시티': 'res', '동탄서부': 'res'
   };
 
-  var STOPS = {}, STOP_LIST = [];
-  ROUTES.forEach(function (rt) {
-    rt.stopIds = [];
-    rt.pts.forEach(function (p) {
-      var name = p[2];
-      if (!STOPS[name]) {
-        var ll = toLonLat(p[0], p[1]);
-        STOPS[name] = {
+  var STOPS = {}, STOP_LIST = [], ROUTES = [];
+  ROUTE_DEFS.forEach(function (def) {
+    var rt = { id: def.id, name: def.name, type: def.type, stopIds: [], pts: [] };
+    def.stops.forEach(function (sp, k) {
+      var label = sp[0], dongName = sp[1];
+      if (!STOPS[label]) {
+        var c = centroidOf(dongName);
+        /* 같은 읍면동에 정류장이 둘이면 겹치지 않게 살짝 흩뜨립니다 */
+        var jitter = mulberry32(label.length * 31 + k * 7);
+        var off = 0.004;
+        var lon = c[0] + (jitter() - 0.5) * off;
+        var lat = c[1] + (jitter() - 0.5) * off;
+        var xy = toXY(lon, lat);
+        STOPS[label] = {
           id: 'S-' + String(STOP_LIST.length + 1).padStart(3, '0'),
-          name: name, x: p[0], y: p[1], lon: ll.lon, lat: ll.lat,
-          kind: STOP_KIND[name] || 'rural', routes: []
+          name: label, dong: dongName,
+          lon: +lon.toFixed(5), lat: +lat.toFixed(5),
+          x: +xy.x.toFixed(1), y: +xy.y.toFixed(1),
+          kind: STOP_KIND[label] || 'rural', routes: []
         };
-        STOP_LIST.push(STOPS[name]);
+        STOP_LIST.push(STOPS[label]);
       }
-      if (STOPS[name].routes.indexOf(rt.id) < 0) STOPS[name].routes.push(rt.id);
-      rt.stopIds.push(STOPS[name].id);
+      var st = STOPS[label];
+      if (st.routes.indexOf(rt.id) < 0) st.routes.push(rt.id);
+      rt.stopIds.push(st.id);
+      rt.pts.push([st.lon, st.lat, label]);
     });
+    ROUTES.push(rt);
   });
   var STOP_BY_ID = {};
   STOP_LIST.forEach(function (s) { STOP_BY_ID[s.id] = s; });
@@ -180,50 +213,63 @@
   });
 
   /* ======================================================================
-   * 3. 격자 생성
-   *    표시 격자는 약 1km. 실구현에서는 250m 격자(SGIS)를 씁니다.
+   * 3. 격자 생성 — 실제 행정경계 안에만
+   *    표시 격자 1.5km. 실구현에서는 250m 격자(SGIS)를 씁니다.
    * ==================================================================== */
-  var STEP = 26;
+  var CELL_KM = 1.5;
+  var KM_PER_DEG_LAT = 110.574;
+  var MID_LAT = (BBOX[1] + BBOX[3]) / 2;
+  var KM_PER_DEG_LON = 111.320 * Math.cos(MID_LAT * Math.PI / 180);
+  var DLAT = CELL_KM / KM_PER_DEG_LAT;
+  var DLON = CELL_KM / KM_PER_DEG_LON;
+
   var CELLS = [];
   (function buildCells() {
     var i = 0;
-    for (var gy = 64; gy < 616; gy += STEP) {
-      for (var gx = 84; gx < 912; gx += STEP) {
-        var cx = gx + 12, cy = gy + 12;
-        if (!inPoly(cx, cy, POLY)) continue;
-        var byT = {}, byTs = {}, rnd = mulberry32(i * 7 + 3);
-        var e = 0, wsum = 0, popw = 0, best = null, bw = 0;
-        REG.forEach(function (r) {
-          var d = Math.hypot(cx - r.x, cy - r.y);
-          var w = Math.exp(-(d * d) / (r.r * r.r));
-          if (w < 1e-4) return;
-          byT[r.t] = (byT[r.t] || 0) + w * r.p;
-          byTs[r.t] = (byTs[r.t] || 0) + w * r.s;
-          e += w * r.e; wsum += w; popw += w * r.p;
-          if (w > bw) { bw = w; best = r; }
+    for (var lat = BBOX[1]; lat < BBOX[3]; lat += DLAT) {
+      for (var lon = BBOX[0]; lon < BBOX[2]; lon += DLON) {
+        var clon = lon + DLON / 2, clat = lat + DLAT / 2;
+        var dong = dongAt(clon, clat);
+        if (!dong) continue;                       // 화성시 밖은 제외
+
+        var rnd = mulberry32(i * 7 + 3);
+        /* 인접 읍면동의 영향까지 섞어 경계에서 값이 뚝 끊기지 않게 합니다 */
+        var byT = {}, byTs = {}, wsum = 0, eld = 0, popw = 0;
+        DONGS.forEach(function (d) {
+          var dx = (clon - d.centroid[0]) * KM_PER_DEG_LON;
+          var dy = (clat - d.centroid[1]) * KM_PER_DEG_LAT;
+          var dist = Math.hypot(dx, dy);
+          /* 자기 읍면동이 지배적이되, 경계에서 값이 뚝 끊기지 않을 만큼만 이웃을 섞습니다 */
+          var reach = d === dong ? 6 : 2.8;        // km
+          var w = Math.exp(-(dist * dist) / (reach * reach));
+          if (d === dong) w = Math.max(w, 1.6);    // 자기 읍면동 비중 보장
+          if (w < 1e-3) return;
+          byT[d.type] = (byT[d.type] || 0) + w * d.demand;
+          byTs[d.type] = (byTs[d.type] || 0) + w * d.supplyLevel;
+          eld += w * d.elderly; wsum += w; popw += w * d.demand;
         });
+
         var dmin = 1e9, nearest = null;
         STOP_LIST.forEach(function (s) {
-          var d = Math.hypot(cx - s.x, cy - s.y);
-          if (d < dmin) { dmin = d; nearest = s; }
+          var sx = (clon - s.lon) * KM_PER_DEG_LON, sy = (clat - s.lat) * KM_PER_DEG_LAT;
+          var dd = Math.hypot(sx, sy);
+          if (dd < dmin) { dmin = dd; nearest = s; }
         });
-        var dir = '중심';
-        if (best) {
-          var dx = cx - best.x, dy = cy - best.y;
-          if (Math.abs(dx) > Math.abs(dy)) { if (dx > 14) dir = '동부'; else if (dx < -14) dir = '서부'; }
-          else { if (dy > 14) dir = '남부'; else if (dy < -14) dir = '북부'; }
-        }
-        var ll = toLonLat(cx, cy);
+
+        var p0 = toXY(lon, lat + DLAT), p1 = toXY(lon + DLON, lat);   // 좌상단·우하단
+        var cellW = Math.max(3, p1.x - p0.x), cellH = Math.max(3, p1.y - p0.y);
+
         CELLS.push({
           idx: i, id: 'G-' + (100 + i),
-          x: gx, y: gy, cx: cx, cy: cy, size: 24,
-          lon: ll.lon, lat: ll.lat,
-          region: best ? best.n : '외곽', dir: dir,
-          name: (best ? best.n : '외곽') + ' ' + dir,
+          lon: +clon.toFixed(5), lat: +clat.toFixed(5),
+          x: +(p0.x + 0.8).toFixed(1), y: +(p0.y + 0.8).toFixed(1),
+          w: +(cellW - 1.6).toFixed(1), h: +(cellH - 1.6).toFixed(1),
+          region: dong.name, regionCode: dong.code, regionKind: dong.kind,
+          name: dong.name + ' ' + directionIn(clon, clat, dong),
           byT: byT, byTs: byTs,
-          elderlyRatio: wsum ? e / wsum : .2,
+          elderlyRatio: wsum ? eld / wsum : .2,
           popWeight: popw,
-          coverage: clamp(1 - dmin / 95, .05, 1),
+          coverage: clamp(1 - dmin / 3.6, .05, 1),      // 3.6km 를 도보권 밖 기준으로
           nearestStopId: nearest ? nearest.id : null,
           nearestStopName: nearest ? nearest.name : null,
           nP: .92 + rnd() * .16, nS: .92 + rnd() * .16, nF: .92 + rnd() * .16,
@@ -233,6 +279,31 @@
       }
     }
   })();
+
+  /** 읍면동 안에서의 방위. 작은 동에서 이름이 겹치지 않도록 8방위를 씁니다. */
+  function directionIn(lon, lat, dong) {
+    /* 배열을 함수 안에 두는 이유: 이 함수는 격자 생성(위쪽)에서 호출되는데,
+       바깥 var 는 그 시점에 아직 초기화되지 않습니다(호이스팅). */
+    var DIR8 = ['동부', '북동부', '북부', '북서부', '서부', '남서부', '남부', '남동부'];
+    var dx = (lon - dong.centroid[0]) * KM_PER_DEG_LON;
+    var dy = (lat - dong.centroid[1]) * KM_PER_DEG_LAT;
+    if (Math.hypot(dx, dy) < 0.7) return '중심';
+    var i = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
+    return DIR8[((i % 8) + 8) % 8];
+  }
+
+  /** 그래도 이름이 겹치면 순번을 붙입니다 (격자 ID 로는 늘 구분됩니다) */
+  function dedupeNames(cells) {
+    var seen = {};
+    cells.forEach(function (c) {
+      var n = c.name;
+      if (seen[n] == null) { seen[n] = 1; return; }
+      seen[n] += 1;
+      c.name = n + ' ' + seen[n];
+    });
+  }
+
+  dedupeNames(CELLS);
   var N = CELLS.length;
 
   /* ======================================================================
@@ -255,6 +326,15 @@
      매번 다시 잡으면 배치 전후 KPI 를 서로 다른 자로 재는 셈이라 비교가 무의미해집니다. */
   var NORM = null;
   var MI_THRESHOLDS = [-1.5, -.75, -.25, .25, .75, 1.5];
+
+  /** 사분면 판정. computeAll 과 추천 엔진이 같은 규칙을 쓰도록 한 곳에 둡니다. */
+  function quadrantOf(zd, zs, mi, nfv, K) {
+    if (zd >= .2 && mi >= .55) return 'need';
+    if (zd <= -.3 && zs >= .3) return 'over';
+    if (zd <= -.35 && zs <= -.35 && nfv >= K.fRef) return 'drt';
+    if (zd >= .25 && zs >= .25) return 'ok';
+    return 'mid';
+  }
 
   function computeAll() {
     var first = !NORM;
@@ -310,14 +390,7 @@
       });
       var dBin = qbins(D, K.dBinT), sBin = qbins(S, K.sBinT), fBin = qbins(nf, K.fBinT);
 
-      var quad = zD.map(function (v, i) {
-        var d = v, s = zS[i];
-        if (d >= .2 && MI[i] >= .55) return 'need';
-        if (d <= -.3 && s >= .3) return 'over';
-        if (d <= -.35 && s <= -.35 && nf[i] >= K.fRef) return 'drt';
-        if (d >= .25 && s >= .25) return 'ok';
-        return 'mid';
-      });
+      var quad = zD.map(function (v, i) { return quadrantOf(v, zS[i], MI[i], nf[i], K); });
       var pri = MI.map(function (v, i) {
         return quad[i] === 'need' ? v * (0.35 + CELLS[i].popWeight) * (1 + CELLS[i].elderlyRatio * 1.6) : 0;
       });
@@ -337,6 +410,7 @@
 
       return {
         period: P.id, D: D, S: S, zD: zD, zS: zS, MI: MI, nf: nf,
+        nq: nq, K: K,          /* 국소 재계산(추천 엔진)에서 씁니다 */
         miBin: miBin, dBin: dBin, sBin: sBin, fBin: fBin,
         quad: quad, pri: pri,
         needIdx: needIdx, drtIdx: drtIdx, overIdx: overIdx,
@@ -348,30 +422,44 @@
 
   /* ======================================================================
    * 5. 배치 효과 모델
-   *    좌표는 SVG px. 축척바 기준 120px ≈ 5km 이므로 1px ≈ 41.7m.
+   *    거리는 km 로 계산합니다(예전에는 화면 px 기준이었습니다).
    *    파급 계수는 시연용 가정값 — 실데이터에서는 실측 승하차로 보정해야 합니다.
    * ==================================================================== */
-  var PX_M = 5000 / 120;
+  /** 배치 효과까지 반영한 커버리지. 제약 판정은 반드시 이 값으로 해야
+      같은 격자에 같은 수단이 중복 추천되지 않습니다. */
+  function effectiveCoverage(c) { return clamp(c.coverage + (c.covAdj || 0), 0, 1); }
+
+  function distKm(a, b) {
+    var dx = (a.lon - b.lon) * KM_PER_DEG_LON;
+    var dy = (a.lat - b.lat) * KM_PER_DEG_LAT;
+    return Math.hypot(dx, dy);
+  }
   var EFFECT = {
     stop: {
-      label: '정류장 신설', icon: '●', radiusPx: 45,
-      apply: function (c, d) { var k = 1 - d / 45; c.covAdj += .34 * k; c.supAdj += .05 * k; }
+      label: '정류장 신설', icon: '●', radiusKm: 2.0,
+      apply: function (c, d) { var k = 1 - d / 2.0; c.covAdj += .34 * k; c.supAdj += .05 * k; },
+      /* 정류장 신설이 답인 상황은 "노선은 인근인데 걸어가기 먼" 경우뿐입니다.
+         - 커버리지 ≥ 0.5 : 정류장은 이미 도보권. 문제는 운행 빈도 → 배차 증편
+         - 커버리지 < 0.15: 노선망 자체가 닿지 않음 → 똑버스(또는 노선 신설)
+         이 구분이 없으면 가장 싼 정류장이 아무 데나 이깁니다. */
+      guard: function (c) { var cv = effectiveCoverage(c); return cv >= .15 && cv < .5; },
+      guardMsg: '정류장 신설은 정류장이 도보권 밖이면서 기존 노선망에서 약 3km 이내인 격자에만 ' +
+        '적용할 수 있습니다. 정류장이 이미 가까우면 배차 증편을, 노선망에서 멀면 똑버스를 검토하세요.'
     },
     /* 똑버스는 문전 서비스라 범위는 넓되 효과는 얕게. 한 대로 권역이 통째로 해결되면 안 됩니다. */
     drt: {
-      label: '똑버스 배치', icon: '◆', radiusPx: 72,
-      apply: function (c, d) { c.supAdj += .13 * (1 - d / 72); }
+      label: '똑버스 배치', icon: '◆', radiusKm: 3.0,
+      apply: function (c, d) { c.supAdj += .13 * (1 - d / 3.0); }
     },
     freq: {
-      label: '배차 증편', icon: '▲', radiusPx: 52,
-      apply: function (c, d) { c.supAdj += (d < STEP ? .20 : .09); },
-      guard: function (c) { return c.coverage >= .5; },
-      guardMsg: '배차 증편은 기존 정류장이 가까운 격자에만 적용할 수 있습니다.'
+      label: '배차 증편', icon: '▲', radiusKm: 2.4,
+      apply: function (c, d) { c.supAdj += (d < CELL_KM ? .20 : .09); },
+      /* 정류장이 도보권 안이면 부족한 것은 접근성이 아니라 운행 빈도입니다. */
+      guard: function (c) { return effectiveCoverage(c) >= .5; },
+      guardMsg: '배차 증편은 정류장이 도보권 안(커버리지 0.5 이상)인 격자에만 적용할 수 있습니다.'
     }
   };
-  function effectRadiusKm(type) {
-    return Math.round(EFFECT[type].radiusPx * PX_M / 100) / 10;
-  }
+  function effectRadiusKm(type) { return EFFECT[type].radiusKm; }
 
   function applyPlacements(placements) {
     CELLS.forEach(function (c) { c.covAdj = 0; c.supAdj = 0; });
@@ -382,8 +470,8 @@
       if (!target) return;
       var mult = Math.max(1, p.count || 1);
       CELLS.forEach(function (c) {
-        var d = Math.hypot(c.cx - target.cx, c.cy - target.cy);
-        if (d < e.radiusPx) {
+        var d = distKm(c, target);
+        if (d < e.radiusKm) {
           for (var k = 0; k < mult; k++) e.apply(c, d);
         }
       });
@@ -428,7 +516,8 @@
         region: c.region,
         direction: c.dir,
         lon: c.lon, lat: c.lat,
-        x: c.x, y: c.y, size: c.size,
+        x: c.x, y: c.y, w: c.w, h: c.h,
+        regionCode: c.regionCode, regionKind: c.regionKind,
         demand: Math.round(100 * d.D[i]),
         supply: Math.round(100 * d.S[i]),
         zDemand: +d.zD[i].toFixed(3),
@@ -561,6 +650,213 @@
   }
 
   /* ======================================================================
+   * 7-2. 추천 배치안 (탐욕적 한계효과 최대화)
+   * ----------------------------------------------------------------------
+   *  ⚠️ 설계 원칙: "최적화는 알고리즘, 설명은 AI"
+   *     배치 위치를 언어모델에게 고르게 하지 않습니다. 매번 답이 달라지고
+   *     근거를 댈 수 없기 때문입니다. 위치는 아래 알고리즘이 정하고,
+   *     선정 근거를 문장으로 다듬는 일만 AI 가 맡습니다.
+   *
+   *  왜 빠른가
+   *     배치는 공급(S)에만 영향을 주고 정규화 기준은 고정돼 있으므로,
+   *     영향권 안 격자만 다시 계산해도 전체 재계산과 결과가 정확히 같습니다.
+   *     (똑버스 1대 = 353칸 중 8칸만 변함 → 약 44배 절약)
+   *
+   *  목적함수
+   *     미해결 통행량 = Σ(고수요·저공급 또는 DRT후보 격자의 잠재통행 × 교통약자 가중)
+   *     교통약자 가중은 우선순위 산식과 같은 (1 + 1.6·고령인구비) 를 씁니다.
+   * ==================================================================== */
+
+  /** 격자 i 를 현재 상태 + 추가 배치효과로 다시 계산 (국소) */
+  function recalcCell(i, d, addCov, addSup) {
+    var c = CELLS[i], K = d.K;
+    var S = .78 * d.nq[i] +
+      .22 * clamp(c.coverage + c.covAdj + addCov, 0, 1) +
+      c.supAdj + addSup;
+    var zS = (S - K.mS) / K.sS;
+    var mi = clamp((d.zD[i] - zS) * Math.pow(clamp(d.D[i] / K.dRef, 0, 1), .65), -2.6, 2.6);
+    return { zS: zS, mi: mi, quad: quadrantOf(d.zD[i], zS, mi, d.nf[i], K) };
+  }
+
+  /* 수단마다 비용의 성격이 다릅니다.
+     정류장은 1회성 시설비(내용연수 10년), 똑버스·증편은 연간 소요액입니다.
+     그냥 나누면 1회성 비용이 부당하게 싸 보이므로, 추천 비교에서는
+     연간 환산 비용을 씁니다. 화면에 표시하는 사업비는 원래 값 그대로입니다. */
+  var COST_LIFE_YEARS = { stop: 10, drt: 1, freq: 1 };
+  function annualCost(type) {
+    return (CONFIG.COST[type] || 0) / (COST_LIFE_YEARS[type] || 1);
+  }
+
+  /** 아직 해결되지 않은 통행량 (교통약자 가중 반영) */
+  function unresolvedOf(i, d, quad) {
+    if (quad !== 'need' && quad !== 'drt') return 0;
+    return d.nf[i] * TRIP_COEF * (1 + CELLS[i].elderlyRatio * 1.6);
+  }
+
+  /** 후보 하나를 놓았을 때의 개선량. 실제로 반영하지는 않습니다. */
+  function evalCandidate(type, target, dataAll, t) {
+    var e = EFFECT[type], d = dataAll[t];
+    var gainWeighted = 0, gainTrips = 0, resolvedCells = 0;
+    for (var i = 0; i < N; i++) {
+      var dist = distKm(CELLS[i], target);
+      if (dist >= e.radiusKm) continue;
+      var inc = { covAdj: 0, supAdj: 0 };
+      e.apply(inc, dist);
+      var after = recalcCell(i, d, inc.covAdj, inc.supAdj);
+      var before = d.quad[i];
+      var u0 = unresolvedOf(i, d, before), u1 = unresolvedOf(i, d, after.quad);
+      if (u0 !== u1) {
+        gainWeighted += u0 - u1;
+        if (before === 'need' && after.quad !== 'need') {
+          resolvedCells++;
+          gainTrips += d.nf[i] * TRIP_COEF;
+        } else if (before !== 'need' && after.quad === 'need') {
+          resolvedCells--;
+          gainTrips -= d.nf[i] * TRIP_COEF;
+        } else if (before === 'drt' && after.quad !== 'drt') {
+          resolvedCells++;
+        }
+      }
+    }
+    return { weighted: gainWeighted, trips: Math.round(gainTrips), cells: resolvedCells };
+  }
+
+  /** 왜 이 수단을 이 자리에 골랐는지 — 보고서에 그대로 실립니다 */
+  function buildRationale(cell, d, i, type, gain) {
+    var parts = [];
+    parts.push('수요지수 ' + Math.round(100 * d.D[i]) + ' 대비 공급지수 ' + Math.round(100 * d.S[i]));
+    if (type === 'stop') {
+      parts.push('노선은 인근을 지나지만 정류장이 도보권 밖(커버리지 ' +
+        cell.coverage.toFixed(2) + ')이라 정류장 신설로 해소 가능');
+    } else if (type === 'freq') {
+      parts.push('정류장은 도보권 안(커버리지 ' + cell.coverage.toFixed(2) +
+        ')이므로 부족한 것은 접근성이 아니라 운행 빈도');
+    } else {
+      parts.push(cell.coverage < .15
+        ? '노선망이 닿지 않아(커버리지 ' + cell.coverage.toFixed(2) + ') 정규 노선보다 수요응답형이 적합'
+        : '절대 수요가 작아 정규 노선 증차보다 수요응답형이 적합');
+    }
+    if (cell.elderlyRatio >= .18) {
+      parts.push('고령인구비 ' + Math.round(cell.elderlyRatio * 100) + '%로 이동 대안이 적음');
+    }
+    if (gain.cells > 0) parts.push('인근 ' + gain.cells + '개 격자 해소 예상');
+    return parts.join(', ');
+  }
+
+  function runRecommendation(body) {
+    body = body || {};
+    var period = body.period || 'am';
+    var t = periodIndex(period);
+    var budget = body.budgetKrw != null ? body.budgetKrw : CONFIG.COST.defaultBudget;
+    var maxN = Math.max(1, Math.min(20, body.maxPlacements || 5));
+    var allowed = body.allowedTypes && body.allowedTypes.length
+      ? body.allowedTypes : Object.keys(EFFECT);
+
+    /* 기존 배치는 무시하고 기준선에서 새로 짭니다(교체 방식) */
+    var data = applyPlacements([]);
+    var chosen = [], spent = 0, stopped = 'max_reached';
+    var used = {};      /* 같은 격자에 같은 수단을 두 번 추천하지 않습니다 */
+
+    while (chosen.length < maxN) {
+      var d = data[t], best = null;
+
+      for (var i = 0; i < N; i++) {
+        var q = d.quad[i];
+        if (q !== 'need' && q !== 'drt') continue;          // 후보: 미해결 격자만
+
+        for (var a = 0; a < allowed.length; a++) {
+          var type = allowed[a], e = EFFECT[type];
+          if (!e) continue;
+          if (used[type + '@' + CELLS[i].id]) continue;
+          if (e.guard && !e.guard(CELLS[i])) continue;       // 증편은 도보권 안에서만
+          var cost = CONFIG.COST[type] || 0;
+          if (cost <= 0 || spent + cost > budget) continue;  // 예산 초과분은 제외
+
+          var gain = evalCandidate(type, CELLS[i], data, t);
+          if (gain.weighted <= 0) continue;
+          var eff = gain.weighted / annualCost(type);        // 연간 환산 1원당 개선량
+          if (!best || eff > best.eff) {
+            best = { i: i, type: type, cost: cost, eff: eff, gain: gain };
+          }
+        }
+      }
+
+      if (!best) {
+        stopped = chosen.length ? 'no_further_gain'
+          : (spent === 0 && budget < Math.min.apply(null, allowed.map(function (x) { return CONFIG.COST[x] || 1e12; }))
+            ? 'budget_exhausted' : 'no_further_gain');
+        break;
+      }
+
+      var cell = CELLS[best.i];
+      used[best.type + '@' + cell.id] = true;
+      chosen.push({
+        rank: chosen.length + 1,
+        type: best.type,
+        typeLabel: EFFECT[best.type].label,
+        cellId: cell.id,
+        cellName: cell.name,
+        region: cell.region,
+        count: 1,
+        radiusKm: EFFECT[best.type].radiusKm,
+        costKrw: best.cost,
+        annualCostKrw: Math.round(annualCost(best.type)),
+        costBasis: COST_LIFE_YEARS[best.type] > 1
+          ? '1회성 시설비(내용연수 ' + COST_LIFE_YEARS[best.type] + '년)' : '연간 운영비',
+        expectedResolvedCells: best.gain.cells,
+        expectedResolvedTrips: best.gain.trips,
+        krwPerTrip: best.gain.trips > 0 ? Math.round(best.cost / best.gain.trips) : null,
+        rationale: buildRationale(cell, data[t], best.i, best.type, best.gain)
+      });
+      spent += best.cost;
+
+      /* 채택분을 실제로 반영하고 다음 라운드로.
+         이미 커버된 곳은 다음 회차에 효율이 자동으로 떨어집니다(중복 배치 방지). */
+      data = applyPlacements(chosen.map(function (p) {
+        return { type: p.type, cellId: p.cellId, count: p.count };
+      }));
+
+      if (spent >= budget) { stopped = 'budget_exhausted'; break; }
+    }
+
+    /* 최종 효과는 기존 시뮬레이션 경로로 계산해 화면·보고서와 수치를 일치시킵니다 */
+    var sim = runSimulation({
+      name: body.name || 'AI 추천 배치안',
+      period: period,
+      budgetKrw: budget,
+      placements: chosen.map(function (p) {
+        return { type: p.type, cellId: p.cellId, count: p.count };
+      })
+    });
+    applyPlacements([]);   // 기준선 복원
+
+    var block = sim.periods.filter(function (x) { return x.period === period; })[0] || sim.periods[0];
+    return {
+      method: 'budget-constrained greedy marginal benefit',
+      methodLabel: '예산 제약 하 한계효과 최대화',
+      methodNote: '미해결 통행량(고수요·저공급 + DRT후보, 교통약자 가중)을 ' +
+        '연간 환산 사업비 1원당 가장 많이 줄이는 지점을 순차 선택했습니다. ' +
+        '정류장 신설은 1회성 시설비를 내용연수 10년으로 나누어 똑버스·증편의 연간 운영비와 같은 기준에서 비교했습니다. ' +
+        '이미 개선된 지역은 다음 회차에 효율이 낮아져 중복 배치되지 않습니다.',
+      period: period,
+      generatedAt: C.nowStamp(),
+      placements: chosen,
+      simulation: sim,
+      summary: {
+        count: chosen.length,
+        totalKrw: spent,
+        budgetKrw: budget,
+        budgetUsedPct: budget > 0 ? +(100 * spent / budget).toFixed(1) : 0,
+        expectedResolvedCells: Math.max(0, -block.delta.needCells),
+        expectedResolvedTrips: Math.max(0, -block.delta.potentialTripsPerDay),
+        expectedResolvedElderlyTrips: Math.max(0, -block.delta.elderlyTripsPerDay),
+        krwPerTrip: sim.effectiveness.krwPerTripPerDay,
+        stoppedBecause: stopped
+      }
+    };
+  }
+
+  /* ======================================================================
    * 8. AI 보고서 초안 (목)
    * ----------------------------------------------------------------------
    *  실서버에서는 이 함수 자리에서 Claude API 를 호출합니다.
@@ -575,6 +871,7 @@
     var d = BASE_DATA[t];
     var base = BASELINE_KPI[t];
     var sim = ctx.simulation || null;
+    var rec = ctx.recommendation || null;
     var top = serializePriorities(d, 5);
     var f = C.fmt, won = C.won;
 
@@ -625,7 +922,18 @@
     });
 
     var planBody, planBullets;
-    if (sim && sim.placements.length) {
+    if (rec && rec.placements && rec.placements.length) {
+      var su = rec.summary || {};
+      planBody = '예산 ' + won(su.budgetKrw || 0) + ' 범위에서 ' + (rec.methodLabel || '최적화 분석') +
+        ' 방식으로 우선 배치 대상 ' + rec.placements.length + '개 지점을 도출하였다. ' +
+        '총 소요액은 ' + won(su.totalKrw || 0) + '으로 예산의 ' + (su.budgetUsedPct || 0) + '% 수준이다.' +
+        (rec.edited ? '\n다만 아래 목록은 담당 부서 검토 의견을 반영해 일부 조정한 안이다.' : '') +
+        '\n' + (rec.methodNote || '');
+      planBullets = rec.placements.map(function (p) {
+        return p.rank + '순위 ' + p.typeLabel + ' — ' + p.cellName + '(' + p.cellId + '), ' +
+          won(p.costKrw) + '. ' + p.rationale;
+      });
+    } else if (sim && sim.placements.length) {
       var byType = {};
       sim.placements.forEach(function (p) { byType[p.typeLabel] = (byType[p.typeLabel] || 0) + p.count; });
       planBody = '「' + sim.name + '」 시나리오는 ' +
@@ -694,6 +1002,17 @@
       })
     }];
 
+    if (rec && rec.placements && rec.placements.length) {
+      tables.push({
+        key: 'recommendation', title: '추천 배치안 및 선정 근거',
+        columns: ['순위', '수단', '위치', '격자', '사업비(원)', '비용 성격', '해소 격자', '해소 통행(일)', '선정 근거'],
+        rows: rec.placements.map(function (p) {
+          return [p.rank, p.typeLabel, p.cellName, p.cellId, f(p.costKrw),
+            p.costBasis || '-', p.expectedResolvedCells, f(p.expectedResolvedTrips), p.rationale];
+        })
+      });
+    }
+
     if (sim) {
       tables.push({
         key: 'placements', title: '시뮬레이션 배치 내역',
@@ -716,7 +1035,9 @@
 
     return {
       title: CONFIG.APP.org + ' 대중교통 수급 불일치 분석 및 노선 조정 검토(안)',
-      subtitle: P.name + ' 시간대(' + P.label + ') 기준' + (sim ? ' · 시나리오 「' + sim.name + '」' : ''),
+      subtitle: P.name + ' 시간대(' + P.label + ') 기준' +
+        (sim ? ' · 시나리오 「' + sim.name + '」' : '') +
+        (rec ? (rec.edited ? ' · AI 추천안(수정)' : ' · AI 추천안') : ''),
       org: CONFIG.APP.org,
       dept: CONFIG.APP.dept,
       period: pid,
@@ -741,18 +1062,27 @@
     switch (opId) {
       case 'meta.get':
         return {
-          region: CONFIG.APP.org,
+          region: BND.region,
           updatedAt: C.todayISO(),
           isMockData: true,
           periods: PERIODS.map(function (p) {
             return { id: p.id, name: p.name, label: p.label, hours: p.hours };
           }),
-          grid: { sizeMeters: 250, displaySizeMeters: 1000, crs: 'EPSG:4326', bbox: BBOX, cellCount: N },
+          grid: {
+            sizeMeters: 250, displaySizeMeters: CELL_KM * 1000,
+            crs: 'EPSG:4326', bbox: BBOX, cellCount: N
+          },
           map: {
             viewBox: [0, 0, VIEW_W, VIEW_H],
-            boundary: POLY, islands: [ISLE],
-            labels: { regions: REGION_LABELS, industrial: IND_MARKS, neighbors: NEIGHBORS },
-            scaleBar: { px: 120, meters: 5000 }
+            /* 실제 행정경계. 좌표는 경위도이므로 화면에서 투영해 그립니다. */
+            boundarySource: BND.source,
+            regions: DONGS.map(function (d) {
+              return {
+                code: d.code, name: d.name, kind: d.kind,
+                centroid: d.centroid, bbox: d.bbox, rings: d.rings
+              };
+            }),
+            scaleBar: { km: 5 }
           },
           cost: CONFIG.COST,
           formula: {
@@ -762,7 +1092,7 @@
             priority: '우선순위 = MI⁺ × 수요규모 × (1 + 1.6·고령인구비)'
           },
           effects: Object.keys(EFFECT).map(function (k) {
-            return { type: k, label: EFFECT[k].label, icon: EFFECT[k].icon, radiusKm: effectRadiusKm(k), unitKrw: CONFIG.COST[k] };
+            return { type: k, label: EFFECT[k].label, icon: EFFECT[k].icon, radiusKm: EFFECT[k].radiusKm, unitKrw: CONFIG.COST[k] };
           })
         };
 
@@ -777,7 +1107,11 @@
       case 'stops.list':
         return {
           stops: STOP_LIST.map(function (s) {
-            return { id: s.id, name: s.name, lon: s.lon, lat: s.lat, x: s.x, y: s.y, kind: s.kind, routes: s.routes.slice() };
+            return {
+              id: s.id, name: s.name, dong: s.dong,
+              lon: s.lon, lat: s.lat, x: s.x, y: s.y,
+              kind: s.kind, routes: s.routes.slice()
+            };
           })
         };
 
@@ -804,8 +1138,7 @@
           routes: ROUTES.map(function (r) {
             return {
               id: r.id, name: r.name, type: r.type, stopIds: r.stopIds.slice(),
-              pathXY: r.pts.map(function (p) { return [p[0], p[1]]; }),
-              path: r.pts.map(function (p) { var ll = toLonLat(p[0], p[1]); return [ll.lon, ll.lat]; })
+              path: r.pts.map(function (p) { return [p[0], p[1]]; })
             };
           })
         };
@@ -815,6 +1148,9 @@
 
       case 'simulations.run':
         return runSimulation(body);
+
+      case 'recommendations.run':
+        return runRecommendation(body);
 
       case 'reports.draft':
         return draftReport(body);

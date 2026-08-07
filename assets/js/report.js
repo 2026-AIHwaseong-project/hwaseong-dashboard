@@ -505,7 +505,7 @@
       '<span class="hs" data-status></span>' +
       '<span class="sp"></span>' +
       '<label class="hs" style="display:flex;align-items:center;gap:5px">' +
-      '<input type="checkbox" data-incl-sim> 시나리오 포함</label>' +
+      '<input type="checkbox" data-incl-sim> 시나리오·추천안 포함</label>' +
       '<button class="btn sm" data-regen type="button">다시 생성</button>' +
       '<button class="xbtn" data-close type="button" aria-label="닫기">×</button>' +
       '</header>' +
@@ -651,7 +651,9 @@
         dept: CONFIG.APP.dept,
         kpi: ctx.kpi || null,
         priorities: ctx.priorities || null,
-        simulation: inclSim ? (ctx.simulation || null) : null
+        simulation: inclSim ? (ctx.simulation || null) : null,
+        /* 추천 배치안이 있으면 선정 근거가 4장과 표에 실립니다 */
+        recommendation: inclSim ? (ctx.recommendation || null) : null
       }
     };
 

@@ -65,60 +65,85 @@
 
     function drawBase() {
       var h = '';
+      var regions = mapMeta.regions || [];
+
       h += '<rect class="wtr" x="0" y="0" width="' + W + '" height="' + H + '"/>';
-      h += '<text class="wlab" x="30" y="212" transform="rotate(-90 30 212)">서 해</text>';
-      (mapMeta.labels && mapMeta.labels.neighbors || []).forEach(function (n) {
-        h += '<text class="nlab" x="' + n[1] + '" y="' + n[2] + '" text-anchor="middle">' + esc(n[0]) + '</text>';
+
+      /* 1단계: 읍면동을 육지색으로 채웁니다. 합쳐지면 그게 곧 시 경계선입니다. */
+      h += '<g data-land>';
+      regions.forEach(function (r) {
+        h += '<path class="land" d="' + ringsPath(r.rings) + '"/>';
       });
-      if (mapMeta.boundary) h += '<path class="land" d="' + path(mapMeta.boundary) + '"/>';
-      (mapMeta.islands || []).forEach(function (isl) {
-        h += '<path class="land" d="' + path(isl) + '"/>';
-      });
-      h += '<line x1="86" y1="316" x2="100" y2="314" stroke="var(--coast)" stroke-width="1.4" stroke-dasharray="3 3"/>';
+      h += '</g>';
 
       h += '<g class="cells" data-cells></g>';
 
-      /* 노선은 격자 위에 그리되, 흰 테두리(케이싱)를 깔아 어떤 격자 색 위에서도 보이게 합니다 */
+      /* 2단계: 읍면동 경계선. 격자 위에 얹어 어디까지가 어느 동인지 보이게 합니다. */
+      h += '<g data-dongline>';
+      regions.forEach(function (r) {
+        h += '<path class="dongline" data-dong="' + esc(r.code) + '" d="' + ringsPath(r.rings) + '"/>';
+      });
+      h += '</g>';
+
       h += '<g data-groutes></g>';
 
+      /* 3단계: 읍면동 이름을 실제 도형 중심에 배치 */
       h += '<g data-glabels>';
-      (mapMeta.labels && mapMeta.labels.regions || []).forEach(function (r) {
-        h += '<text class="rlab' + (r[0] === '제부도' ? ' sm' : '') + '" x="' + r[1] + '" y="' + r[2] + '" text-anchor="middle">' + esc(r[0]) + '</text>';
-      });
-      (mapMeta.labels && mapMeta.labels.industrial || []).forEach(function (m) {
-        var x = m[1], y = m[2];
-        h += '<path class="indmark" d="M' + (x - 5) + ',' + (y + 3) + ' L' + x + ',' + (y - 6) + ' L' + (x + 5) + ',' + (y + 3) + ' Z"/>' +
-          '<text class="rlab sm" x="' + (x + 8) + '" y="' + (y + 6) + '" text-anchor="start">' + esc(m[0]) + '</text>';
+      regions.forEach(function (r) {
+        var p = C.project(r.centroid[0], r.centroid[1]);
+        h += '<text class="rlab' + (r.kind === '동' ? ' sm' : '') + '" x="' + p.x.toFixed(1) +
+          '" y="' + p.y.toFixed(1) + '" text-anchor="middle">' + esc(r.name) + '</text>';
       });
       h += '</g>';
 
       h += '<g class="placed" data-placed></g>';
-      /* 선택 표시는 이중 링(바깥 흰 테두리 + 안쪽 강조색)이라 어떤 격자 색 위에서도 보입니다 */
       h += '<g data-selring visibility="hidden">' +
-        '<rect class="selring-out" x="-99" y="-99" width="28" height="28" rx="4"/>' +
-        '<rect class="selring-in" x="-99" y="-99" width="28" height="28" rx="4"/>' +
+        '<rect class="selring-out" x="-99" y="-99" width="20" height="20" rx="3"/>' +
+        '<rect class="selring-in" x="-99" y="-99" width="20" height="20" rx="3"/>' +
         '</g>';
 
       h += '<g transform="translate(' + (W - 38) + ',72)"><circle class="compass" r="11"/>' +
         '<path d="M0,-7 L3,4 L0,2 L-3,4 Z" fill="var(--ink3)"/>' +
         '<text class="compass-t" y="-16" text-anchor="middle">N</text></g>';
 
-      var sb = mapMeta.scaleBar || { px: 120, meters: 5000 };
-      h += '<g transform="translate(' + (W - 172) + ',' + (H - 34) + ')">' +
-        '<line class="scalebar" x1="0" y1="0" x2="' + sb.px + '" y2="0"/>' +
+      /* 축척바 — 경위도 기준으로 실제 거리를 계산합니다 */
+      var sbKm = (mapMeta.scaleBar && mapMeta.scaleBar.km) || 5;
+      var sbPx = scaleBarPx(sbKm);
+      h += '<g transform="translate(' + (W - 52 - sbPx) + ',' + (H - 34) + ')">' +
+        '<line class="scalebar" x1="0" y1="0" x2="' + sbPx.toFixed(1) + '" y2="0"/>' +
         '<line class="scalebar" x1="0" y1="-4" x2="0" y2="4"/>' +
-        '<line class="scalebar" x1="' + sb.px + '" y1="-4" x2="' + sb.px + '" y2="4"/>' +
-        '<text class="compass-t" x="' + (sb.px / 2) + '" y="-6" text-anchor="middle">0 ─ ' +
-        (sb.meters / 1000) + ' km' + (meta.isMockData ? ' (개략)' : '') + '</text></g>';
+        '<line class="scalebar" x1="' + sbPx.toFixed(1) + '" y1="-4" x2="' + sbPx.toFixed(1) + '" y2="4"/>' +
+        '<text class="compass-t" x="' + (sbPx / 2).toFixed(1) + '" y="-6" text-anchor="middle">0 \u2500 ' +
+        sbKm + ' km</text></g>';
 
       svg.setAttribute('viewBox', vb.join(' '));
       svg.innerHTML = h;
+    }
+
+    /** 경위도 고리들을 투영해 SVG path 로 */
+    function ringsPath(rings) {
+      return (rings || []).map(function (ring) {
+        return 'M' + ring.map(function (pt) {
+          var q = C.project(pt[0], pt[1]);
+          return q.x.toFixed(1) + ',' + q.y.toFixed(1);
+        }).join('L') + 'Z';
+      }).join('');
+    }
+
+    /** km 를 화면 px 로 (축척바용) */
+    function scaleBarPx(km) {
+      var b = (meta.grid && meta.grid.bbox) || [126.5, 37, 127.2, 37.3];
+      var midLat = (b[1] + b[3]) / 2;
+      var dLon = km / (111.320 * Math.cos(midLat * Math.PI / 180));
+      var p0 = C.project(b[0], midLat), p1 = C.project(b[0] + dLon, midLat);
+      return Math.max(20, p1.x - p0.x);
     }
 
     drawBase();
     var gCells = svg.querySelector('[data-cells]');
     var gRoutes = svg.querySelector('[data-groutes]');
     var gLabels = svg.querySelector('[data-glabels]');
+    var gDongLine = svg.querySelector('[data-dongline]');
     var gPlaced = svg.querySelector('[data-placed]');
     var gSelRing = svg.querySelector('[data-selring]');
 
@@ -148,9 +173,8 @@
       var h = '';
       state.cells.forEach(function (c) {
         var p = C.xy(c);
-        var s = c.size || 24;
-        h += '<rect x="' + p.x + '" y="' + p.y + '" width="' + s + '" height="' + s +
-          '" rx="2" class="c m3" data-id="' + esc(c.id) + '"/>';
+        h += '<rect x="' + p.x + '" y="' + p.y + '" width="' + (c.w || 20) + '" height="' + (c.h || 20) +
+          '" rx="1.5" class="c m3" data-id="' + esc(c.id) + '"/>';
       });
       gCells.innerHTML = h;
     }
@@ -158,19 +182,19 @@
     function renderRoutes() {
       var h = '';
       /* 1단계: 케이싱(바탕색 굵은 선) → 2단계: 노선 본선. 격자 위에서도 선이 끊겨 보이지 않습니다. */
+      function routePts(rt) {
+        var src = rt.pathXY;
+        if (src && src.length) return src.map(function (p) { return p[0] + ',' + p[1]; });
+        return (rt.path || []).map(function (p) {
+          var q = C.project(p[0], p[1]);
+          return q.x.toFixed(1) + ',' + q.y.toFixed(1);
+        });
+      }
       state.routes.forEach(function (rt) {
-        var pts = (rt.pathXY || []).map(function (p) { return p[0] + ',' + p[1]; });
-        if (!pts.length && rt.path) {
-          pts = rt.path.map(function (p) { var q = C.project(p[0], p[1]); return q.x + ',' + q.y; });
-        }
-        h += '<polyline class="rt-casing" points="' + pts.join(' ') + '"/>';
+        h += '<polyline class="rt-casing" points="' + routePts(rt).join(' ') + '"/>';
       });
       state.routes.forEach(function (rt) {
-        var pts = (rt.pathXY || []).map(function (p) { return p[0] + ',' + p[1]; });
-        if (!pts.length && rt.path) {
-          pts = rt.path.map(function (p) { var q = C.project(p[0], p[1]); return q.x + ',' + q.y; });
-        }
-        h += '<polyline class="rt" data-route="' + esc(rt.id) + '" points="' + pts.join(' ') + '"/>';
+        h += '<polyline class="rt" data-route="' + esc(rt.id) + '" points="' + routePts(rt).join(' ') + '"/>';
       });
       state.stops.forEach(function (s) {
         var p = C.xy(s);
@@ -262,7 +286,7 @@
 
     /** 지도 기호 범례. 실제 지도와 같은 SVG 로 그려 모양이 정확히 일치합니다. */
     function renderSymbolLegend() {
-      var cellKm = 1;
+      var cellKm = 1.5;
       if (meta.grid && meta.grid.displaySizeMeters) cellKm = meta.grid.displaySizeMeters / 1000;
 
       function item(svgInner, label, w) {
@@ -277,7 +301,7 @@
       items.push(item('<circle cx="11" cy="7" r="4.6" class="st hub"/>', '환승 거점'));
       items.push(item('<polyline class="rt-casing" points="2,10 8,4 14,9 20,4"/>' +
         '<polyline class="rt" points="2,10 8,4 14,9 20,4"/>', '버스 노선'));
-      items.push(item('<path class="indmark" d="M6,10 L11,3 L16,10 Z"/>', '산업단지'));
+      items.push(item('<path class="dongline" d="M2,11 L8,4 L14,9 L20,3"/>', '읍면동 경계'));
       items.push(item('<rect x="3" y="3" width="8" height="8" rx="2" class="selring-out"/>' +
         '<rect x="3" y="3" width="8" height="8" rx="2" class="selring-in"/>', '선택한 격자'));
 
@@ -296,13 +320,13 @@
       if (!state.selectedCellId) { gSelRing.setAttribute('visibility', 'hidden'); return; }
       var c = state.byId[state.selectedCellId];
       if (!c) { gSelRing.setAttribute('visibility', 'hidden'); return; }
-      var p = C.xy(c), s = (c.size || 24);
+      var p = C.xy(c), cw = c.w || 20, ch = c.h || 20;
       Array.prototype.forEach.call(gSelRing.children, function (r, i) {
         var pad = i === 0 ? 3 : 1.5;   // 바깥 링이 더 크게
         r.setAttribute('x', p.x - pad);
         r.setAttribute('y', p.y - pad);
-        r.setAttribute('width', s + pad * 2);
-        r.setAttribute('height', s + pad * 2);
+        r.setAttribute('width', cw + pad * 2);
+        r.setAttribute('height', ch + pad * 2);
       });
       gSelRing.setAttribute('visibility', 'visible');
     }
@@ -323,17 +347,17 @@
     /** 좌표가 들어 있는 격자를 찾습니다 (정류장 → 격자 매핑에 사용) */
     function cellAt(x, y) {
       for (var i = 0; i < state.cells.length; i++) {
-        var c = state.cells[i], p = C.xy(c), s = c.size || 24;
-        if (x >= p.x && x <= p.x + s && y >= p.y && y <= p.y + s) return c;
+        var c = state.cells[i], p = C.xy(c);
+        if (x >= p.x && x <= p.x + (c.w || 20) && y >= p.y && y <= p.y + (c.h || 20)) return c;
       }
       /* 격자 사이 틈에 걸렸으면 가장 가까운 격자 */
       var best = null, bd = 1e9;
       state.cells.forEach(function (c) {
-        var p = C.xy(c), s = c.size || 24;
-        var d = Math.hypot(x - (p.x + s / 2), y - (p.y + s / 2));
+        var p = C.xy(c);
+        var d = Math.hypot(x - (p.x + (c.w || 20) / 2), y - (p.y + (c.h || 20) / 2));
         if (d < bd) { bd = d; best = c; }
       });
-      return bd < 26 ? best : null;
+      return bd < 30 ? best : null;
     }
 
     /* ------------------------------------------------------ 배치 마커 */
@@ -357,8 +381,8 @@
         var list = byCell[cellId];
         var c = state.byId[cellId];
         if (!c) return;
-        var q = C.xy(c), s = c.size || 24;
-        var cx = q.x + s / 2, cy = q.y + s / 2;
+        var q = C.xy(c);
+        var cx = q.x + (c.w || 20) / 2, cy = q.y + (c.h || 20) / 2;
         var offs = OFFSETS[Math.min(list.length, 3)] || OFFSETS[3];
         list.slice(0, 3).forEach(function (p, i) {
           var o = offs[i] || [0, 0];
@@ -450,6 +474,8 @@
         gRoutes.style.display = v ? '' : 'none';
       },
       setShowLabels: function (v) { state.showLabels = !!v; gLabels.style.display = v ? '' : 'none'; },
+      /** 읍면동 경계선 표시 여부 */
+      setShowBoundary: function (v) { gDongLine.style.display = v ? '' : 'none'; },
       setArmed: function (v) {
         state.armed = !!v;
         var box = svg.parentNode;

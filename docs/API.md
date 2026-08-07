@@ -76,8 +76,9 @@ HTTP 상태 코드 + 아래 형태 중 아무거나. 프론트엔드는 `message
 | 5 | `routes.list` | GET | `/routes` | 노선 목록 | 필수 |
 | 6 | `stops.profile` | GET | `/stops/{stopId}/profile` | 정류장 시간대별 승하차 | 필수 |
 | 7 | `simulations.run` | POST | `/simulations` | 배치 시뮬레이션 | **필수**(시뮬레이션 화면) |
-| 8 | `reports.draft` | POST | `/reports/draft` | AI 보고서 초안 생성 | **필수**(보고서 기능) |
-| 9 | `reports.export` | POST | `/reports/export` | 서버측 파일 생성(.hwpx) | 선택 |
+| 8 | `recommendations.run` | POST | `/recommendations` | 추천 배치안 산출 | **필수**(추천 기능) |
+| 9 | `reports.draft` | POST | `/reports/draft` | AI 보고서 초안 생성 | **필수**(보고서 기능) |
+| 10 | `reports.export` | POST | `/reports/export` | 서버측 파일 생성(.hwpx) | 선택 |
 
 > 9번은 선택입니다. 구현하지 않으면 프론트엔드가 브라우저에서 직접
 > `.xlsx` / `.rtf` 를 만듭니다(현재 기본 동작). 한글 원본 포맷 `.hwpx` 가
@@ -91,11 +92,11 @@ HTTP 상태 코드 + 아래 형태 중 아무거나. 프론트엔드는 `message
 
 한 번만 호출되며 캐시됩니다. 지도 경계, 시간대 정의, 배치 수단 단가가 들어갑니다.
 
-```json
+```jsonc
 {
   "region": "화성시",
-  "updatedAt": "2026-08-06",
-  "isMockData": false,
+  "updatedAt": "2026-08-07",
+  "isMockData": true,
   "periods": [
     { "id": "am",    "name": "출근", "label": "07–09", "hours": [7, 9] },
     { "id": "day",   "name": "낮",   "label": "09–17", "hours": [9, 17] },
@@ -103,22 +104,25 @@ HTTP 상태 코드 + 아래 형태 중 아무거나. 프론트엔드는 `message
     { "id": "night", "name": "심야", "label": "22–24", "hours": [22, 24] }
   ],
   "grid": {
-    "sizeMeters": 250,
-    "displaySizeMeters": 1000,
+    "sizeMeters": 250,             // 실제 분석 격자
+    "displaySizeMeters": 1500,     // 화면 표시 격자
     "crs": "EPSG:4326",
-    "bbox": [126.62, 36.97, 127.17, 37.33],
-    "cellCount": 389
+    "bbox": [126.52923, 37.00909, 127.1613, 37.30279],
+    "cellCount": 353
   },
   "map": {
     "viewBox": [0, 0, 960, 640],
-    "boundary": [[152, 96], [214, 84], "… SVG 좌표 폴리곤 …"],
-    "islands": [[[52, 306], "…"]],
-    "labels": {
-      "regions":    [["동탄", 788, 262], "…"],
-      "industrial": [["기아공장", 268, 466], "…"],
-      "neighbors":  [["수원시", 592, 52], "…"]
-    },
-    "scaleBar": { "px": 120, "meters": 5000 }
+    "boundarySource": "SGIS 통계지리정보서비스 읍면동 경계 (bnd_dong_00_2025_2Q)",
+    "regions": [
+      {
+        "code": "31240130", "name": "우정읍", "kind": "읍",
+        "centroid": [126.80819, 37.04512],
+        "bbox": [126.75, 37.00, 126.87, 37.09],
+        "rings": [ [[126.80, 37.01], [126.81, 37.02], "… 경위도 폴리곤 …"] ]
+      }
+      // … 4읍 9면 16동 = 29개
+    ],
+    "scaleBar": { "km": 5 }
   },
   "cost": { "stop": 42000000, "drt": 180000000, "freq": 95000000, "defaultBudget": 3000000000 },
   "formula": {
@@ -128,26 +132,25 @@ HTTP 상태 코드 + 아래 형태 중 아무거나. 프론트엔드는 `message
     "priority":  "우선순위 = MI⁺ × 수요규모 × (1 + 1.6·고령인구비)"
   },
   "effects": [
-    { "type": "stop", "label": "정류장 신설", "icon": "●", "radiusKm": 1.9, "unitKrw": 42000000 },
+    { "type": "stop", "label": "정류장 신설", "icon": "●", "radiusKm": 2.0, "unitKrw": 42000000 },
     { "type": "drt",  "label": "똑버스 배치", "icon": "◆", "radiusKm": 3.0, "unitKrw": 180000000 },
-    { "type": "freq", "label": "배차 증편",   "icon": "▲", "radiusKm": 2.2, "unitKrw": 95000000 }
+    { "type": "freq", "label": "배차 증편",   "icon": "▲", "radiusKm": 2.4, "unitKrw": 95000000 }
   ]
 }
 ```
 
-#### ⚠️ 지도 좌표에 관한 중요한 안내
+#### 지도 좌표 — 전부 경위도입니다
 
-현재 목 데이터의 `map.boundary` 는 **개략도용 SVG 좌표**입니다.
-실데이터로 바꿀 때 선택지는 두 가지입니다.
+`map.regions[].rings` 와 `centroid` 는 **경위도(EPSG:4326)** 이고, 화면 투영은
+프론트엔드(`assets/js/core.js` 의 `project()`)가 `grid.bbox` 기준으로 처리합니다.
+서버는 SVG 좌표를 계산할 필요가 없습니다.
 
-| 방식 | 하는 일 | 권장 |
-|---|---|---|
-| **A. 경위도 그대로 보내기** | `boundary` 를 실제 행정경계 GeoJSON 의 `[lon, lat]` 배열로 보내고, 셀에서 `x`/`y` 를 **빼고** `lon`/`lat` 만 보냅니다. 프론트엔드가 `grid.bbox` 기준으로 자동 투영합니다. | ✅ |
-| B. 서버가 투영 | 서버가 SVG 좌표(`x`,`y`)까지 계산해 보냅니다. | 기존 목과 동일 |
+**현재 목 데이터의 경계는 실제 SGIS 읍면동 경계입니다.** 실서버에서도 같은 출처를
+쓰면 되고, 원본 SHP → 이 형식으로 변환하는 스크립트가 `tools/build-boundary.py` 에
+있습니다(좌표 단순화 포함, 63,204점 → 5,759점).
 
-> 방식 A를 쓰려면 `boundary` 좌표도 경위도여야 합니다.
-> 프론트엔드의 투영 함수는 `assets/js/core.js` 의 `project()` 이며,
-> `bbox` 를 `viewBox` 에 맞춰 등장방형으로 맞춥니다(화성시 규모에서 충분).
+> 격자를 어느 읍면동에 넣을지는 **점-다각형 판정**으로 서버가 결정해
+> `cells[].region` / `regionCode` 에 실어 보냅니다.
 
 ---
 
@@ -160,18 +163,19 @@ HTTP 상태 코드 + 아래 형태 중 아무거나. 프론트엔드는 `message
   "period": "am",
   "scale": { "miThresholds": [-1.5, -0.75, -0.25, 0.25, 0.75, 1.5], "tripCoef": 3200 },
   "kpi": {
-    "needCells": 13, "drtCells": 57, "overCells": 0, "totalCells": 389,
-    "needShare": 3.3, "potentialTripsPerDay": 36336,
-    "elderlyTripsPerDay": 2934, "avgMi": 0.002
+    "needCells": 28, "drtCells": 32, "overCells": 2, "totalCells": 353,
+    "needShare": 7.9, "potentialTripsPerDay": 45471,
+    "elderlyTripsPerDay": 4842, "avgMi": 0.005
   },
   "cells": [
     {
       "id": "G-100",
-      "name": "새솔동 북부",
-      "region": "새솔동",
-      "direction": "북부",
-      "lon": 126.66154, "lat": 37.282568,
-      "x": 162, "y": 90, "size": 24,
+      "name": "우정읍 남부",
+      "region": "우정읍",
+      "regionCode": "31240130",
+      "regionKind": "읍",
+      "lon": 126.80819, "lat": 37.01587,
+      "x": 415.1, "y": 590.2, "w": 22.8, "h": 23.0,
       "demand": 31, "supply": 28,
       "zDemand": 0.056, "zSupply": -0.129,
       "mi": 0.185,
@@ -196,14 +200,15 @@ HTTP 상태 코드 + 아래 형태 중 아무거나. 프론트엔드는 `message
 | `id` | string | 격자 고유 ID. 시뮬레이션 요청에서 이 값을 씁니다 |
 | `name` / `region` / `direction` | string | 화면 표기용 이름 |
 | `lon` / `lat` | number | 격자 중심 경위도 |
-| `x` / `y` / `size` | number | SVG 좌표(선택). 없으면 `lon/lat` 로 자동 투영 |
+| `regionCode` / `regionKind` | string | 행정동 코드와 읍/면/동 구분 |
+| `x` / `y` / `w` / `h` | number | SVG 좌표·크기(선택). 없으면 `lon/lat` 로 자동 투영 |
 | `demand` / `supply` | number | 0~100 정규화 지수 (화면 표시용) |
 | `zDemand` / `zSupply` | number | 표준화값. **산점도 축이 이 값입니다** |
 | `mi` | number | 미스매칭 지수. `-2.6 ~ +2.6` 로 클리핑 |
 | `flow` | number | 0~1 정규화 유동인구 |
 | `flowTripsPerDay` | number | 일 통행량 환산값 |
 | `elderlyRatio` | number | 0~1 고령인구 비율 |
-| `coverage` | number | 0~1 정류장 커버리지. **0.5 미만이면 배차 증편 불가** |
+| `coverage` | number | 0~1 정류장 접근성. **수단별 적용 제약의 기준** (§3.7 참고) |
 | `quadrant` | enum | `need` / `over` / `drt` / `ok` / `mid` |
 | `action` | enum | `NEW_STOP` / `ADD_FREQ` / `DRT` |
 | `priorityScore` | number | 우선순위 점수. `need` 가 아니면 0 |
@@ -387,7 +392,106 @@ mid  : 그 외                                   → 균형권
 
 ---
 
-### 3.7 `POST /reports/draft` — AI 보고서 초안 ★
+### 3.7 `POST /recommendations` — 추천 배치안 ★
+
+> **설계 원칙: 최적화는 알고리즘, 설명은 AI**
+> 배치 위치를 언어모델에게 고르게 하지 마세요. 매번 답이 달라지고 근거를 댈 수 없습니다.
+> 위치는 아래 알고리즘이 정하고, 근거 문장만 AI 가 다듬습니다.
+
+#### 요청
+
+```jsonc
+{
+  "period": "am",
+  "budgetKrw": 3000000000,
+  "maxPlacements": 5,
+  "allowedTypes": ["stop", "drt", "freq"]   // 선택. 생략하면 전부
+}
+```
+
+#### 응답
+
+```jsonc
+{
+  "method": "budget-constrained greedy marginal benefit",
+  "methodLabel": "예산 제약 하 한계효과 최대화",
+  "methodNote": "미해결 통행량을 연간 환산 사업비 1원당 가장 많이 줄이는 지점을 순차 선택…",
+  "period": "am",
+  "generatedAt": "2026-08-07 12:10",
+  "placements": [
+    { "rank": 1, "type": "stop", "typeLabel": "정류장 신설",
+      "cellId": "G-269", "cellName": "동탄8동 북부", "region": "동탄8동", "count": 1,
+      "radiusKm": 2.0,
+      "costKrw": 42000000, "annualCostKrw": 4200000,
+      "costBasis": "1회성 시설비(내용연수 10년)",
+      "expectedResolvedCells": 3, "expectedResolvedTrips": 8636, "krwPerTrip": 4863,
+      "rationale": "수요지수 87 대비 공급지수 53, 노선은 인근을 지나지만 정류장이 도보권 밖(커버리지 0.23)이라 정류장 신설로 해소 가능" }
+  ],
+  "simulation": { "…": "POST /simulations 와 같은 형식. 화면·보고서가 이 수치를 씁니다" },
+  "summary": {
+    "count": 5, "totalKrw": 210000000, "budgetKrw": 3000000000, "budgetUsedPct": 7.0,
+    "expectedResolvedCells": 11, "expectedResolvedTrips": 22190,
+    "expectedResolvedElderlyTrips": 1870, "krwPerTrip": 3883,
+    "stoppedBecause": "max_reached"   // budget_exhausted | max_reached | no_further_gain | no_candidate
+  }
+}
+```
+
+#### 알고리즘 (목 구현 — 백엔드에서 그대로 옮기면 됩니다)
+
+```
+후보 = 현재 상태에서 미해결인 격자 (고수요·저공급 + DRT후보)
+
+예산이 남고 최대 건수에 못 미치는 동안 반복:
+    각 (후보, 수단) 조합에 대해:
+        수단별 적용 제약을 통과하지 못하면 건너뜀
+        효율 = 줄어든 미해결 통행량 ÷ 연간 환산 사업비
+    효율 1위를 채택하고 실제로 반영
+    ※ 같은 (격자, 수단) 조합은 두 번 채택하지 않음
+    ※ 이미 개선된 곳은 다음 회차에 효율이 자동으로 낮아짐 → 중복 방지
+```
+
+**목적함수 — 미해결 통행량**
+
+```
+미해결(i) = (고수요·저공급 또는 DRT후보인 격자) ? 잠재통행_i × (1 + 1.6·고령비_i) : 0
+```
+
+교통약자 가중은 우선순위 산식과 같은 계수를 씁니다.
+
+**수단별 적용 제약 (서로 겹치지 않게 설계)**
+
+| 커버리지 | 진단 | 수단 |
+|---|---|---|
+| ≥ 0.5 | 정류장은 도보권 안, 버스가 뜸함 | `freq` 배차 증편 |
+| 0.15 ~ 0.5 | 노선은 인근, 정류장이 멀다 | `stop` 정류장 신설 |
+| < 0.15 | 노선망 자체가 닿지 않음 | `drt` 똑버스 |
+
+> 이 구분이 없으면 가장 싼 정류장이 아무 데나 선택됩니다.
+> 제약 판정은 **배치 효과가 반영된 커버리지**로 해야 같은 격자에 중복 추천되지 않습니다.
+
+**⚠️ 비용 단위 주의**
+
+수단마다 비용의 성격이 다릅니다. 그대로 비교하면 안 됩니다.
+
+| 수단 | 사업비 | 성격 | 연간 환산 |
+|---|---|---|---|
+| 정류장 신설 | 4,200만 원 | 1회성 시설비 | ÷ 10년 = 420만 원 |
+| 똑버스 배치 | 1.8억 원 | 연간 운영비 | 1.8억 원 |
+| 배차 증편 | 9,500만 원 | 연간 소요액 | 9,500만 원 |
+
+**효율 비교는 연간 환산 비용으로**, 화면·보고서 표시는 원래 사업비로 합니다.
+
+#### 성능 참고
+
+배치는 **공급(S)에만** 영향을 주고 정규화 기준은 고정돼 있으므로, 영향권 안 격자만
+다시 계산해도 전체 재계산과 결과가 **정확히 같습니다**. (똑버스 1대 = 353칸 중 8칸)
+
+목 구현 실측: 전체 재계산 방식 **49초** → 국소 계산 방식 **0.2초** (약 44배)
+
+---
+
+### 3.8 `POST /reports/draft` — AI 보고서 초안 ★
 
 **Claude API 호출 규격은 별도 문서 → [`AI-REPORT.md`](AI-REPORT.md)**
 
@@ -403,10 +507,20 @@ mid  : 그 외                                   → 균형권
     "org": "화성시", "dept": "교통정책과",
     "kpi": { "needCells": 13, "…": "/grid 의 kpi 그대로" },
     "priorities": [ "/priorities 의 items 그대로" ],
-    "simulation": { "…": "POST /simulations 응답 그대로 (없으면 null)" }
+    "simulation": { "…": "POST /simulations 응답 그대로 (없으면 null)" },
+    "recommendation": {
+      "placements": [ "…POST /recommendations 의 placements…" ],
+      "summary": { "…" },
+      "methodLabel": "예산 제약 하 한계효과 최대화",
+      "methodNote": "…",
+      "edited": false        // 사용자가 추천안을 손봤는지
+    }
   }
 }
 ```
+
+`recommendation` 이 있으면 보고서 4장(개선 방안)에 선정 근거가 들어가고,
+**"추천 배치안 및 선정 근거"** 표가 추가됩니다.
 
 #### 응답
 
@@ -423,7 +537,7 @@ mid  : 그 외                                   → 균형권
       "key": "summary",
       "heading": "1. 검토 개요",
       "body": "본 자료는 …\n두 번째 문단은 \\n 으로 구분합니다.",
-      "bullets": ["분석 시간대: 출근 07–09", "고수요·저공급 격자: 13개 / 전체 389개"]
+      "bullets": ["분석 시간대: 출근 07–09", "고수요·저공급 격자: 28개 / 전체 353개"]
     }
   ],
   "tables": [
@@ -447,7 +561,7 @@ mid  : 그 외                                   → 균형권
 
 ---
 
-### 3.8 `POST /reports/export` — 서버측 파일 생성 (선택)
+### 3.9 `POST /reports/export` — 서버측 파일 생성 (선택)
 
 `config.js` 의 `EXPORT_MODE` 를 `'server'` 또는 `'auto'` 로 바꿨을 때만 호출됩니다.
 
@@ -532,6 +646,8 @@ def draft_report(req: ReportRequest):
 - [ ] 지도에 격자가 칠해진다 (안 칠해지면 `bins` 누락 또는 `lon/lat` 범위 오류)
 - [ ] `POST /simulations` 에 빈 `placements` 를 보내면 `kpi === baseline` 이다
 - [ ] 배치를 추가하면 `delta.needCells` 가 **음수**가 된다
+- [ ] `POST /recommendations` 가 같은 `(격자, 수단)` 조합을 두 번 추천하지 않는다
+- [ ] 추천 건수를 늘리면 수단이 다양해진다 (정류장만 나오면 제약 설정을 확인)
 - [ ] 브라우저 개발자도구 Network 탭에 CORS 오류가 없다
 - [ ] `USE_MOCK: false` 로 바꿔도 화면이 목 모드와 동일하게 보인다
 

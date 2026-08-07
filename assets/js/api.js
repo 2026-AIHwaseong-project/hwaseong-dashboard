@@ -30,6 +30,7 @@
     'priorities.list': { method: 'GET',  path: '/priorities' },                 // ?period=am&limit=10
     'simulations.run': { method: 'POST', path: '/simulations' },
     'simulations.get': { method: 'GET',  path: '/simulations/{id}' },
+    'recommendations.run': { method: 'POST', path: '/recommendations', long: true },  // 최적화 계산
     'reports.draft':   { method: 'POST', path: '/reports/draft',  long: true }, // AI 호출 → 타임아웃 김
     'reports.export':  { method: 'POST', path: '/reports/export', long: true, binary: true }
   };
@@ -195,6 +196,14 @@
      */
     runSimulation: function (body) {
       return call('simulations.run', null, body);
+    },
+
+    /**
+     * 추천 배치안 산출 (예산 제약 하 한계효과 최대화).
+     * body = { period, budgetKrw, maxPlacements, allowedTypes? }
+     */
+    recommend: function (body) {
+      return call('recommendations.run', null, body);
     },
 
     /**

@@ -33,7 +33,9 @@
     effects: {},          // type → {label, icon, radiusKm, unitKrw}
     busy: false,
     pending: null,
-    selectedCellId: null
+    selectedCellId: null,
+    recommendation: null,   // 추천 결과 원본
+    recEdited: false        // 추천안을 사용자가 손봤는지
   };
 
   /* =====================================================================
@@ -50,7 +52,12 @@
         meta: S.meta,
         kpi: currentPeriodBlock() ? currentPeriodBlock().kpi : null,
         priorities: null,
-        simulation: S.result
+        simulation: S.result,
+        recommendation: S.recommendation
+          ? { placements: S.recommendation.placements, summary: S.recommendation.summary,
+              methodLabel: S.recommendation.methodLabel, methodNote: S.recommendation.methodNote,
+              edited: S.recEdited }
+          : null
       };
     });
 
@@ -154,34 +161,121 @@
       C.toast('먼저 상단에서 배치할 수단을 선택하세요.');
       return;
     }
-    /* 배차 증편은 기존 정류장이 가까운 격자에만 */
-    if (S.tool === 'freq' && cell.coverage < 0.5) {
-      C.toast('배차 증편은 기존 정류장이 가까운 격자에만 적용할 수 있습니다. 이 격자는 정류장 도보권 밖입니다.', 'err', 5000);
-      return;
-    }
+    /* 수단별 적용 제약 확인 (규칙은 서버 모델과 같은 값을 씁니다) */
+    var guardMsg = guardFor(S.tool, cell);
+    if (guardMsg) { C.toast(guardMsg, 'err', 6000); return; }
     var same = S.placements.filter(function (p) { return p.type === S.tool && p.cellId === cell.id; })[0];
     if (same) same.count += 1;
     else S.placements.push({ type: S.tool, cellId: cell.id, cellName: cell.name, count: 1 });
+    if (S.recommendation) S.recEdited = true;
     runSim();
   }
 
-  /* 배차 증편은 정류장 도보권(커버리지 0.5 이상) 격자에만 적용됩니다.
+  /** 수단별 적용 제약. 위반이면 안내 문구를, 아니면 null 을 돌려줍니다. */
+  function guardFor(type, cell) {
+    if (type === 'freq' && cell.coverage < 0.5) {
+      return '배차 증편은 기존 정류장이 가까운 격자에만 적용할 수 있습니다. 이 격자는 정류장 도보권 밖입니다.';
+    }
+    if (type === 'stop' && cell.coverage < 0.15) {
+      return '정류장 신설은 기존 노선망에서 약 3km 이내인 격자에만 적용할 수 있습니다. ' +
+        '이보다 먼 지역은 노선 신설·연장 또는 똑버스 검토 대상입니다.';
+    }
+    return null;
+  }
+
+  /* 적용 가능한 격자를 도구를 들었을 때 미리 표시합니다.
      예전에는 찍어 봐야 알 수 있었는데, 이제 도구를 들면 지도에서 바로 구분됩니다. */
   function refreshEligible() {
     if (!S.map) return;
-    if (S.tool !== 'freq') { S.map.setEligible(null); return; }
+    if (!S.tool || S.tool === 'drt') { S.map.setEligible(null); return; }
     var set = new Set();
-    S.map.cells().forEach(function (c) { if (c.coverage >= 0.5) set.add(c.id); });
-    S.map.setEligible(set, '배차 증편이 가능한 격자만 강조 중');
+    S.map.cells().forEach(function (c) { if (!guardFor(S.tool, c)) set.add(c.id); });
+    var label = (S.effects[S.tool] || {}).label || S.tool;
+    S.map.setEligible(set, label + '이 가능한 격자만 강조 중');
   }
 
   function removePlacement(i) {
     S.placements.splice(i, 1);
+    if (S.recommendation) S.recEdited = true;
     runSim();
+  }
+
+  /* =====================================================================
+   * 3-2. 추천 배치안
+   *   위치 선정은 서버의 최적화 알고리즘이 합니다(언어모델이 아닙니다).
+   *   결과는 그대로 배치 목록에 들어가며, 사용자가 자유롭게 고칠 수 있습니다.
+   * =================================================================== */
+  function requestRecommendation() {
+    var btn = $('#btnRecommend');
+    btn.disabled = true;
+    btn.textContent = '계산 중…';
+    $('#recBox').innerHTML = '<div class="rec-loading"><span class="spin" aria-hidden="true"></span>' +
+      '예산 범위에서 효과가 가장 큰 지점을 찾고 있습니다…</div>';
+
+    api.recommend({
+      period: S.period,
+      budgetKrw: S.budget,
+      maxPlacements: 5
+    }).then(function (rec) {
+      S.recommendation = rec;
+      S.recEdited = false;
+      /* 기존 배치는 교체합니다 */
+      S.placements = rec.placements.map(function (p) {
+        return {
+          type: p.type, cellId: p.cellId, cellName: p.cellName,
+          count: p.count, fromAI: true, rank: p.rank, rationale: p.rationale
+        };
+      });
+      btn.disabled = false;
+      btn.innerHTML = '<i>\u2726</i>추천 다시 받기';
+      if (!rec.placements.length) {
+        C.toast('현재 예산·조건에서 추천할 배치가 없습니다. 예산을 늘려 보세요.', 'err', 5000);
+      } else {
+        C.toast('추천 배치안 <b>' + rec.placements.length + '건</b>을 불러왔습니다. 마음에 안 드는 항목은 지우셔도 됩니다.');
+      }
+      runSim();
+    }).catch(function (err) {
+      btn.disabled = false;
+      btn.innerHTML = '<i>\u2726</i>AI 추천 배치안';
+      $('#recBox').innerHTML = '';
+      C.toast('추천을 받지 못했습니다 — ' + esc(api.humanize(err)), 'err', 6000);
+    });
+  }
+
+  function paintRecBox() {
+    var box = $('#recBox');
+    var rec = S.recommendation;
+    if (!rec) { box.innerHTML = ''; return; }
+    var su = rec.summary;
+    var reasonText = {
+      budget_exhausted: '예산을 모두 소진해 중단',
+      max_reached: '요청한 건수를 채워 중단',
+      no_further_gain: '더 이상 개선 효과가 없어 중단',
+      no_candidate: '조건에 맞는 후보가 없음'
+    }[su.stoppedBecause] || su.stoppedBecause;
+
+    box.innerHTML =
+      '<div class="rec-box">' +
+      '<div class="rec-head"><span class="rec-badge">AI 추천</span>' +
+      esc(rec.methodLabel) +
+      (S.recEdited ? '<span class="rec-edited">사용자 수정됨</span>' : '') + '</div>' +
+      '<div class="rec-nums">' +
+      '<span><b>' + su.count + '</b>건</span>' +
+      '<span><b>' + esc(won(su.totalKrw)) + '</b> (예산의 ' + su.budgetUsedPct + '%)</span>' +
+      '<span>사각지대 <b>' + fmt(su.expectedResolvedCells) + '</b>칸 해소</span>' +
+      '<span>일 <b>' + fmt(su.expectedResolvedTrips) + '</b>통행</span>' +
+      (su.krwPerTrip ? '<span><b>' + fmt(su.krwPerTrip) + '</b>원/통행</span>' : '') +
+      '</div>' +
+      '<div class="rec-note">' + esc(rec.methodNote) + ' (' + esc(reasonText) + ')</div>' +
+      '</div>';
   }
 
   function resetAll() {
     S.placements = [];
+    S.recommendation = null;
+    S.recEdited = false;
+    var btn = $('#btnRecommend');
+    if (btn) btn.innerHTML = '<i>\u2726</i>AI 추천 배치안';
     runSim();
   }
 
@@ -238,6 +332,7 @@
     S.map.setPlacements(S.placements);
     if (S.selectedCellId) S.map.select(S.selectedCellId);
     paintKpi();
+    paintRecBox();
     paintPlacementList();
     paintBudget();
     drawCompareChart();
@@ -305,9 +400,11 @@
     host.innerHTML = '<ul class="plist">' + S.placements.map(function (p, i) {
       var e = S.effects[p.type] || {};
       var cell = S.map.cellById(p.cellId);
-      return '<li><span class="ic">' + esc(e.icon || '●') + '</span>' +
-        '<span class="tx"><b>' + esc(e.label || p.type) + (p.count > 1 ? ' ×' + p.count : '') + '</b>' +
-        '<span>' + esc(cell ? cell.name : '') + ' · ' + esc(p.cellId) + ' · 반경 ' + (e.radiusKm || '?') + 'km</span></span>' +
+      return '<li' + (p.fromAI ? ' class="from-ai"' : '') + '><span class="ic">' + esc(e.icon || '●') + '</span>' +
+        '<span class="tx"><b>' + esc(e.label || p.type) + (p.count > 1 ? ' ×' + p.count : '') +
+        (p.fromAI ? '<span class="ai-tag">추천 ' + p.rank + '순위</span>' : '') + '</b>' +
+        '<span>' + esc(cell ? cell.name : '') + ' · ' + esc(p.cellId) + ' · 반경 ' + (e.radiusKm || '?') + 'km</span>' +
+        (p.rationale ? '<span class="why">' + esc(p.rationale) + '</span>' : '') + '</span>' +
         '<span class="cost">' + won((e.unitKrw || 0) * p.count) + '</span>' +
         '<button class="del" data-remove="' + i + '" type="button" aria-label="배치 삭제">×</button></li>';
     }).join('') + '</ul>';
@@ -605,7 +702,7 @@
       var e2 = S.tool ? S.effects[S.tool] : null;
       $('#simhint').textContent = e2
         ? (e2.label + ' 모드 — 배치할 격자를 지도에서 클릭하세요. 반경 약 ' + e2.radiusKm + 'km에 파급됩니다. (단가 ' + won(e2.unitKrw) + ')' +
-           (S.tool === 'freq' ? ' 적용 가능한 격자만 또렷하게 표시됩니다.' : ''))
+           (S.tool !== 'drt' ? ' 적용 가능한 격자만 또렷하게 표시됩니다.' : ''))
         : '수단을 고른 뒤 지도를 클릭하면 배치되고, KPI가 기준선 대비 즉시 재계산됩니다.';
     });
 
@@ -625,6 +722,7 @@
       runSim();
     });
     $('#btnReset').addEventListener('click', resetAll);
+    $('#btnRecommend').addEventListener('click', requestRecommendation);
     $('#btnSave').addEventListener('click', saveCurrent);
 
     $('#scenList').addEventListener('click', function (e) {

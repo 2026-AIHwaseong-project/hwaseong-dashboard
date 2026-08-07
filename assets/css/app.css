@@ -23,6 +23,8 @@
     14. 지도 기호 범례
     15. 권역별 요약표
     16. 용어 도움말 버튼
+    17. 읍면동 경계선
+    18. 추천 배치안
    ========================================================================= */
 
 /* ---------------------------------------------------------------- 1. 토큰 */
@@ -549,3 +551,45 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
   .legendbar .lg-syms{gap:4px 12px}
   .brief .brief-main{font-size:12.5px}
 }
+
+
+/* ===========================================================================
+   17. 읍면동 경계선
+   실제 행정경계(SGIS)를 격자 위에 얹어, 어디까지가 어느 동인지 보이게 합니다.
+   ======================================================================== */
+.dongline{fill:none;stroke:var(--ink2);stroke-width:1.1;stroke-opacity:.5;
+  stroke-linejoin:round;pointer-events:none;vector-effect:non-scaling-stroke}
+
+
+/* ===========================================================================
+   18. 추천 배치안
+   위치 선정은 최적화 알고리즘이 하고, 근거 문장을 함께 보여 줍니다.
+   ======================================================================== */
+.rec-hint{font-size:11px;color:var(--ink3);line-height:1.55;margin-top:6px}
+.rec-loading{display:flex;align-items:center;gap:8px;padding:12px 14px;
+  font-size:11.5px;color:var(--ink3)}
+.rec-loading .spin{width:14px;height:14px;border-width:2px;flex:none}
+
+.rec-box{margin:0 14px 12px;padding:10px 12px;border:1px solid var(--sel);
+  border-radius:9px;background:var(--selbg)}
+.rec-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  font-size:11.5px;color:var(--ink2);font-weight:600}
+.rec-badge{font-size:10px;font-weight:700;letter-spacing:.03em;border-radius:999px;
+  padding:2px 8px;background:var(--sel);color:#fff}
+.rec-edited{font-size:10px;font-weight:600;border-radius:999px;padding:2px 8px;
+  background:var(--tag-add-bg);color:var(--tag-add-fg)}
+.rec-nums{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:7px;
+  font-size:11.5px;color:var(--ink3)}
+.rec-nums b{color:var(--ink);font-size:13px;font-weight:650;
+  font-variant-numeric:tabular-nums}
+.rec-note{margin-top:7px;padding-top:7px;border-top:1px dashed var(--line);
+  font-size:10.5px;color:var(--ink3);line-height:1.6}
+
+/* 배치 목록에서 추천 항목 구분 */
+.plist li.from-ai{border-color:var(--sel);background:color-mix(in srgb,var(--selbg) 55%,var(--bg))}
+.plist .ai-tag{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:600;
+  border-radius:999px;padding:1px 7px;background:var(--sel);color:#fff;vertical-align:1px}
+.plist .why{display:block;margin-top:3px;font-size:10.5px;line-height:1.5;
+  color:var(--ink3);font-family:inherit;white-space:normal}
+.plist li{align-items:start}
+.plist .ic{padding-top:2px}
