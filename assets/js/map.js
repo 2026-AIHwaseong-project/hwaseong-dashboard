@@ -38,7 +38,7 @@
     var legendEl = opt.legend || null;
     var meta = opt.meta || {};
     var mapMeta = meta.map || {};
-    var vb = mapMeta.viewBox || [0, 0, 960, 640];
+    var vb = mapMeta.viewBox || [0, 0, 960, 580];   // meta 가 없을 때만 쓰는 폴백
     var W = vb[2], H = vb[3];
 
     if (meta.grid && meta.grid.bbox) C.setProjection(meta.grid.bbox, W, H);

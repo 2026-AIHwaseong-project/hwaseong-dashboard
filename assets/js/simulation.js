@@ -18,6 +18,9 @@
   var C = HW.core, api = HW.api;
   var $ = C.$, $$ = C.$$, esc = C.esc, fmt = C.fmt, won = C.won;
 
+  /* 대안 비교표에서 구성을 짧게 쓰기 위한 수단 약칭 */
+  var TYPE_KO = { stop: '정류장', drt: '똑버스', freq: '증편' };
+
   var LS_SCENARIOS = 'hw.scenarios';
   var LS_LAST = 'hw.lastSimulation';
 
@@ -35,7 +38,8 @@
     pending: null,
     selectedCellId: null,
     recommendation: null,   // 추천 결과 원본
-    recEdited: false        // 추천안을 사용자가 손봤는지
+    recEdited: false,       // 추천안을 사용자가 손봤는지
+    recStrategy: 'efficiency'   // 어떤 목적으로 고를지 (효율/약자/균형/즉시)
   };
 
   /* =====================================================================
@@ -205,7 +209,8 @@
    *   위치 선정은 서버의 최적화 알고리즘이 합니다(언어모델이 아닙니다).
    *   결과는 그대로 배치 목록에 들어가며, 사용자가 자유롭게 고칠 수 있습니다.
    * =================================================================== */
-  function requestRecommendation() {
+  function requestRecommendation(strategy) {
+    if (strategy) S.recStrategy = strategy;
     var btn = $('#btnRecommend');
     btn.disabled = true;
     btn.textContent = '계산 중…';
@@ -215,7 +220,9 @@
     api.recommend({
       period: S.period,
       budgetKrw: S.budget,
-      maxPlacements: 5
+      maxPlacements: 5,
+      strategy: S.recStrategy,
+      includeAlternatives: true    // 다른 목적으로 짜면 어떻게 되는지 함께
     }).then(function (rec) {
       S.recommendation = rec;
       S.recEdited = false;
@@ -231,7 +238,8 @@
       if (!rec.placements.length) {
         C.toast('현재 예산·조건에서 추천할 배치가 없습니다. 예산을 늘려 보세요.', 'err', 5000);
       } else {
-        C.toast('추천 배치안 <b>' + rec.placements.length + '건</b>을 불러왔습니다. 마음에 안 드는 항목은 지우셔도 됩니다.');
+        C.toast('<b>' + esc(rec.strategyLabel || '추천') + '</b> 기준으로 <b>' +
+          rec.placements.length + '건</b>을 짰습니다. 마음에 안 드는 항목은 지우셔도 됩니다.');
       }
       runSim();
     }).catch(function (err) {
@@ -267,7 +275,74 @@
       (su.krwPerTrip ? '<span><b>' + fmt(su.krwPerTrip) + '</b>원/통행</span>' : '') +
       '</div>' +
       '<div class="rec-note">' + esc(rec.methodNote) + ' (' + esc(reasonText) + ')</div>' +
+      (su.costCompareLabel
+        ? '<div class="rec-note rec-basis">비용 비교: <b>' + esc(su.costCompareLabel) + '</b> — ' +
+          esc(su.costCompareNote || '') +
+          '<button class="help" data-help="costBasis" type="button">?</button></div>'
+        : '') +
+      altTable(rec) +
+      producedByNote(rec) +
       '</div>';
+
+    wireStrategyTabs(box);
+    C.wireHelp(box);
+  }
+
+  /* 다른 목적으로 짜면 어떻게 되는지.
+     "이 안 말고 다른 안은 없나요"에 화면에서 바로 답하기 위한 표입니다.
+     난수로 다른 답을 만드는 게 아니라, 목적을 바꾸면 답이 달라지는 것을 보여줍니다. */
+  function altTable(rec) {
+    var alts = rec.alternatives;
+    if (!alts || alts.length < 2) return '';
+    var best = alts.reduce(function (a, b) {
+      return b.expectedResolvedTrips > a.expectedResolvedTrips ? b : a; });
+    var bestOld = alts.reduce(function (a, b) {
+      return b.expectedResolvedElderlyTrips > a.expectedResolvedElderlyTrips ? b : a; });
+
+    /* 사이드 패널이 좁습니다(12칸 중 4칸). 열을 늘리면 박스를 넘습니다.
+       구성·사업비는 목적 이름 아래 작은 줄로 접고, 표는 4열로 유지합니다. */
+    return '<div class="rec-alt">' +
+      '<div class="rec-alt-head">다른 목적으로 짜면' +
+        '<button class="help" data-help="strategy" type="button">?</button></div>' +
+      '<div class="rec-alt-wrap">' +
+      '<table class="rec-alt-tbl"><thead><tr>' +
+        '<th>목적</th><th>격자</th><th>일 통행</th><th>고령</th>' +
+      '</tr></thead><tbody>' +
+      alts.map(function (a) {
+        var mix = ['stop', 'drt', 'freq'].filter(function (k) { return a.mix[k]; })
+          .map(function (k) { return TYPE_KO[k] + a.mix[k]; }).join('+') || '—';
+        return '<tr class="' + (a.selected ? 'is-on' : '') + '" data-strategy="' + a.strategy + '">' +
+          '<td><button class="rec-tab" type="button" data-strategy="' + a.strategy + '"' +
+            (a.selected ? ' aria-current="true"' : '') + '>' + esc(a.label) + '</button>' +
+            '<span class="rec-alt-sub">' + esc(mix) + ' · ' + esc(won(a.totalKrw)) + '</span></td>' +
+          '<td>' + fmt(a.expectedResolvedCells) + '</td>' +
+          '<td>' + fmt(a.expectedResolvedTrips) + (a === best ? '<i class="rec-top">최대</i>' : '') + '</td>' +
+          '<td>' + fmt(a.expectedResolvedElderlyTrips) + (a === bestOld ? '<i class="rec-top">최대</i>' : '') + '</td>' +
+          '</tr>';
+      }).join('') +
+      '</tbody></table></div>' +
+      '<div class="rec-note">' + esc((rec.strategyNote || '') + ' ' + (rec.strategyBasisNote || '')) + '</div>' +
+      '</div>';
+  }
+
+  /* 무엇을 알고리즘이 하고 무엇을 AI 가 하는지 화면에 남깁니다.
+     배치를 AI 가 고른다고 오해하면 검증 단계에서 그대로 지적당합니다. */
+  function producedByNote(rec) {
+    var pb = rec.producedBy;
+    if (!pb) return '';
+    return '<div class="rec-note rec-by">' +
+      '배치 산출 <b>' + esc(pb.placements) + '</b> · 설명·보고서 <b>' + esc(pb.narrative) + '</b>' +
+      (pb.deterministicNote ? '<br>' + esc(pb.deterministicNote) : '') +
+      '</div>';
+  }
+
+  function wireStrategyTabs(root) {
+    Array.prototype.forEach.call(root.querySelectorAll('.rec-tab'), function (b) {
+      b.addEventListener('click', function () {
+        var sid = b.getAttribute('data-strategy');
+        if (sid && sid !== S.recStrategy) requestRecommendation(sid);
+      });
+    });
   }
 
   function resetAll() {
@@ -752,8 +827,16 @@
     var costList = $('#costNote');
     if (costList && meta.effects) {
       costList.innerHTML = meta.effects.map(function (e) {
-        return '<span>' + esc(e.label) + ' ' + esc(won(e.unitKrw)) + '</span>';
+        return '<span>' + esc(e.label) + ' <b>' + esc(won(e.unitKrw)) + '</b> ' +
+          '<i>' + esc(e.costBasisLabel || '') + '</i></span>';
       }).join('');
+      /* 단가가 확정되지 않았으면 분명히 알립니다. 실제 사업비로 오해하면 안 됩니다. */
+      if (meta.effects.some(function (e) { return e.costAssumed; })) {
+        costList.innerHTML += '<span class="cost-assumed">' +
+          '<span class="dq-badge">가정값</span>단가·내용연수 모두 미확정' +
+          '<button class="help" data-help="assumedCost" type="button">?</button></span>';
+        C.wireHelp(costList);
+      }
     }
   }
 

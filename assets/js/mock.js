@@ -28,11 +28,15 @@
    *    assets/data/boundary.js 가 SGIS 읍면동 경계(경위도)를 실어 옵니다.
    *    좌표는 전부 경위도(EPSG:4326)이며, 화면 투영은 core.project 가 합니다.
    * ==================================================================== */
-  var VIEW_W = 960, VIEW_H = 640;
   var BND = HW.BOUNDARY;
   if (!BND) throw new Error('assets/data/boundary.js 를 먼저 불러와야 합니다.');
   var BBOX = BND.bbox.slice();
   var DONGS = BND.dongs;
+
+  /* 세로 길이는 실제 경계 비율에서 계산합니다. 960×640(1.5:1) 로 고정하면
+     화성시 종횡비(1.72:1)와 안 맞아 위아래에 54px 씩 빈 띠가 생겼습니다.
+     ※ BBOX 보다 먼저 계산하면 호이스팅으로 undefined 가 들어갑니다. */
+  var VIEW_W = 960, VIEW_H = C.fitHeight(BBOX, VIEW_W);
 
   C.setProjection(BBOX, VIEW_W, VIEW_H);
 
@@ -163,8 +167,15 @@
         var lon = c[0] + (jitter() - 0.5) * off;
         var lat = c[1] + (jitter() - 0.5) * off;
         var xy = toXY(lon, lat);
+        /* 정류소 조인 키.
+           경기데이터드림 정류소id 로 조인하면 매칭률이 79.2% 인데,
+           국토부 ARS번호(모바일단축번호)로 하면 99.5% 입니다(백엔드 실측).
+           다만 ARS번호는 전국 유일이 아니라 시군구 안에서만 유일하므로,
+           나중에 인접 시군으로 넓혀도 안 깨지도록 시군구코드와 결합해 씁니다. */
+        var ars = String(20000 + STOP_LIST.length * 7);
         STOPS[label] = {
-          id: 'S-' + String(STOP_LIST.length + 1).padStart(3, '0'),
+          id: '41590-' + ars,
+          arsNo: ars,
           name: label, dong: dongName,
           lon: +lon.toFixed(5), lat: +lat.toFixed(5),
           x: +xy.x.toFixed(1), y: +xy.y.toFixed(1),
@@ -216,7 +227,7 @@
    * 3. 격자 생성 — 실제 행정경계 안에만
    *    표시 격자 1.5km. 실구현에서는 250m 격자(SGIS)를 씁니다.
    * ==================================================================== */
-  var CELL_KM = 1.5;
+  var CELL_KM = (CONFIG.GRID && CONFIG.GRID.displaySizeMeters ? CONFIG.GRID.displaySizeMeters : 1500) / 1000;
   var KM_PER_DEG_LAT = 110.574;
   var MID_LAT = (BBOX[1] + BBOX[3]) / 2;
   var KM_PER_DEG_LON = 111.320 * Math.cos(MID_LAT * Math.PI / 180);
@@ -575,9 +586,9 @@
    * ==================================================================== */
   var SIM_SEQ = 1;
   function costOf(placements) {
-    var COST = CONFIG.COST, breakdown = {}, total = 0;
+    var breakdown = {}, total = 0;
     (placements || []).forEach(function (p) {
-      var unit = COST[p.type] || 0;
+      var unit = CONFIG.costKrw(p.type);
       var n = Math.max(1, p.count || 1);
       breakdown[p.type] = (breakdown[p.type] || 0) + unit * n;
       total += unit * n;
@@ -585,7 +596,13 @@
     return {
       totalKrw: total,
       breakdown: Object.keys(breakdown).map(function (k) {
-        return { type: k, label: EFFECT[k] ? EFFECT[k].label : k, unitKrw: CONFIG.COST[k] || 0, amountKrw: breakdown[k] };
+        var cm = CONFIG.costMeta(k) || {};
+        return {
+          type: k, label: EFFECT[k] ? EFFECT[k].label : k,
+          unitKrw: CONFIG.costKrw(k), amountKrw: breakdown[k],
+          basis: cm.basis, costBasisLabel: costBasisLabel(k),
+          assumed: cm.confirmed === false
+        };
       })
     };
   }
@@ -628,7 +645,7 @@
           cellName: c ? c.name : p.cellId,
           count: Math.max(1, p.count || 1),
           radiusKm: effectRadiusKm(p.type),
-          unitKrw: CONFIG.COST[p.type] || 0
+          unitKrw: CONFIG.costKrw(p.type)
         };
       }),
       cost: cost,
@@ -679,22 +696,113 @@
   }
 
   /* 수단마다 비용의 성격이 다릅니다.
-     정류장은 1회성 시설비(내용연수 10년), 똑버스·증편은 연간 소요액입니다.
-     그냥 나누면 1회성 비용이 부당하게 싸 보이므로, 추천 비교에서는
-     연간 환산 비용을 씁니다. 화면에 표시하는 사업비는 원래 값 그대로입니다. */
-  var COST_LIFE_YEARS = { stop: 10, drt: 1, freq: 1 };
+     정류장은 1회성 자본비(내용연수 10년), 똑버스·증편은 연간 운영비입니다.
+     화면 표시용으로 연환산 값이 필요해 아래 함수를 둡니다.
+     추천 순위에 쓰는 비용은 compareCost() 를 보세요 — 기본은 총사업비입니다. */
+  /** 연간 환산 비용.
+   *  basis 가 'capital' 이면 내용연수로 나누고 유지관리비를 더합니다.
+   *  'operating' 은 이미 연간 값이므로 그대로 씁니다(나누면 이중 할인).
+   *  ※ 이 비교 방식 자체는 추후 재검토 대상입니다. docs/API.md §3.7 참고. */
   function annualCost(type) {
-    return (CONFIG.COST[type] || 0) / (COST_LIFE_YEARS[type] || 1);
+    var c = CONFIG.costMeta(type);
+    if (!c) return 0;
+    if (c.basis === 'capital') {
+      return c.krw / (c.lifeYears || 1) + (c.annualMaintenanceKrw || 0);
+    }
+    return c.krw;   // operating: 이미 연간 값이라 나누면 이중 할인
   }
 
+  /* 추천 순위를 매길 때 쓰는 '비용'.
+     예산 한도를 총액으로 재고 있으므로 순위도 같은 자로 재야 합니다.
+     기준을 바꾸려면 CONFIG.COST.compareBasis 한 줄만 고치면 됩니다. */
+  function compareCost(type) {
+    return CONFIG.COST.compareBasis === 'annual'
+      ? annualCost(type)
+      : CONFIG.costKrw(type);
+  }
+
+  /* 비교 기준 설명. meta·추천·보고서가 같은 문장을 쓰도록 여기서만 만듭니다. */
+  function costCompareMeta() {
+    var annual = CONFIG.COST.compareBasis === 'annual';
+    return {
+      basis: CONFIG.COST.compareBasis,
+      label: annual ? '연환산 비용 기준' : '총사업비 기준',
+      note: annual
+        ? '자본비는 내용연수로 나눠 연간 비용으로 환산해 비교했습니다.'
+        : '예산 한도와 같은 기준(총사업비)으로 비교했습니다. '
+          + '똑버스·증편은 이듬해에도 같은 예산이 필요합니다.'
+    };
+  }
+
+  /* 보고서 주석 시트에 그대로 실리는 산출식 */
+  function formulaMeta() {
+    return {
+      demand: 'D = 0.5·norm(교통카드 승하차) + 0.5·norm(통신 유동인구)',
+      supply: 'S = 0.78·norm(운행빈도) + 0.22·정류장 커버리지 + 배치효과',
+      mismatch: 'MI = z(D) − z(S), 수요가중 감쇠 적용',
+      priority: '우선순위 = MI⁺ × 수요규모 × (1 + 1.6·고령인구비)'
+    };
+  }
+  function costBasisLabel(type) {
+    var c = CONFIG.costMeta(type);
+    if (!c) return '-';
+    return c.basis === 'capital'
+      ? '1회성 자본비(내용연수 ' + (c.lifeYears || 1) + '년)'
+      : '연간 운영비';
+  }
+
+  /* ======================================================================
+   *  추천 전략 — 같은 알고리즘에 목적만 바꿔 끼웁니다.
+   *
+   *  그리디는 결정론적이라 같은 조건이면 항상 같은 답이 나옵니다.
+   *  정책 도구에서 재현성은 요구사항이므로 난수를 넣지 않습니다.
+   *  대신 "다른 안"이 필요하면 목적함수를 바꿉니다. 각 전략은 그 자체로
+   *  결정론적이면서 서로 다른 답을 냅니다.
+   * =================================================================== */
+  var STRATEGIES = {
+    efficiency: {
+      label: '효율 최우선', short: '효율',
+      note: '사업비 1원당 해소 통행량이 가장 큰 순서로 고릅니다.',
+      basisNote: '기본안입니다. 예산 대비 성과를 묻는 질문에 답합니다.',
+      /* 전체 통행에 고령 가중을 얹은 값 — 우선순위 산식과 같은 계수 */
+      weight: function (i) { return 1 + CELLS[i].elderlyRatio * 1.6; }
+    },
+    equity: {
+      label: '교통약자 우선', short: '약자',
+      note: '고령 통행 해소량이 가장 큰 순서로 고릅니다.',
+      basisNote: '전체 통행이 아니라 고령 통행을 기준으로 삼습니다. '
+        + '총 해소량은 줄지만 이동 대안이 적은 지역이 먼저 들어갑니다.',
+      /* 가중치를 조금 올리는 정도로는 순위가 안 바뀝니다(1.6→3.0 실험 결과 동일).
+         기준 자체를 고령 통행량으로 바꿔야 실제로 다른 답이 나옵니다. */
+      weight: function (i) { return CELLS[i].elderlyRatio; }
+    },
+    balance: {
+      label: '지역 균형', short: '균형',
+      note: '읍면동마다 최대 1개씩만 배정해 특정 지역 집중을 막습니다.',
+      basisNote: '효율은 떨어지지만 지역 형평 문제 제기에 대응할 수 있습니다.',
+      weight: function (i) { return 1 + CELLS[i].elderlyRatio * 1.6; },
+      maxPerRegion: 1
+    },
+    quick: {
+      label: '즉시 착수', short: '즉시',
+      note: '인허가·운영 협의가 비교적 짧은 정류장 신설만으로 구성합니다.',
+      basisNote: '운수업체 협의나 차량 확보 없이 당해 연도 착수가 가능한 범위입니다.',
+      weight: function (i) { return 1 + CELLS[i].elderlyRatio * 1.6; },
+      types: ['stop']
+    }
+  };
+  var STRATEGY_ORDER = ['efficiency', 'equity', 'balance', 'quick'];
+  function strategyOf(id) { return STRATEGIES[id] ? id : 'efficiency'; }
+
   /** 아직 해결되지 않은 통행량 (교통약자 가중 반영) */
-  function unresolvedOf(i, d, quad) {
+  function unresolvedOf(i, d, quad, wf) {
     if (quad !== 'need' && quad !== 'drt') return 0;
-    return d.nf[i] * TRIP_COEF * (1 + CELLS[i].elderlyRatio * 1.6);
+    var w = wf ? wf(i) : (1 + CELLS[i].elderlyRatio * 1.6);
+    return d.nf[i] * TRIP_COEF * w;
   }
 
   /** 후보 하나를 놓았을 때의 개선량. 실제로 반영하지는 않습니다. */
-  function evalCandidate(type, target, dataAll, t) {
+  function evalCandidate(type, target, dataAll, t, wf) {
     var e = EFFECT[type], d = dataAll[t];
     var gainWeighted = 0, gainTrips = 0, resolvedCells = 0;
     for (var i = 0; i < N; i++) {
@@ -704,7 +812,7 @@
       e.apply(inc, dist);
       var after = recalcCell(i, d, inc.covAdj, inc.supAdj);
       var before = d.quad[i];
-      var u0 = unresolvedOf(i, d, before), u1 = unresolvedOf(i, d, after.quad);
+      var u0 = unresolvedOf(i, d, before, wf), u1 = unresolvedOf(i, d, after.quad, wf);
       if (u0 !== u1) {
         gainWeighted += u0 - u1;
         if (before === 'need' && after.quad !== 'need') {
@@ -752,10 +860,19 @@
     var allowed = body.allowedTypes && body.allowedTypes.length
       ? body.allowedTypes : Object.keys(EFFECT);
 
+    /* 전략이 수단을 제한하면(즉시 착수 = 정류장만) 요청과 교집합을 씁니다 */
+    var stratId = strategyOf(body.strategy);
+    var strat = STRATEGIES[stratId];
+    if (strat.types) {
+      allowed = allowed.filter(function (x) { return strat.types.indexOf(x) >= 0; });
+      if (!allowed.length) allowed = strat.types.slice();
+    }
+
     /* 기존 배치는 무시하고 기준선에서 새로 짭니다(교체 방식) */
     var data = applyPlacements([]);
     var chosen = [], spent = 0, stopped = 'max_reached';
-    var used = {};      /* 같은 격자에 같은 수단을 두 번 추천하지 않습니다 */
+    var used = {};        /* 같은 격자에 같은 수단을 두 번 추천하지 않습니다 */
+    var perRegion = {};   /* 지역 균형 전략에서 읍면동별 배정 수를 셉니다 */
 
     while (chosen.length < maxN) {
       var d = data[t], best = null;
@@ -764,17 +881,21 @@
         var q = d.quad[i];
         if (q !== 'need' && q !== 'drt') continue;          // 후보: 미해결 격자만
 
+        /* 지역 균형 — 이미 상한을 채운 읍면동은 건너뜁니다 */
+        if (strat.maxPerRegion &&
+            (perRegion[CELLS[i].region] || 0) >= strat.maxPerRegion) continue;
+
         for (var a = 0; a < allowed.length; a++) {
           var type = allowed[a], e = EFFECT[type];
           if (!e) continue;
           if (used[type + '@' + CELLS[i].id]) continue;
           if (e.guard && !e.guard(CELLS[i])) continue;       // 증편은 도보권 안에서만
-          var cost = CONFIG.COST[type] || 0;
+          var cost = CONFIG.costKrw(type);
           if (cost <= 0 || spent + cost > budget) continue;  // 예산 초과분은 제외
 
-          var gain = evalCandidate(type, CELLS[i], data, t);
+          var gain = evalCandidate(type, CELLS[i], data, t, strat.weight);
           if (gain.weighted <= 0) continue;
-          var eff = gain.weighted / annualCost(type);        // 연간 환산 1원당 개선량
+          var eff = gain.weighted / compareCost(type);       // 1원당 개선량 (예산과 같은 기준)
           if (!best || eff > best.eff) {
             best = { i: i, type: type, cost: cost, eff: eff, gain: gain };
           }
@@ -783,13 +904,14 @@
 
       if (!best) {
         stopped = chosen.length ? 'no_further_gain'
-          : (spent === 0 && budget < Math.min.apply(null, allowed.map(function (x) { return CONFIG.COST[x] || 1e12; }))
+          : (spent === 0 && budget < Math.min.apply(null, allowed.map(function (x) { return CONFIG.costKrw(x) || 1e12; }))
             ? 'budget_exhausted' : 'no_further_gain');
         break;
       }
 
       var cell = CELLS[best.i];
       used[best.type + '@' + cell.id] = true;
+      perRegion[cell.region] = (perRegion[cell.region] || 0) + 1;
       chosen.push({
         rank: chosen.length + 1,
         type: best.type,
@@ -801,8 +923,8 @@
         radiusKm: EFFECT[best.type].radiusKm,
         costKrw: best.cost,
         annualCostKrw: Math.round(annualCost(best.type)),
-        costBasis: COST_LIFE_YEARS[best.type] > 1
-          ? '1회성 시설비(내용연수 ' + COST_LIFE_YEARS[best.type] + '년)' : '연간 운영비',
+        costBasis: costBasisLabel(best.type),
+        costAssumed: (CONFIG.costMeta(best.type) || {}).confirmed === false,
         expectedResolvedCells: best.gain.cells,
         expectedResolvedTrips: best.gain.trips,
         krwPerTrip: best.gain.trips > 0 ? Math.round(best.cost / best.gain.trips) : null,
@@ -821,7 +943,7 @@
 
     /* 최종 효과는 기존 시뮬레이션 경로로 계산해 화면·보고서와 수치를 일치시킵니다 */
     var sim = runSimulation({
-      name: body.name || 'AI 추천 배치안',
+      name: body.name || (strat.label + ' 배치안'),
       period: period,
       budgetKrw: budget,
       placements: chosen.map(function (p) {
@@ -831,15 +953,69 @@
     applyPlacements([]);   // 기준선 복원
 
     var block = sim.periods.filter(function (x) { return x.period === period; })[0] || sim.periods[0];
+
+    /* 다른 전략으로 돌리면 어떻게 되는지 요약만 함께 돌려줍니다.
+       "이 안 말고 다른 안은 없나요"에 화면에서 바로 답하기 위한 것입니다.
+       요약만 필요하므로 배치 목록은 싣지 않습니다(응답 크기 절약). */
+    var alternatives = null;
+    if (body.includeAlternatives) {
+      alternatives = STRATEGY_ORDER.map(function (sid) {
+        var alt = sid === stratId ? null : runRecommendation({
+          period: period, budgetKrw: budget, maxPlacements: maxN,
+          allowedTypes: body.allowedTypes, strategy: sid
+        });
+        var su = alt ? alt.summary : null;
+        var mix = { stop: 0, drt: 0, freq: 0 };
+        (alt ? alt.placements : chosen).forEach(function (pp) { mix[pp.type]++; });
+        return {
+          strategy: sid,
+          label: STRATEGIES[sid].label,
+          short: STRATEGIES[sid].short,
+          note: STRATEGIES[sid].note,
+          basisNote: STRATEGIES[sid].basisNote,
+          selected: sid === stratId,
+          count: alt ? su.count : chosen.length,
+          totalKrw: alt ? su.totalKrw : spent,
+          mix: mix,
+          expectedResolvedCells: alt ? su.expectedResolvedCells : Math.max(0, -block.delta.needCells),
+          expectedResolvedTrips: alt ? su.expectedResolvedTrips : Math.max(0, -block.delta.potentialTripsPerDay),
+          expectedResolvedElderlyTrips: alt ? su.expectedResolvedElderlyTrips
+            : Math.max(0, -block.delta.elderlyTripsPerDay)
+        };
+      });
+      applyPlacements([]);   // 대안 계산 후 기준선 복원
+    }
+
     return {
       method: 'budget-constrained greedy marginal benefit',
       methodLabel: '예산 제약 하 한계효과 최대화',
       methodNote: '미해결 통행량(고수요·저공급 + DRT후보, 교통약자 가중)을 ' +
-        '연간 환산 사업비 1원당 가장 많이 줄이는 지점을 순차 선택했습니다. ' +
-        '정류장 신설은 1회성 시설비를 내용연수 10년으로 나누어 똑버스·증편의 연간 운영비와 같은 기준에서 비교했습니다. ' +
+        (CONFIG.COST.compareBasis === 'annual' ? '연간 환산 사업비' : '총사업비') +
+        ' 1원당 가장 많이 줄이는 지점을 순차 선택했습니다. ' +
         '이미 개선된 지역은 다음 회차에 효율이 낮아져 중복 배치되지 않습니다.',
       period: period,
       generatedAt: C.nowStamp(),
+
+      /* 어떤 목적으로 고른 안인지. 같은 알고리즘에 목적만 바꿔 끼운 것입니다. */
+      strategy: stratId,
+      strategyLabel: strat.label,
+      strategyNote: strat.note,
+      strategyBasisNote: strat.basisNote,
+      strategies: STRATEGY_ORDER.map(function (sid) {
+        return { id: sid, label: STRATEGIES[sid].label, short: STRATEGIES[sid].short,
+                 note: STRATEGIES[sid].note };
+      }),
+      alternatives: alternatives,
+
+      /* 배치 선정은 알고리즘, 설명·보고서 문장은 AI 가 씁니다. */
+      producedBy: {
+        placements: '최적화 알고리즘 (예산 제약 하 그리디)',
+        narrative: CONFIG.APP.isMockData ? '템플릿 (실서버에서는 Claude)' : 'Claude',
+        deterministic: true,
+        deterministicNote: '같은 조건이면 항상 같은 결과가 나옵니다. '
+          + '다른 안이 필요하면 난수가 아니라 전략(목적)을 바꿉니다.'
+      },
+
       placements: chosen,
       simulation: sim,
       summary: {
@@ -851,7 +1027,10 @@
         expectedResolvedTrips: Math.max(0, -block.delta.potentialTripsPerDay),
         expectedResolvedElderlyTrips: Math.max(0, -block.delta.elderlyTripsPerDay),
         krwPerTrip: sim.effectiveness.krwPerTripPerDay,
-        stoppedBecause: stopped
+        stoppedBecause: stopped,
+        costCompareBasis: costCompareMeta().basis,
+        costCompareLabel: costCompareMeta().label,
+        costCompareNote: costCompareMeta().note
       }
     };
   }
@@ -927,6 +1106,10 @@
       planBody = '예산 ' + won(su.budgetKrw || 0) + ' 범위에서 ' + (rec.methodLabel || '최적화 분석') +
         ' 방식으로 우선 배치 대상 ' + rec.placements.length + '개 지점을 도출하였다. ' +
         '총 소요액은 ' + won(su.totalKrw || 0) + '으로 예산의 ' + (su.budgetUsedPct || 0) + '% 수준이다.' +
+        (rec.strategyLabel
+          ? '\n본 안은 「' + rec.strategyLabel + '」 기준으로 산출하였다. ' + (rec.strategyNote || '')
+            + ' ' + (rec.strategyBasisNote || '')
+          : '') +
         (rec.edited ? '\n다만 아래 목록은 담당 부서 검토 의견을 반영해 일부 조정한 안이다.' : '') +
         '\n' + (rec.methodNote || '');
       planBullets = rec.placements.map(function (p) {
@@ -1033,6 +1216,20 @@
       });
     }
 
+    /* 목적별 대안 비교 — "왜 이 안이냐"에 대한 답을 문서 안에 남깁니다. */
+    if (rec && rec.alternatives && rec.alternatives.length > 1) {
+      tables.push({
+        key: 'alternatives', title: '목적별 대안 비교',
+        columns: ['목적', '채택', '구성', '해소 격자', '일 통행 해소', '고령 통행 해소', '사업비(원)'],
+        rows: rec.alternatives.map(function (a) {
+          var mix = ['stop', 'drt', 'freq'].filter(function (k) { return a.mix[k]; })
+            .map(function (k) { return EFFECT[k].label + ' ' + a.mix[k]; }).join(', ') || '—';
+          return [a.label, a.selected ? '○' : '', mix, a.expectedResolvedCells,
+                  f(a.expectedResolvedTrips), f(a.expectedResolvedElderlyTrips), f(a.totalKrw)];
+        })
+      });
+    }
+
     return {
       title: CONFIG.APP.org + ' 대중교통 수급 불일치 분석 및 노선 조정 검토(안)',
       subtitle: P.name + ' 시간대(' + P.label + ') 기준' +
@@ -1045,9 +1242,18 @@
       model: 'mock-template',      // 실서버에서는 'claude-opus-5'
       sections: sections,
       tables: tables,
+      /* 주석 시트가 쓰는 산출식·비교 기준.
+         이게 없으면 report.js 가 하드코딩된 기본 문구로 넘어갑니다. */
+      meta: {
+        formula: formulaMeta(),
+        costCompare: costCompareMeta()
+      },
       disclaimer: CONFIG.APP.isMockData
-        ? '본 문서의 모든 수치는 로직 시연을 위한 가상 예시 데이터에 기반합니다. 실제 지리·운행 정보와 다르며, 정책 판단의 근거로 사용할 수 없습니다.'
-        : '본 문서는 자동 생성된 초안입니다. 담당자 검토 후 활용하시기 바랍니다.'
+        ? '본 문서의 수치는 로직 시연을 위한 가상 예시 데이터에 기반합니다. 행정경계만 실제(SGIS)이며 ' +
+          '수요·공급 수치와 노선·정류장은 가상입니다. 정책 판단의 근거로 사용할 수 없습니다.'
+        : '본 문서는 자동 생성된 초안입니다. 시간대별 승하차는 원자료에 시간대 정보가 없어 ' +
+          '통신 유동인구 시간배율로 안분한 추정치이며, 사업비와 내용연수는 미확정 가정값입니다. ' +
+          '담당자 검토 후 활용하시기 바랍니다.'
     };
   }
 
@@ -1069,8 +1275,14 @@
             return { id: p.id, name: p.name, label: p.label, hours: p.hours };
           }),
           grid: {
-            sizeMeters: 250, displaySizeMeters: CELL_KM * 1000,
-            crs: 'EPSG:4326', bbox: BBOX, cellCount: N
+            /* 분석 격자 — SGIS 공공데이터포털 배포판이 1km 만 제공합니다 */
+            sizeMeters: CONFIG.GRID.analysisSizeMeters,
+            analysisCellCount: CONFIG.GRID.analysisCellCount,
+            /* 화면 표시 격자 — 분석 격자를 묶어 그립니다 */
+            displaySizeMeters: CELL_KM * 1000,
+            /* ★ 아래 값은 /grid 의 cells 길이와 반드시 같아야 합니다 */
+            cellCount: N,
+            crs: 'EPSG:4326', bbox: BBOX
           },
           map: {
             viewBox: [0, 0, VIEW_W, VIEW_H],
@@ -1085,14 +1297,31 @@
             scaleBar: { km: 5 }
           },
           cost: CONFIG.COST,
-          formula: {
-            demand: 'D = 0.5·norm(교통카드 승하차) + 0.5·norm(통신 유동인구)',
-            supply: 'S = 0.78·norm(운행빈도) + 0.22·정류장 커버리지 + 배치효과',
-            mismatch: 'MI = z(D) − z(S), 수요가중 감쇠 적용',
-            priority: '우선순위 = MI⁺ × 수요규모 × (1 + 1.6·고령인구비)'
+          /* 어느 수치가 실측이고 어느 수치가 추정인지 화면이 알 수 있게 합니다.
+             교통카드 원자료는 일자별 집계라 시간대 정보가 없어서,
+             시간대별 승하차는 유동인구 시간배율로 안분한 추정치입니다. */
+          dataQuality: {
+            boardingDaily: { level: 'observed', label: '일별 승하차', source: '교통카드빅데이터(STCIS)' },
+            boardingHourly: {
+              level: 'estimated', label: '시간대별 승하차',
+              method: '일자별 승하차를 통신 유동인구 시간배율로 안분',
+              note: '원자료에 시간대 정보가 없습니다.'
+            },
+            flowHourly: { level: 'observed', label: '시간대별 유동인구', source: '통신사 유동인구' },
+            boundary: { level: 'observed', label: '행정경계', source: BND.source }
           },
+          formula: formulaMeta(),
+          costCompare: costCompareMeta(),
           effects: Object.keys(EFFECT).map(function (k) {
-            return { type: k, label: EFFECT[k].label, icon: EFFECT[k].icon, radiusKm: EFFECT[k].radiusKm, unitKrw: CONFIG.COST[k] };
+            var cm = CONFIG.costMeta(k) || {};
+            return {
+              type: k, label: EFFECT[k].label, icon: EFFECT[k].icon,
+              radiusKm: EFFECT[k].radiusKm,
+              unitKrw: CONFIG.costKrw(k),
+              costBasis: cm.basis, costBasisLabel: costBasisLabel(k),
+              costNote: cm.note, costSource: cm.source,
+              costAssumed: cm.confirmed === false
+            };
           })
         };
 
@@ -1108,7 +1337,9 @@
         return {
           stops: STOP_LIST.map(function (s) {
             return {
-              id: s.id, name: s.name, dong: s.dong,
+              id: s.id,                 /* 조인 키: {시군구코드}-{ARS번호} */
+              arsNo: s.arsNo,           /* 국토부 ARS번호(모바일단축번호) */
+              name: s.name, dong: s.dong,
               lon: s.lon, lat: s.lat, x: s.x, y: s.y,
               kind: s.kind, routes: s.routes.slice()
             };
@@ -1125,6 +1356,9 @@
         });
         return {
           stopId: st.id, stopName: st.name, kind: st.kind, routes: st.routes.slice(),
+          /* 시간대 프로파일은 실측이 아니라 추정입니다(위 dataQuality 참고) */
+          isEstimated: true,
+          estimationMethod: '일자별 승하차를 통신 유동인구 시간배율로 안분',
           hours: HOURS.slice(), boardings: st.boardings.slice(), alightings: st.alightings.slice(),
           summary: {
             boardingsPerDay: tb, alightingsPerDay: ta,

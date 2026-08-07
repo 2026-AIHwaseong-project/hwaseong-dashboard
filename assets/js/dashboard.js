@@ -48,6 +48,7 @@
       S.meta = meta;
       renderPeriodTabs(meta.periods);
       renderFooter(meta);
+      renderDataQuality(meta);
       S.map = HW.createMap({
         svg: $('#map'), legend: $('#legend'), meta: meta,
         onClearFocus: function () { focusRegion(null); },
@@ -443,6 +444,15 @@
     $('#ss3').textContent = p.summary.peakSharePct + '%';
     $('#ss4').textContent = p.routes.join(' · ') + '선';
 
+    /* 시간대 프로파일이 추정치면 눈에 띄게 알립니다.
+       교통카드 원자료는 일자별 집계라 시간대 정보가 없어, 유동인구 배율로 안분한 값입니다.
+       실측인 것처럼 보이면 검증 단계에서 그대로 지적당합니다. */
+    var badge = $('#stEstimated');
+    if (badge) {
+      badge.style.display = p.isEstimated ? '' : 'none';
+      badge.title = p.isEstimated ? (p.estimationMethod || '추정치') : '';
+    }
+
     $('#sttbl').innerHTML = '<tr><th>시각</th><th>승차</th><th>하차</th></tr>' +
       hours.map(function (hr, k) {
         return '<tr><td>' + hr + '시</td><td>' + fmt(B[k]) + '</td><td>' + fmt(A[k]) + '</td></tr>';
@@ -557,6 +567,23 @@
       var raw = localStorage.getItem('hw.lastSimulation');
       return raw ? JSON.parse(raw) : null;
     } catch (e) { return null; }
+  }
+
+  /** 데이터 품질 안내 — 무엇이 실측이고 무엇이 추정인지 */
+  function renderDataQuality(meta) {
+    var dq = meta.dataQuality;
+    var host = $('#dataQuality');
+    if (!host) return;
+    if (!dq) { host.style.display = 'none'; return; }
+    var est = Object.keys(dq).filter(function (k) { return dq[k].level === 'estimated'; });
+    if (!est.length) { host.style.display = 'none'; return; }
+    host.innerHTML = est.map(function (k) {
+      var d = dq[k];
+      return '<span class="dq-item"><span class="dq-badge">추정</span>' +
+        esc(d.label) + ' — ' + esc(d.method || d.note || '') + '</span>';
+    }).join('') +
+      '<button class="help" data-help="estimated" type="button">?</button>';
+    C.wireHelp(host);
   }
 
   function renderFooter(meta) {

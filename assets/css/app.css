@@ -25,6 +25,7 @@
     16. 용어 도움말 버튼
     17. 읍면동 경계선
     18. 추천 배치안
+    19. 데이터 품질 · 가정값 표시
    ========================================================================= */
 
 /* ---------------------------------------------------------------- 1. 토큰 */
@@ -593,3 +594,104 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
   color:var(--ink3);font-family:inherit;white-space:normal}
 .plist li{align-items:start}
 .plist .ic{padding-top:2px}
+
+
+/* ===========================================================================
+   19. 데이터 품질 · 가정값 표시
+   무엇이 실측이고 무엇이 추정·가정인지 화면에서 구분되게 합니다.
+   실측인 척 내보내면 검증 단계에서 그대로 지적당합니다.
+   ======================================================================== */
+.dq-badge{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.03em;
+  border-radius:999px;padding:2px 7px;margin-right:5px;vertical-align:1px;
+  background:var(--tag-add-bg);color:var(--tag-add-fg)}
+.dq{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;
+  margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+.dq:empty{display:none}
+.dq-item{font-size:11px;color:var(--ink3);display:inline-flex;align-items:center}
+.cost-assumed{display:inline-flex;align-items:center;color:var(--tag-add-fg);font-weight:600}
+#costNote b{color:var(--ink2);font-weight:600}
+#costNote i{font-style:normal;opacity:.75}
+
+/* ===========================================================================
+ * [20] 비용 비교 기준 표기 (추천 박스)
+ *   추천이 왜 이런 조합인지 묻는 질문에 대한 답을 화면에 남겨 둡니다.
+ *   기존 .rec-note 를 그대로 쓰고 톤만 낮춥니다. 새 색은 만들지 않습니다.
+ * ======================================================================== */
+.rec-basis{color:var(--ink3);font-size:11.5px;line-height:1.55}
+.rec-basis b{color:var(--ink);font-weight:600}
+.rec-basis .help{margin-left:5px;vertical-align:baseline}
+
+/* ===========================================================================
+ * [21] 추천 대안 비교 (목적별 시나리오)
+ *   같은 알고리즘에 목적만 바꿔 끼운 결과를 나란히 보여 줍니다.
+ *   기존 .rec-* 규칙과 토큰을 그대로 쓰고 새 색은 만들지 않습니다.
+ * ======================================================================== */
+.rec-alt{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}
+.rec-alt-head{font-size:11.5px;font-weight:600;color:var(--ink);margin-bottom:6px}
+/* 사이드 패널은 좁습니다. 표가 넘칠 여지를 남기지 않습니다. */
+.rec-alt-wrap{max-width:100%;overflow-x:auto}
+.rec-alt-tbl{width:100%;table-layout:fixed;border-collapse:collapse;font-size:11px}
+.rec-alt-tbl th{text-align:right;font-weight:500;color:var(--ink2);
+  padding:3px 4px;border-bottom:1px solid var(--line);white-space:nowrap}
+.rec-alt-tbl th:first-child,.rec-alt-tbl td:first-child{text-align:left;width:42%}
+.rec-alt-tbl td{text-align:right;padding:5px 4px;color:var(--ink);
+  border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;
+  overflow-wrap:anywhere}
+.rec-alt-tbl tbody tr:last-child td{border-bottom:0}
+.rec-alt-tbl tr.is-on td{background:var(--selbg);font-weight:600}
+.rec-alt-sub{display:block;margin-top:1px;font-size:10px;font-weight:400;
+  color:var(--ink2);white-space:normal}
+.rec-tab{background:none;border:0;padding:0;font:inherit;color:var(--ink2);
+  cursor:pointer;text-align:left;border-bottom:1px dotted var(--line);
+  white-space:normal;overflow-wrap:anywhere}
+.rec-tab:hover{color:var(--ink)}
+.rec-alt-tbl tr.is-on .rec-tab{color:var(--ink);font-weight:600;
+  border-bottom:0;cursor:default}
+.rec-top{display:block;font-style:normal;font-size:9.5px;font-weight:500;
+  color:var(--ink2)}
+.rec-by{color:var(--ink2);font-size:11px;line-height:1.55}
+.rec-by b{color:var(--ink);font-weight:600}
+
+/* ===========================================================================
+ * [22] 다크모드 대비 보정
+ *   --sel 은 라이트에서 진한 보라(#4a3aa7), 다크에서 밝은 라벤더(#9085e9)입니다.
+ *   그 위에 흰 글자를 고정해 두면 다크에서 대비가 3.13:1 까지 떨어집니다
+ *   (WCAG AA 기준 4.5:1). 밝은 배경에는 어두운 글자를 얹어야 합니다.
+ *   기존 규칙은 건드리지 않고 다크에서만 글자색을 덮어씁니다. → 6.03:1
+ * ======================================================================== */
+/* 추천 박스 안의 설명글은 10.5px 로 작습니다. --ink3 로는 다크에서 3.97:1 이라
+   읽기 어렵습니다. 전역 토큰은 그대로 두고 이 박스 안에서만 한 단계 올립니다. */
+.rec-box .rec-note{color:var(--ink2)}
+
+:root[data-theme="dark"] .rec-badge,
+:root[data-theme="dark"] .plist .ai-tag,
+:root[data-theme="dark"] .btn.primary,
+:root[data-theme="dark"] .simtool.on,
+:root[data-theme="dark"] .help:hover{color:var(--bg)}
+@media (prefers-color-scheme:dark){
+  :root:where(:not([data-theme="light"])) .rec-badge,
+  :root:where(:not([data-theme="light"])) .plist .ai-tag,
+  :root:where(:not([data-theme="light"])) .btn.primary,
+  :root:where(:not([data-theme="light"])) .simtool.on,
+  :root:where(:not([data-theme="light"])) .help:hover{color:var(--bg)}
+}
+
+/* ===========================================================================
+ * [23] 지도 패널 높이 고정 + 스티키
+ *   .grid{align-items:stretch} 때문에 sidecard 가 길어지면 mapcard 도 같이 늘어납니다.
+ *   .mapbox{flex:1} 이 늘어난 공간을 차지하지만 SVG 는 height:auto(종횡비 유지)라
+ *   아래에 빈 공간이 생깁니다.
+ *   align-self:start  — sidecard 높이에 맞춰 늘어나지 않습니다.
+ *   flex:0 0 auto     — mapbox 가 flex:1 로 비어 있는 공간을 차지하지 않습니다.
+ *   position:sticky   — 추천 목록이 길어져 스크롤해도 지도가 화면에 남습니다.
+ * ======================================================================== */
+.mapcard{align-self:start}
+.mapcard .mapbox{flex:0 0 auto}
+
+/* 저장된 시나리오 — 지도 아래 가로 그리드 */
+.scen-floor{border-top:1px solid var(--line);padding:10px 14px 14px}
+.scen-floor-hd{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+.scen-floor-hd b{font-size:13px;font-weight:650}
+.scen-floor-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.scen-floor-list .empty{grid-column:1/-1;padding:14px 0;text-align:center}
+.scen-floor-list .scen .smeta{white-space:normal}

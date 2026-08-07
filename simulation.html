@@ -85,11 +85,20 @@
       </div>
 
       <div class="mapbox">
-        <svg id="map" class="mapsvg" viewBox="0 0 960 640" role="img"
+        <svg id="map" class="mapsvg" viewBox="0 0 960 580" role="img"
              aria-label="배치 시뮬레이션 지도. 배치한 수단은 기호로 표시됩니다."></svg>
         <div class="mock" id="mapMock">실제 행정경계 · 가상 수치</div>
       </div>
       <div class="legendbar" id="legend"></div>
+
+      <!-- 저장된 시나리오 — 지도 아래 가로 배치 -->
+      <div class="scen-floor">
+        <div class="scen-floor-hd">
+          <b>저장된 시나리오</b>
+          <span class="hsub">클릭하면 불러옵니다</span>
+        </div>
+        <div class="scen-floor-list" id="scenList"></div>
+      </div>
     </section>
 
     <!-- ───────────────────── 시나리오 패널 ───────────────────── -->
@@ -132,11 +141,6 @@
         <button class="btn" data-report-open type="button">보고서</button>
       </div>
 
-      <div class="chead" style="border-top:1px solid var(--line);padding-top:12px">
-        <h2 style="font-size:13px">저장된 시나리오</h2>
-        <span class="hsub">클릭하면 불러옵니다</span>
-      </div>
-      <div class="scen-list" id="scenList"></div>
     </section>
 
     <!-- ───────────────────── 전후 비교 ───────────────────── -->

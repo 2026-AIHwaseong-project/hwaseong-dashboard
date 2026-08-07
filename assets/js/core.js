@@ -74,6 +74,19 @@
    *   (화성시 정도의 범위에서는 등장방형 투영으로 충분합니다.)
    */
   var PROJ = { bbox: null, w: 960, h: 640, pad: 24 };
+  /* 지도 높이를 경계에 맞춰 계산합니다.
+     화성시는 가로가 세로의 약 1.72배인데 viewBox 를 1.5 로 두면
+     위아래에 각각 54px 씩, 세로의 17% 가 빈 띠로 남습니다.
+     경계 파일이 바뀌어도 알아서 맞도록 값을 고정하지 않고 계산합니다. */
+  function fitHeight(bbox, w) {
+    if (!bbox || bbox.length !== 4) return PROJ.h;
+    var midLat = (bbox[1] + bbox[3]) / 2;
+    var kx = Math.cos(midLat * Math.PI / 180);
+    var dx = (bbox[2] - bbox[0]) * kx, dy = (bbox[3] - bbox[1]);
+    if (!(dx > 0) || !(dy > 0)) return PROJ.h;
+    return Math.round(PROJ.pad * 2 + (w - PROJ.pad * 2) * (dy / dx));
+  }
+
   function setProjection(bbox, w, h) {
     if (bbox && bbox.length === 4) PROJ.bbox = bbox.slice();
     if (w) PROJ.w = w;
@@ -278,6 +291,38 @@
       d: '출퇴근 시간대(07–09, 17–19) 승하차가 하루 전체에서 차지하는 비율입니다. ' +
          '높을수록 특정 시간대에 이용이 몰린다는 뜻입니다.'
     },
+    estimated: {
+      t: '추정치 (실측 아님)',
+      d: '교통카드 원자료는 <b>일자별 집계</b>라 시간대 정보가 없습니다. ' +
+         '시간대별 승하차는 통신 유동인구의 시간배율로 안분해 채운 <b>추정치</b>입니다. ' +
+         '하루 총량은 실측이지만, 시간대별 배분은 추정입니다. ' +
+         '시간대별 지표를 해석할 때 이 점을 감안하십시오.'
+    },
+    strategy: {
+      t: '왜 목적을 고르나요',
+      d: '배치 산출은 <b>최적화 알고리즘</b>입니다. 난수를 쓰지 않으므로 같은 조건이면 ' +
+         '항상 같은 결과가 나옵니다. 공문서에 쓰려면 재현이 되어야 하기 때문입니다.<br><br>' +
+         '그래서 "다른 안"은 무작위로 만들지 않고 <b>목적을 바꿔서</b> 만듭니다. ' +
+         '효율을 최우선으로 할지, 교통약자를 먼저 볼지, 지역 균형을 맞출지에 따라 ' +
+         '답이 달라집니다. 어느 목적을 택할지가 곧 정책 판단입니다.<br><br>' +
+         '표의 목적 이름을 누르면 그 기준으로 다시 짭니다.'
+    },
+    costBasis: {
+      t: '비용 비교 기준',
+      d: '추천 순위는 <b>총사업비</b> 1원당 개선량으로 매깁니다. 예산 한도를 총액으로 재고 ' +
+         '있으니 순위도 같은 자로 재야 하기 때문입니다.<br><br>' +
+         '다만 총사업비는 <b>1년차 관점</b>입니다. 정류장은 한 번 지으면 끝이지만 ' +
+         '똑버스·배차 증편은 이듬해에도 같은 예산이 필요합니다. 다년도로 비교하면 ' +
+         '정류장 비중이 더 커집니다.<br><br>' +
+         '기준을 연환산으로 바꾸려면 config.js 의 <b>COST.compareBasis</b> 를 ' +
+         "'annual' 로 두면 됩니다."
+    },
+    assumedCost: {
+      t: '가정값 사업비',
+      d: '정류장·똑버스·증편 단가와 내용연수는 아직 확정되지 않은 <b>시연용 가정값</b>입니다. ' +
+         '실제 사업비가 확정되면 <b>config.js</b> 의 COST 를 바꾸고 confirmed 를 true 로 두면 ' +
+         '이 표시가 사라집니다.'
+    },
     baseline: {
       t: '기준선',
       d: '아무것도 배치하지 않은 현재 상태의 수치입니다. ' +
@@ -338,7 +383,7 @@
     clamp: clamp, fmt: fmt, fmt1: fmt1, pct: pct, won: won, delta: delta,
     mulberry32: mulberry32,
     todayISO: todayISO, nowStamp: nowStamp, korDate: korDate,
-    setProjection: setProjection, project: project, xy: xy,
+    setProjection: setProjection, fitHeight: fitHeight, project: project, xy: xy,
     showTip: showTip, hideTip: hideTip, toast: toast,
     initTheme: initTheme, applyTheme: applyTheme,
     downloadBlob: downloadBlob,
