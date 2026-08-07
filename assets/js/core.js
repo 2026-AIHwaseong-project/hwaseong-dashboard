@@ -225,6 +225,86 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  /* ------------------------------------------------------- 용어 사전
+   * 화면에 쓰인 지표 용어를 공무원이 바로 이해할 수 있게 풀어 씁니다.
+   * HTML 에서  <button class="help" data-help="mi">?</button>  로 붙입니다.
+   * ------------------------------------------------------------------ */
+  var HELP = {
+    mi: {
+      t: '미스매칭 지수 (MI)',
+      d: '수요를 표준화한 값에서 공급을 표준화한 값을 뺀 수치입니다. ' +
+         '0이면 수요와 공급이 균형을 이룬 상태이고, 양수가 클수록 수요에 비해 버스 공급이 부족합니다. ' +
+         '음수는 공급에 여유가 있다는 뜻입니다.'
+    },
+    demand: {
+      t: '수요지수 D',
+      d: '교통카드 실제 승하차와 통신 유동인구를 절반씩 반영해 0~100으로 환산한 값입니다. ' +
+         '버스가 없어서 발생하지 못한 통행까지 잡아내기 위해 유동인구를 함께 봅니다.'
+    },
+    supply: {
+      t: '공급지수 S',
+      d: '노선 운행빈도와 정류장까지의 도보 접근성을 합쳐 0~100으로 환산한 값입니다.'
+    },
+    need: {
+      t: '고수요·저공급 격자',
+      d: '이동 수요는 많은데 버스 공급이 따라가지 못하는 격자입니다. ' +
+         '정류장이 도보권 밖이면 <b>신설</b>, 도보권 안이면 <b>증차</b>가 우선 검토 대상입니다. ' +
+         '흔히 말하는 대중교통 사각지대가 여기에 해당합니다.'
+    },
+    drt: {
+      t: 'DRT (수요응답형 교통 · 똑버스)',
+      d: '수요와 공급이 모두 낮아 정규 노선을 넣기에는 효율이 떨어지는 지역에, ' +
+         '호출하면 오는 방식으로 운행하는 교통수단입니다. ' +
+         '농촌 지역 이동권 보장에 쓰입니다.'
+    },
+    potential: {
+      t: '잠재수요',
+      d: '통신사 유동인구로 추정한 이동 총량입니다. ' +
+         '실제 버스 이용 실적이 아니라 <b>버스가 있었다면 발생했을 통행</b>까지 포함한 값이라, ' +
+         '사각지대 규모를 가늠하는 데 씁니다.'
+    },
+    elderly: {
+      t: '교통약자 가중',
+      d: '고령인구 비율이 높은 격자의 우선순위를 높이는 보정입니다. ' +
+         '같은 수요라도 이동 대안이 적은 지역을 먼저 보기 위한 장치입니다.'
+    },
+    coverage: {
+      t: '정류장 커버리지',
+      d: '격자에서 가장 가까운 정류장까지의 거리로 계산한 접근성입니다. ' +
+         '0에 가까울수록 도보권 밖이며, 0.5 미만이면 배차 증편 대상에서 제외됩니다.'
+    },
+    peak: {
+      t: '첨두 집중률',
+      d: '출퇴근 시간대(07–09, 17–19) 승하차가 하루 전체에서 차지하는 비율입니다. ' +
+         '높을수록 특정 시간대에 이용이 몰린다는 뜻입니다.'
+    },
+    baseline: {
+      t: '기준선',
+      d: '아무것도 배치하지 않은 현재 상태의 수치입니다. ' +
+         '시뮬레이션 결과는 항상 이 값과 비교해 표시됩니다.'
+    }
+  };
+
+  /** [data-help] 버튼에 설명 툴팁을 붙입니다. 터치 기기를 위해 클릭도 받습니다. */
+  function wireHelp(root) {
+    $$('[data-help]', root).forEach(function (b) {
+      var key = b.getAttribute('data-help');
+      var h = HELP[key];
+      if (!h) return;
+      b.setAttribute('aria-label', h.t + ' 설명');
+      b.setAttribute('title', h.t);
+      var html = '<b>' + esc(h.t) + '</b><br>' + h.d;
+      b.addEventListener('mouseenter', function (e) { showTip(html, e); });
+      b.addEventListener('mousemove', function (e) { showTip(html, e); });
+      b.addEventListener('mouseleave', hideTip);
+      b.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        showTip(html, e);
+      });
+    });
+  }
+
   /* --------------------------------------------------------- 상단 내비 */
   /** 각 페이지 상단의 공통 내비게이션을 만들어 넣습니다. */
   function mountTopnav(current) {
@@ -254,6 +334,7 @@
 
   HW.core = {
     $: $, $$: $$, el: el, esc: esc,
+    HELP: HELP, wireHelp: wireHelp,
     clamp: clamp, fmt: fmt, fmt1: fmt1, pct: pct, won: won, delta: delta,
     mulberry32: mulberry32,
     todayISO: todayISO, nowStamp: nowStamp, korDate: korDate,

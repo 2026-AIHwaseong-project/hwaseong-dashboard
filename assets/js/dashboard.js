@@ -22,6 +22,7 @@
     selectedCellId: null,
     selectedStopId: null,
     profile: null,
+    focusRegion: null,
     map: null
   };
 
@@ -31,6 +32,7 @@
   function boot() {
     C.mountTopnav('dashboard');
     C.initTheme();
+    C.wireHelp();
     HW.report.mount();
     HW.report.setContextProvider(function () {
       return {
@@ -48,9 +50,15 @@
       renderFooter(meta);
       S.map = HW.createMap({
         svg: $('#map'), legend: $('#legend'), meta: meta,
+        onClearFocus: function () { focusRegion(null); },
         onCellClick: function (cell) { selectCell(cell.id, true); },
         onCellHover: function (cell, ev) { C.showTip(cellTip(cell), ev); },
-        onStopClick: function (stop) { selectStop(stop.id); }
+        /* 정류장 위에 있는 격자도 선택되게 합니다.
+           예전에는 정류장이 클릭을 가로채 그 격자를 고를 방법이 없었습니다. */
+        onStopClick: function (stop, cell) {
+          selectStop(stop.id);
+          if (cell) selectCell(cell.id, false);
+        }
       });
       return Promise.all([api.stops(), api.routes()]);
     }).then(function (r) {
@@ -110,8 +118,10 @@
     return Promise.all([api.grid(pid), api.priorities(pid, 10)]).then(function (r) {
       S.grid = r[0];
       S.priorities = r[1];
-      S.map.setData({ cells: S.grid.cells });
+      S.map.setData({ cells: S.grid.cells, scale: S.grid.scale });
       paintKpi();
+      paintBrief();
+      paintRegions();
       paintPriorities();
       drawScatter();
       paintCellTable();
@@ -137,6 +147,144 @@
     $('#k3s').textContent = '사각지대 잠재수요의 ' + share.toFixed(1) + '% · 교통약자 가중 근거';
 
     $('#k4').innerHTML = fmt(k.drtCells) + '<small>개</small>';
+  }
+
+  /* =====================================================================
+   * 3-2. 한 줄 브리핑
+   *   숫자만 나열하지 않고 "그래서 어디가 문제이고 무엇을 검토할지"를
+   *   문장으로 먼저 제시합니다. 실무자가 첫 화면에서 판단을 시작할 수 있게.
+   * =================================================================== */
+  function paintBrief() {
+    var k = S.grid.kpi;
+    var items = S.priorities.items;
+    var regions = aggregateRegions();
+    var top = regions.filter(function (r) { return r.need > 0; })[0];
+    var periodLabel = (S.meta.periods || []).filter(function (p) { return p.id === S.period; })[0];
+    periodLabel = periodLabel ? (periodLabel.name + ' 시간대(' + periodLabel.label + ')') : S.period;
+
+    var lines = [];
+    lines.push('<b>' + esc(periodLabel) + '</b> 기준, 전체 ' + fmt(k.totalCells) + '개 격자 중 ' +
+      '<b>고수요·저공급이 ' + fmt(k.needCells) + '개</b>(' + k.needShare + '%)입니다.');
+
+    if (top && top.need >= 2) {
+      lines.push('<b>' + esc(top.name) + '</b> 권역에 ' + top.need + '개가 몰려 있습니다.');
+    }
+    if (items[0]) {
+      lines.push('최우선 대상은 <b>' + esc(items[0].name) + '</b>(' + esc(items[0].cellId) + ')이며 ' +
+        esc(items[0].actionLabel) + ' 검토가 필요합니다.');
+    }
+    lines.push('사각지대 잠재수요는 일 ' + fmt(k.potentialTripsPerDay) + '통행, ' +
+      '이 중 고령층 추정이 ' + fmt(k.elderlyTripsPerDay) + '통행입니다.');
+
+    /* 상위 격자의 조치 유형 분포 → 무엇을 몇 건 검토해야 하는지 */
+    var mix = {};
+    items.forEach(function (r) { mix[r.actionLabel] = (mix[r.actionLabel] || 0) + 1; });
+    var mixText = Object.keys(mix).map(function (kk) { return kk + ' ' + mix[kk] + '곳'; }).join(' · ');
+
+    $('#brief').innerHTML =
+      '<div class="brief-main">' + lines.join(' ') + '</div>' +
+      (mixText ? '<div class="brief-act"><span class="brief-tag">검토 대상</span>' + esc(mixText) +
+        ' <span class="brief-dim">(우선순위 상위 ' + items.length + '개 격자 기준)</span></div>' : '');
+  }
+
+  /* =====================================================================
+   * 3-3. 권역별 요약
+   *   공무원은 격자 번호가 아니라 읍면동 단위로 일합니다.
+   *   격자를 권역으로 집계해 "어느 동네를 먼저 봐야 하는지" 보여줍니다.
+   * =================================================================== */
+  var regionSort = { key: 'need', desc: true };
+
+  function aggregateRegions() {
+    var by = {};
+    S.grid.cells.forEach(function (c) {
+      var r = by[c.region] || (by[c.region] = {
+        name: c.region, cells: 0, need: 0, drt: 0, over: 0,
+        trips: 0, elderly: 0, eldSum: 0, actions: {}, topCell: null, topMi: -99
+      });
+      r.cells++;
+      r.eldSum += c.elderlyRatio;
+      if (c.quadrant === 'need') {
+        r.need++;
+        r.trips += c.flowTripsPerDay;
+        r.elderly += c.flowTripsPerDay * c.elderlyRatio;
+        r.actions[c.actionLabel] = (r.actions[c.actionLabel] || 0) + 1;
+        if (c.mi > r.topMi) { r.topMi = c.mi; r.topCell = c; }
+      } else if (c.quadrant === 'drt') r.drt++;
+      else if (c.quadrant === 'over') r.over++;
+    });
+    var list = Object.keys(by).map(function (k) {
+      var r = by[k];
+      r.elderlyRatio = r.eldSum / r.cells;
+      r.action = Object.keys(r.actions).sort(function (a, b) { return r.actions[b] - r.actions[a]; })[0] ||
+        (r.drt > 0 ? 'DRT 검토' : '—');
+      return r;
+    });
+    return sortRegions(list);
+  }
+
+  function sortRegions(list) {
+    var k = regionSort.key, d = regionSort.desc ? -1 : 1;
+    return list.sort(function (a, b) {
+      var av = k === 'name' ? a.name : a[k];
+      var bv = k === 'name' ? b.name : b[k];
+      if (k === 'name') return d * -av.localeCompare(bv, 'ko');
+      if (av === bv) return b.need - a.need;
+      return d * (av - bv);
+    });
+  }
+
+  function paintRegions() {
+    var list = aggregateRegions();
+    var maxNeed = Math.max.apply(null, list.map(function (r) { return r.need; }).concat([1]));
+    var head = [
+      ['name', '권역', 'left'], ['cells', '격자', ''], ['need', '사각지대', ''],
+      ['drt', 'DRT 후보', ''], ['trips', '잠재수요(통행/일)', ''],
+      ['elderly', '고령 통행', ''], ['elderlyRatio', '고령비', '']
+    ];
+    var html = '<table class="rgtbl"><thead><tr>' +
+      head.map(function (h) {
+        var on = regionSort.key === h[0];
+        return '<th data-sort="' + h[0] + '" class="' + (on ? 'on' : '') + '" scope="col">' +
+          esc(h[1]) + (on ? (regionSort.desc ? ' ▾' : ' ▴') : '') + '</th>';
+      }).join('') + '<th scope="col">주 조치</th></tr></thead><tbody>' +
+      list.map(function (r) {
+        var pctBar = r.need > 0 ? (100 * r.need / maxNeed) : 0;
+        return '<tr data-region="' + esc(r.name) + '"' +
+          (S.focusRegion === r.name ? ' class="on"' : '') + '>' +
+          '<td class="rg-name">' + esc(r.name) + '</td>' +
+          '<td>' + fmt(r.cells) + '</td>' +
+          '<td class="rg-need">' + (r.need > 0
+            ? '<span class="rg-bar"><i style="width:' + pctBar.toFixed(0) + '%"></i></span><b>' + r.need + '</b>'
+            : '<span class="rg-zero">0</span>') + '</td>' +
+          '<td>' + (r.drt || '<span class="rg-zero">0</span>') + '</td>' +
+          '<td>' + (r.trips ? fmt(r.trips) : '<span class="rg-zero">–</span>') + '</td>' +
+          '<td>' + (r.elderly ? fmt(r.elderly) : '<span class="rg-zero">–</span>') + '</td>' +
+          '<td>' + Math.round(r.elderlyRatio * 100) + '%</td>' +
+          '<td>' + (r.need > 0 || r.drt > 0
+            ? '<span class="tag ' + (r.action === 'DRT 검토' || r.action === 'DRT' ? 'drt' : r.action === '신설' ? 'new' : 'add') + '">' + esc(r.action) + '</span>'
+            : '<span class="rg-zero">—</span>') + '</td>' +
+          '</tr>';
+      }).join('') + '</tbody></table>';
+    $('#regionTbl').innerHTML = html;
+  }
+
+  /** 권역 행을 누르면 그 권역 격자만 지도에서 진하게 표시합니다 */
+  function focusRegion(name) {
+    S.focusRegion = (S.focusRegion === name) ? null : name;
+    if (!S.focusRegion) {
+      S.map.setEligible(null);
+    } else {
+      var set = new Set();
+      S.grid.cells.forEach(function (c) { if (c.region === S.focusRegion) set.add(c.id); });
+      S.map.setEligible(set, S.focusRegion + ' 권역만 강조 중');
+      /* 그 권역에서 가장 시급한 격자를 함께 선택 */
+      var top = S.priorities.items.filter(function (r) {
+        var c = cellById(r.cellId);
+        return c && c.region === S.focusRegion;
+      })[0];
+      if (top) selectCell(top.cellId, true);
+    }
+    paintRegions();
   }
 
   /* =====================================================================
@@ -362,6 +510,19 @@
       var on = e.currentTarget.classList.toggle('on');
       e.currentTarget.setAttribute('aria-pressed', String(on));
       S.map.setShowLabels(on);
+    });
+
+    $('#regionTbl').addEventListener('click', function (e) {
+      var th = e.target.closest('th[data-sort]');
+      if (th) {
+        var k = th.getAttribute('data-sort');
+        if (regionSort.key === k) regionSort.desc = !regionSort.desc;
+        else { regionSort.key = k; regionSort.desc = true; }
+        paintRegions();
+        return;
+      }
+      var tr = e.target.closest('tr[data-region]');
+      if (tr) focusRegion(tr.getAttribute('data-region'));
     });
 
     $('#t10').addEventListener('click', function (e) {

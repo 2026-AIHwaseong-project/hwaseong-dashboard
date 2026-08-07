@@ -26,25 +26,32 @@
     <div class="periods" id="periods" role="tablist" aria-label="시간대 선택"></div>
   </header>
 
+  <!-- ───────────────────── 한 줄 브리핑 ───────────────────── -->
+  <section class="brief" id="brief" aria-label="현황 요약"></section>
+
   <!-- ─────────────────────────── KPI ─────────────────────────── -->
   <section class="kpis" aria-label="핵심 지표">
     <div class="kpi">
-      <div class="lb">고수요·저공급 격자</div>
+      <div class="lb">고수요·저공급 격자
+        <button class="help" data-help="need" type="button">?</button></div>
       <div class="vl" id="k1">–</div>
       <div class="sb" id="k1s">–</div>
     </div>
     <div class="kpi">
-      <div class="lb">사각지대 잠재수요</div>
+      <div class="lb">사각지대 잠재수요
+        <button class="help" data-help="potential" type="button">?</button></div>
       <div class="vl" id="k2">–</div>
       <div class="sb" id="k2s">–</div>
     </div>
     <div class="kpi">
-      <div class="lb">사각지대 고령 통행</div>
+      <div class="lb">사각지대 고령 통행
+        <button class="help" data-help="elderly" type="button">?</button></div>
       <div class="vl" id="k3">–</div>
       <div class="sb" id="k3s">–</div>
     </div>
     <div class="kpi">
-      <div class="lb">DRT(똑버스) 후보 격자</div>
+      <div class="lb">DRT(똑버스) 후보 격자
+        <button class="help" data-help="drt" type="button">?</button></div>
       <div class="vl" id="k4">–</div>
       <div class="sb">저수요·저공급 — 노선 신설 대신 수요응답형</div>
     </div>
@@ -55,8 +62,9 @@
     <!-- ─────────────────────── 지도 ─────────────────────── -->
     <section class="card mapcard">
       <div class="chead">
-        <h2>격자 미스매칭 지도</h2>
-        <span class="hsub">MI = z(수요) − z(공급) · 표시 격자 ≈1km (실구현 250m)</span>
+        <h2>격자 미스매칭 지도
+          <button class="help" data-help="mi" type="button">?</button></h2>
+        <span class="hsub">붉을수록 수요 대비 버스가 부족한 격자 · 표시 격자 ≈1km (실구현 250m)</span>
       </div>
       <div class="mtools">
         <div class="lset" id="layers" role="tablist" aria-label="지도 레이어">
@@ -73,9 +81,9 @@
       <div class="mapbox">
         <svg id="map" class="mapsvg" viewBox="0 0 960 640" role="img"
              aria-label="화성시 격자 미스매칭 지도. 붉을수록 수요 대비 공급이 부족한 격자입니다."></svg>
-        <div class="legend" id="legend"></div>
         <div class="mock" id="mapMock">개략도 · 가상 수치</div>
       </div>
+      <div class="legendbar" id="legend"></div>
     </section>
 
     <!-- ───────────────────── 우선순위 ───────────────────── -->
@@ -96,7 +104,8 @@
     <section class="card sc-card">
       <div class="chead">
         <h2>수요–공급 4분면</h2>
-        <span class="hsub">점 1개 = 격자 1개 · 색 = MI</span>
+        <span class="hsub">점 1개 = 격자 1개 · 색 = MI
+          <button class="help" data-help="demand" type="button">?</button></span>
         <span class="pchip" id="pchip">–</span>
       </div>
       <svg id="scatter" class="chart" viewBox="0 0 520 420" role="img"
@@ -122,13 +131,23 @@
       <div class="ststats">
         <span>일 승차<b id="ss1">–</b></span>
         <span>일 하차<b id="ss2">–</b></span>
-        <span>첨두 집중률<b id="ss3">–</b></span>
+        <span>첨두 집중률 <button class="help" data-help="peak" type="button">?</button><b id="ss3">–</b></span>
         <span>경유 노선<b id="ss4">–</b></span>
       </div>
       <details class="tbl">
         <summary>시간대별 수치 표 보기</summary>
         <div class="tblwrap"><table id="sttbl"></table></div>
       </details>
+    </section>
+
+    <!-- ─────────────────── 권역별 요약 ─────────────────── -->
+    <section class="card span12">
+      <div class="chead">
+        <h2>권역별 요약</h2>
+        <span class="hsub">읍면동 단위로 어디를 먼저 봐야 하는지 · 행을 클릭하면 지도에서 해당 권역만 강조됩니다</span>
+        <span class="pchip">머리글 클릭 시 정렬</span>
+      </div>
+      <div class="tblwrap" id="regionTbl"></div>
     </section>
 
   </div>

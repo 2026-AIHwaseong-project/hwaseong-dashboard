@@ -42,6 +42,7 @@
   function boot() {
     C.mountTopnav('simulation');
     C.initTheme();
+    C.wireHelp();
     HW.report.mount();
     HW.report.setContextProvider(function () {
       return {
@@ -67,13 +68,17 @@
 
       S.map = HW.createMap({
         svg: $('#map'), legend: $('#legend'), meta: meta,
+        placementLegend: true,   /* 범례에 배치 기호(●◆▲) 설명도 함께 */
+        onClearFocus: function () { S.map.setEligible(null); },
         onCellClick: onCellClick,
         onCellHover: function (cell, ev) { C.showTip(cellTip(cell), ev); },
-        onStopClick: function () { /* 시뮬레이션 화면에서는 정류장 클릭 동작 없음 */ }
+        /* 정류장을 눌러도 그 정류장이 놓인 격자에 배치됩니다.
+           "이 정류장 증편하자"가 가장 자연스러운 동작인데 예전에는 무반응이었습니다. */
+        onStopClick: function (stop, cell) { if (cell) onCellClick(cell); }
       });
       return Promise.all([api.stops(), api.routes(), api.grid(S.period)]);
     }).then(function (r) {
-      S.map.setData({ stops: r[0].stops, routes: r[1].routes, cells: r[2].cells });
+      S.map.setData({ stops: r[0].stops, routes: r[1].routes, cells: r[2].cells, scale: r[2].scale });
       wireControls();
       renderScenarioList();
 
@@ -160,6 +165,16 @@
     runSim();
   }
 
+  /* 배차 증편은 정류장 도보권(커버리지 0.5 이상) 격자에만 적용됩니다.
+     예전에는 찍어 봐야 알 수 있었는데, 이제 도구를 들면 지도에서 바로 구분됩니다. */
+  function refreshEligible() {
+    if (!S.map) return;
+    if (S.tool !== 'freq') { S.map.setEligible(null); return; }
+    var set = new Set();
+    S.map.cells().forEach(function (c) { if (c.coverage >= 0.5) set.add(c.id); });
+    S.map.setEligible(set, '배차 증편이 가능한 격자만 강조 중');
+  }
+
   function removePlacement(i) {
     S.placements.splice(i, 1);
     runSim();
@@ -219,6 +234,7 @@
     if (!S.result) return;
     var cells = S.result.cellsByPeriod[S.period];
     if (cells) S.map.setData({ cells: cells });
+    refreshEligible();
     S.map.setPlacements(S.placements);
     if (S.selectedCellId) S.map.select(S.selectedCellId);
     paintKpi();
@@ -583,9 +599,13 @@
         x.setAttribute('aria-pressed', String(on));
       });
       S.map.setArmed(!!S.tool);
+      /* 배치 모드에서는 정류장이 격자 클릭을 가로채지 않게 합니다 */
+      S.map.setStopsInteractive(!S.tool);
+      refreshEligible();
       var e2 = S.tool ? S.effects[S.tool] : null;
       $('#simhint').textContent = e2
-        ? (e2.label + ' 모드 — 배치할 격자를 지도에서 클릭하세요. 반경 약 ' + e2.radiusKm + 'km에 파급됩니다. (단가 ' + won(e2.unitKrw) + ')')
+        ? (e2.label + ' 모드 — 배치할 격자를 지도에서 클릭하세요. 반경 약 ' + e2.radiusKm + 'km에 파급됩니다. (단가 ' + won(e2.unitKrw) + ')' +
+           (S.tool === 'freq' ? ' 적용 가능한 격자만 또렷하게 표시됩니다.' : ''))
         : '수단을 고른 뒤 지도를 클릭하면 배치되고, KPI가 기준선 대비 즉시 재계산됩니다.';
     });
 

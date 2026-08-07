@@ -28,13 +28,15 @@
   <!-- ─────────────────── 기준선 대비 KPI ─────────────────── -->
   <section class="kpis" aria-label="기준선 대비 효과">
     <div class="kpi">
-      <div class="lb">고수요·저공급 격자</div>
+      <div class="lb">고수요·저공급 격자
+        <button class="help" data-help="need" type="button">?</button></div>
       <div class="vl" id="k1">–</div>
       <div class="dl" id="k1d">기준선</div>
       <div class="sb" id="k1s">–</div>
     </div>
     <div class="kpi">
-      <div class="lb">사각지대 잠재수요</div>
+      <div class="lb">사각지대 잠재수요
+        <button class="help" data-help="potential" type="button">?</button></div>
       <div class="vl" id="k2">–</div>
       <div class="dl" id="k2d">기준선</div>
       <div class="sb" id="k2s">–</div>
@@ -46,7 +48,8 @@
       <div class="sb" id="k3s">–</div>
     </div>
     <div class="kpi">
-      <div class="lb">해소 통행당 사업비</div>
+      <div class="lb">해소 통행당 사업비
+        <button class="help" data-help="baseline" type="button">?</button></div>
       <div class="vl" id="k4">–</div>
       <div class="dl" id="k4d">기준선</div>
       <div class="sb" id="k4s">–</div>
@@ -84,9 +87,9 @@
       <div class="mapbox">
         <svg id="map" class="mapsvg" viewBox="0 0 960 640" role="img"
              aria-label="배치 시뮬레이션 지도. 배치한 수단은 기호로 표시됩니다."></svg>
-        <div class="legend" id="legend"></div>
         <div class="mock" id="mapMock">개략도 · 가상 수치</div>
       </div>
+      <div class="legendbar" id="legend"></div>
     </section>
 
     <!-- ───────────────────── 시나리오 패널 ───────────────────── -->

@@ -9,12 +9,14 @@
  *      legend: document.querySelector('#legend'),
  *      meta: meta,                       // api.meta()
  *      onCellClick: function(cell, ev){},
- *      onStopClick: function(stop, ev){}
+ *      onStopClick: function(stop, cell, ev){}   // cell = 그 정류장이 놓인 격자
  *    });
- *    map.setData({ cells: [...], stops: [...], routes: [...] });
+ *    map.setData({ cells: [...], stops: [...], routes: [...], scale: {...} });
  *    map.setLayer('mi');                 // 'mi' | 'demand' | 'supply' | 'flow'
  *    map.select('G-321');
- *    map.setPlacements([{type:'stop', cellId:'G-321'}]);
+ *    map.setStopsInteractive(false);     // 배치 모드: 정류장이 클릭을 가로채지 않게
+ *    map.setEligible(idSet);             // 배치 가능한 격자만 강조 (null 이면 해제)
+ *    map.setPlacements([{type:'stop', cellId:'G-321', count:2}]);
  * ========================================================================= */
 (function (global) {
   'use strict';
@@ -24,11 +26,12 @@
   var esc = C.esc;
 
   var LAYERS = {
-    mi: { key: 'mi', prefix: 'm', steps: 7, title: '미스매칭 지수 MI (z)', kind: 'diverging' },
-    demand: { key: 'demand', prefix: 'sb', steps: 5, title: '수요지수 D · 5분위', kind: 'sequential' },
-    supply: { key: 'supply', prefix: 'so', steps: 5, title: '공급지수 S · 5분위', kind: 'sequential' },
-    flow: { key: 'flow', prefix: 'sb', steps: 5, title: '유동인구(잠재수요) · 5분위', kind: 'sequential' }
+    mi: { key: 'mi', prefix: 'm', steps: 7, title: '미스매칭 지수 MI', unit: '(z)', kind: 'diverging' },
+    demand: { key: 'demand', prefix: 'sb', steps: 5, title: '수요지수 D', unit: '5분위', kind: 'sequential' },
+    supply: { key: 'supply', prefix: 'so', steps: 5, title: '공급지수 S', unit: '5분위', kind: 'sequential' },
+    flow: { key: 'flow', prefix: 'sb', steps: 5, title: '유동인구(잠재수요)', unit: '5분위', kind: 'sequential' }
   };
+  var QUINTILE_LABELS = ['하위 20%', '20–40%', '40–60%', '60–80%', '상위 20%'];
 
   function createMap(opt) {
     var svg = opt.svg;
@@ -41,14 +44,17 @@
     if (meta.grid && meta.grid.bbox) C.setProjection(meta.grid.bbox, W, H);
 
     var state = {
-      cells: [], stops: [], routes: [],
+      cells: [], stops: [], routes: [], scale: null,
       byId: {},
       layer: 'mi',
       selectedCellId: null,
       selectedStopId: null,
       placements: [],
+      eligible: null,          // Set 또는 null(해제)
+      eligibleNote: '',        // 강조 중임을 알리는 범례 문구
       showRoutes: true,
       showLabels: true,
+      stopsInteractive: true,
       armed: false
     };
 
@@ -72,6 +78,9 @@
 
       h += '<g class="cells" data-cells></g>';
 
+      /* 노선은 격자 위에 그리되, 흰 테두리(케이싱)를 깔아 어떤 격자 색 위에서도 보이게 합니다 */
+      h += '<g data-groutes></g>';
+
       h += '<g data-glabels>';
       (mapMeta.labels && mapMeta.labels.regions || []).forEach(function (r) {
         h += '<text class="rlab' + (r[0] === '제부도' ? ' sm' : '') + '" x="' + r[1] + '" y="' + r[2] + '" text-anchor="middle">' + esc(r[0]) + '</text>';
@@ -83,9 +92,12 @@
       });
       h += '</g>';
 
-      h += '<g data-groutes></g>';
       h += '<g class="placed" data-placed></g>';
-      h += '<rect class="selring" data-selring x="-99" y="-99" width="26" height="26" rx="3" visibility="hidden"/>';
+      /* 선택 표시는 이중 링(바깥 흰 테두리 + 안쪽 강조색)이라 어떤 격자 색 위에서도 보입니다 */
+      h += '<g data-selring visibility="hidden">' +
+        '<rect class="selring-out" x="-99" y="-99" width="28" height="28" rx="4"/>' +
+        '<rect class="selring-in" x="-99" y="-99" width="28" height="28" rx="4"/>' +
+        '</g>';
 
       h += '<g transform="translate(' + (W - 38) + ',72)"><circle class="compass" r="11"/>' +
         '<path d="M0,-7 L3,4 L0,2 L-3,4 Z" fill="var(--ink3)"/>' +
@@ -108,18 +120,24 @@
     var gRoutes = svg.querySelector('[data-groutes]');
     var gLabels = svg.querySelector('[data-glabels]');
     var gPlaced = svg.querySelector('[data-placed]');
-    var selRing = svg.querySelector('[data-selring]');
+    var gSelRing = svg.querySelector('[data-selring]');
 
     /* -------------------------------------------------------- 데이터 */
     function setData(d) {
+      if (d.scale) state.scale = d.scale;
       if (d.cells) {
+        /* 격자 구성이 그대로면 DOM 을 다시 만들지 않고 색만 갱신합니다.
+           배치할 때마다 389개를 새로 그리면 마우스가 올려져 있던 격자의
+           호버 상태가 끊기고, 그 위에 떠 있던 툴팁도 어긋납니다. */
+        var same = state.cells.length === d.cells.length &&
+          d.cells.every(function (c, i) { return state.cells[i] && state.cells[i].id === c.id; });
         state.cells = d.cells;
         state.byId = {};
         d.cells.forEach(function (c) { state.byId[c.id] = c; });
-        renderCells();
+        if (!same) renderCells();
       }
-      if (d.routes) { state.routes = d.routes; }
-      if (d.stops) { state.stops = d.stops; }
+      if (d.routes) state.routes = d.routes;
+      if (d.stops) state.stops = d.stops;
       if (d.routes || d.stops) renderRoutes();
       paint();
       placeRing();
@@ -139,6 +157,14 @@
 
     function renderRoutes() {
       var h = '';
+      /* 1단계: 케이싱(바탕색 굵은 선) → 2단계: 노선 본선. 격자 위에서도 선이 끊겨 보이지 않습니다. */
+      state.routes.forEach(function (rt) {
+        var pts = (rt.pathXY || []).map(function (p) { return p[0] + ',' + p[1]; });
+        if (!pts.length && rt.path) {
+          pts = rt.path.map(function (p) { var q = C.project(p[0], p[1]); return q.x + ',' + q.y; });
+        }
+        h += '<polyline class="rt-casing" points="' + pts.join(' ') + '"/>';
+      });
       state.routes.forEach(function (rt) {
         var pts = (rt.pathXY || []).map(function (p) { return p[0] + ',' + p[1]; });
         if (!pts.length && rt.path) {
@@ -158,6 +184,13 @@
       });
       gRoutes.innerHTML = h;
       gRoutes.style.display = state.showRoutes ? '' : 'none';
+      applyStopsInteractive();
+    }
+
+    /* 배치 모드에서는 정류장이 격자 클릭을 가로채지 않도록 통과시킵니다.
+       (이걸 안 하면 정류장이 놓인 격자에는 아무것도 배치할 수 없습니다) */
+    function applyStopsInteractive() {
+      gRoutes.classList.toggle('nohit', !state.stopsInteractive);
     }
 
     /* ---------------------------------------------------------- 채색 */
@@ -170,40 +203,108 @@
     }
     function paint() {
       var L = LAYERS[state.layer];
+      var elig = state.eligible;
       Array.prototype.forEach.call(gCells.children, function (rect) {
-        var c = state.byId[rect.getAttribute('data-id')];
+        var id = rect.getAttribute('data-id');
+        var c = state.byId[id];
         if (!c) return;
-        rect.setAttribute('class', 'c ' + L.prefix + binOf(c, L.key));
+        var cls = 'c ' + L.prefix + binOf(c, L.key);
+        if (elig) cls += elig.has(id) ? ' elig' : ' inelig';
+        rect.setAttribute('class', cls);
       });
       renderLegend();
     }
 
+    /** 범례 — 구간 경계 수치를 함께 표기해 색이 무엇을 뜻하는지 읽을 수 있게 합니다 */
     function renderLegend() {
       if (!legendEl) return;
       var L = LAYERS[state.layer];
-      var h = '<div class="lt">' + esc(L.title) + '</div><div class="lrow">';
-      for (var i = 0; i < L.steps; i++) h += '<i style="background:var(--' + L.prefix + i + ')"></i>';
-      h += '</div>';
+      var h = '<div class="lg-head"><b>' + esc(L.title) + '</b><span>' + esc(L.unit) + '</span></div>';
+
+      h += '<div class="lg-body">';
       if (L.kind === 'diverging') {
-        h += '<div class="lcap"><span>−2.6</span><span>0 균형</span><span>+2.6</span></div>' +
-          '<div class="lcap"><span>공급 여유</span><span></span><span>공급 부족</span></div>';
+        var th = (state.scale && state.scale.miThresholds) || [-1.5, -0.75, -0.25, 0.25, 0.75, 1.5];
+        h += '<span class="lg-end">공급 여유</span>';
+        h += '<div class="lg-scale"><div class="lg-sw">';
+        for (var i = 0; i < L.steps; i++) h += '<i style="background:var(--' + L.prefix + i + ')"></i>';
+        h += '</div><div class="lg-tick">';
+        /* 눈금은 색 칸 사이 경계에 옵니다 */
+        h += '<span></span>';
+        th.forEach(function (v) {
+          h += '<span>' + (v > 0 ? '+' : '') + v + '</span>';
+        });
+        h += '<span></span></div></div>';
+        h += '<span class="lg-end">공급 부족</span>';
       } else {
-        h += '<div class="lcap"><span>낮음</span><span>높음</span></div>';
+        h += '<span class="lg-end">낮음</span>';
+        h += '<div class="lg-scale"><div class="lg-sw">';
+        for (var j = 0; j < L.steps; j++) h += '<i style="background:var(--' + L.prefix + j + ')" title="' + QUINTILE_LABELS[j] + '"></i>';
+        h += '</div><div class="lg-tick lg-tick5">' +
+          QUINTILE_LABELS.map(function (t) { return '<span>' + t + '</span>'; }).join('') +
+          '</div></div>';
+        h += '<span class="lg-end">높음</span>';
       }
+      h += '</div>';
+
+      if (state.eligible) {
+        h += '<div class="lg-note"><i class="sw-elig"></i>' +
+          esc(state.eligibleNote || '선택한 격자만 진하게 표시 중') +
+          ' <button class="lg-clear" type="button" data-clear-focus>해제</button></div>';
+      }
+
+      /* 지도 기호 설명 — 색만으로는 흰 점·선·삼각형이 무엇인지 알 수 없습니다 */
+      h += renderSymbolLegend();
       legendEl.innerHTML = h;
+
+      var clr = legendEl.querySelector('[data-clear-focus]');
+      if (clr && opt.onClearFocus) clr.addEventListener('click', opt.onClearFocus);
+    }
+
+    /** 지도 기호 범례. 실제 지도와 같은 SVG 로 그려 모양이 정확히 일치합니다. */
+    function renderSymbolLegend() {
+      var cellKm = 1;
+      if (meta.grid && meta.grid.displaySizeMeters) cellKm = meta.grid.displaySizeMeters / 1000;
+
+      function item(svgInner, label, w) {
+        return '<span class="lg-sym"><svg viewBox="0 0 ' + (w || 22) + ' 14" width="' + (w || 22) + '" height="14" aria-hidden="true">' +
+          svgInner + '</svg>' + esc(label) + '</span>';
+      }
+      var items = [];
+      items.push(item('<rect x="2" y="2" width="10" height="10" rx="2" class="c m3"/>' +
+        '<rect x="2" y="2" width="10" height="10" rx="2" fill="none" stroke="var(--line)"/>',
+        '격자 1칸 ≈ ' + cellKm + 'km'));
+      items.push(item('<circle cx="11" cy="7" r="3.4" class="st"/>', '정류장'));
+      items.push(item('<circle cx="11" cy="7" r="4.6" class="st hub"/>', '환승 거점'));
+      items.push(item('<polyline class="rt-casing" points="2,10 8,4 14,9 20,4"/>' +
+        '<polyline class="rt" points="2,10 8,4 14,9 20,4"/>', '버스 노선'));
+      items.push(item('<path class="indmark" d="M6,10 L11,3 L16,10 Z"/>', '산업단지'));
+      items.push(item('<rect x="3" y="3" width="8" height="8" rx="2" class="selring-out"/>' +
+        '<rect x="3" y="3" width="8" height="8" rx="2" class="selring-in"/>', '선택한 격자'));
+
+      if (opt.placementLegend) {
+        (meta.effects || []).forEach(function (e) {
+          items.push(item('<circle cx="11" cy="7" r="6" class="pmk-bg"/>' +
+            '<text class="pmk" x="11" y="10.5" text-anchor="middle" style="font-size:8px">' +
+            esc(e.icon) + '</text>', e.label, 24));
+        });
+      }
+      return '<div class="lg-syms">' + items.join('') + '</div>';
     }
 
     /* -------------------------------------------------------- 선택 */
     function placeRing() {
-      if (!state.selectedCellId) { selRing.setAttribute('visibility', 'hidden'); return; }
+      if (!state.selectedCellId) { gSelRing.setAttribute('visibility', 'hidden'); return; }
       var c = state.byId[state.selectedCellId];
-      if (!c) { selRing.setAttribute('visibility', 'hidden'); return; }
-      var p = C.xy(c), s = (c.size || 24) + 2;
-      selRing.setAttribute('x', p.x - 1);
-      selRing.setAttribute('y', p.y - 1);
-      selRing.setAttribute('width', s);
-      selRing.setAttribute('height', s);
-      selRing.setAttribute('visibility', 'visible');
+      if (!c) { gSelRing.setAttribute('visibility', 'hidden'); return; }
+      var p = C.xy(c), s = (c.size || 24);
+      Array.prototype.forEach.call(gSelRing.children, function (r, i) {
+        var pad = i === 0 ? 3 : 1.5;   // 바깥 링이 더 크게
+        r.setAttribute('x', p.x - pad);
+        r.setAttribute('y', p.y - pad);
+        r.setAttribute('width', s + pad * 2);
+        r.setAttribute('height', s + pad * 2);
+      });
+      gSelRing.setAttribute('visibility', 'visible');
     }
 
     function highlightStop(stopId) {
@@ -219,18 +320,63 @@
       });
     }
 
+    /** 좌표가 들어 있는 격자를 찾습니다 (정류장 → 격자 매핑에 사용) */
+    function cellAt(x, y) {
+      for (var i = 0; i < state.cells.length; i++) {
+        var c = state.cells[i], p = C.xy(c), s = c.size || 24;
+        if (x >= p.x && x <= p.x + s && y >= p.y && y <= p.y + s) return c;
+      }
+      /* 격자 사이 틈에 걸렸으면 가장 가까운 격자 */
+      var best = null, bd = 1e9;
+      state.cells.forEach(function (c) {
+        var p = C.xy(c), s = c.size || 24;
+        var d = Math.hypot(x - (p.x + s / 2), y - (p.y + s / 2));
+        if (d < bd) { bd = d; best = c; }
+      });
+      return bd < 26 ? best : null;
+    }
+
     /* ------------------------------------------------------ 배치 마커 */
+    /** 같은 격자에 여러 수단을 놓아도 겹치지 않도록 위치를 나눠 찍습니다 */
+    var OFFSETS = {
+      1: [[0, 0]],
+      2: [[-7, 0], [7, 0]],
+      3: [[0, -6], [-7, 5], [7, 5]]
+    };
     function renderPlacements() {
       var effects = {};
       (meta.effects || []).forEach(function (e) { effects[e.type] = e; });
-      gPlaced.innerHTML = state.placements.map(function (p) {
-        var c = state.byId[p.cellId];
-        if (!c) return '';
+
+      var byCell = {};
+      state.placements.forEach(function (p) {
+        (byCell[p.cellId] = byCell[p.cellId] || []).push(p);
+      });
+
+      var h = '';
+      Object.keys(byCell).forEach(function (cellId) {
+        var list = byCell[cellId];
+        var c = state.byId[cellId];
+        if (!c) return;
         var q = C.xy(c), s = c.size || 24;
-        var icon = (effects[p.type] && effects[p.type].icon) || '●';
-        return '<text class="pmk" x="' + (q.x + s / 2) + '" y="' + (q.y + s / 2 + 5) +
-          '" text-anchor="middle">' + esc(icon) + '</text>';
-      }).join('');
+        var cx = q.x + s / 2, cy = q.y + s / 2;
+        var offs = OFFSETS[Math.min(list.length, 3)] || OFFSETS[3];
+        list.slice(0, 3).forEach(function (p, i) {
+          var o = offs[i] || [0, 0];
+          var x = cx + o[0], y = cy + o[1];
+          var icon = (effects[p.type] && effects[p.type].icon) || '●';
+          /* 어떤 격자 색 위에서도 읽히도록 바탕 원을 깔아 줍니다 */
+          h += '<circle class="pmk-bg" cx="' + x + '" cy="' + y + '" r="8.5"/>';
+          h += '<text class="pmk" x="' + x + '" y="' + (y + 4.5) + '" text-anchor="middle">' + esc(icon) + '</text>';
+          if (p.count > 1) {
+            h += '<circle class="pmk-badge-bg" cx="' + (x + 7) + '" cy="' + (y - 6.5) + '" r="6"/>';
+            h += '<text class="pmk-badge" x="' + (x + 7) + '" y="' + (y - 4) + '" text-anchor="middle">' + p.count + '</text>';
+          }
+        });
+        if (list.length > 3) {
+          h += '<text class="pmk-more" x="' + cx + '" y="' + (cy + 17) + '" text-anchor="middle">+' + (list.length - 3) + '</text>';
+        }
+      });
+      gPlaced.innerHTML = h;
     }
 
     /* -------------------------------------------------------- 이벤트 */
@@ -253,8 +399,7 @@
     svg.addEventListener('mousemove', function (e) {
       var s = e.target.closest('.sthit');
       if (!s) return;
-      var stop = null;
-      state.stops.forEach(function (x) { if (x.id === s.getAttribute('data-stophit')) stop = x; });
+      var stop = findStop(s.getAttribute('data-stophit'));
       if (!stop) return;
       C.showTip('<b>' + esc(stop.name) + '</b><br>경유 ' + stop.routes.join('·') +
         '선 · 클릭하면 시간대 프로파일', e);
@@ -262,10 +407,16 @@
     svg.addEventListener('click', function (e) {
       var s = e.target.closest('.sthit');
       if (!s) return;
-      var stop = null;
-      state.stops.forEach(function (x) { if (x.id === s.getAttribute('data-stophit')) stop = x; });
-      if (stop && opt.onStopClick) opt.onStopClick(stop, e);
+      var stop = findStop(s.getAttribute('data-stophit'));
+      if (!stop || !opt.onStopClick) return;
+      var p = C.xy(stop);
+      opt.onStopClick(stop, cellAt(p.x, p.y), e);
     });
+
+    function findStop(id) {
+      for (var i = 0; i < state.stops.length; i++) if (state.stops[i].id === id) return state.stops[i];
+      return null;
+    }
 
     function defaultCellTip(c) {
       return '<b>' + esc(c.name) + '</b> <span class="mono">' + esc(c.id) + '</span><br>' +
@@ -283,8 +434,21 @@
       select: function (cellId) { state.selectedCellId = cellId; placeRing(); },
       selectedCell: function () { return state.byId[state.selectedCellId] || null; },
       highlightStop: highlightStop,
+      cellAt: cellAt,
       setPlacements: function (list) { state.placements = list || []; renderPlacements(); },
-      setShowRoutes: function (v) { state.showRoutes = !!v; gRoutes.style.display = v ? '' : 'none'; },
+      /** 특정 격자만 강조합니다. idSet 이 null 이면 해제.
+       *  배치 가능 격자 표시(시뮬레이션)와 권역 강조(대시보드) 양쪽에 씁니다. */
+      setEligible: function (idSet, note) {
+        state.eligible = idSet || null;
+        state.eligibleNote = note || '';
+        paint();
+      },
+      /** false 로 두면 정류장이 격자 클릭을 가로채지 않습니다 */
+      setStopsInteractive: function (v) { state.stopsInteractive = !!v; applyStopsInteractive(); },
+      setShowRoutes: function (v) {
+        state.showRoutes = !!v;
+        gRoutes.style.display = v ? '' : 'none';
+      },
       setShowLabels: function (v) { state.showLabels = !!v; gLabels.style.display = v ? '' : 'none'; },
       setArmed: function (v) {
         state.armed = !!v;
