@@ -126,7 +126,10 @@
       paintPriorities();
       drawScatter();
       paintCellTable();
-      if (S.selectedCellId) S.map.select(S.selectedCellId);
+      /* 선택 상태를 새 시간대 기준으로 다시 그립니다 — 그냥 select 만 하면
+         정류장 프로파일 음영과 시뮬레이션 링크의 period 가 이전 탭에 머뭅니다. */
+      if (S.selectedCellId) selectCell(S.selectedCellId);
+      if (S.selectedStopId) selectStop(S.selectedStopId);
     }).catch(fail);
   }
 
@@ -228,7 +231,7 @@
     return list.sort(function (a, b) {
       var av = k === 'name' ? a.name : a[k];
       var bv = k === 'name' ? b.name : b[k];
-      if (k === 'name') return d * -av.localeCompare(bv, 'ko');
+      if (k === 'name') return d * av.localeCompare(bv, 'ko');
       if (av === bv) return b.need - a.need;
       return d * (av - bv);
     });

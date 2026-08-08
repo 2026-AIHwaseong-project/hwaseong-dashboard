@@ -856,7 +856,7 @@
     var period = body.period || 'am';
     var t = periodIndex(period);
     var budget = body.budgetKrw != null ? body.budgetKrw : CONFIG.COST.defaultBudget;
-    var maxN = Math.max(1, Math.min(20, body.maxPlacements || 5));
+    var maxN = Math.max(1, Math.min(20, body.maxPlacements || 10));
     var allowed = body.allowedTypes && body.allowedTypes.length
       ? body.allowedTypes : Object.keys(EFFECT);
 
@@ -866,6 +866,15 @@
     if (strat.types) {
       allowed = allowed.filter(function (x) { return strat.types.indexOf(x) >= 0; });
       if (!allowed.length) allowed = strat.types.slice();
+    }
+
+    /* 추천 범위 — 대시보드에서 특정 격자를 보고 넘어왔다면 그 읍면동으로 후보를
+       제한합니다. 후보만 좁힐 뿐 선정 방식은 같아서 결정성이 유지됩니다. */
+    var regionScope = body.region || null;
+    /* 단일 동 안에서 '지역 균형'(동별 1건 상한)은 곧 1건 추천이라 성립하지 않습니다 */
+    if (regionScope && stratId === 'balance') {
+      stratId = 'efficiency';
+      strat = STRATEGIES[stratId];
     }
 
     /* 기존 배치는 무시하고 기준선에서 새로 짭니다(교체 방식) */
@@ -880,6 +889,7 @@
       for (var i = 0; i < N; i++) {
         var q = d.quad[i];
         if (q !== 'need' && q !== 'drt') continue;          // 후보: 미해결 격자만
+        if (regionScope && CELLS[i].region !== regionScope) continue;   // 범위 제한
 
         /* 지역 균형 — 이미 상한을 채운 읍면동은 건너뜁니다 */
         if (strat.maxPerRegion &&
@@ -903,9 +913,12 @@
       }
 
       if (!best) {
+        /* 한 건도 못 넣고 끝났는데 사유가 '예산 소진'이면
+           "0건 · 0원 · 예산 소진"이라는 모순 문장이 화면에 나옵니다 */
         stopped = chosen.length ? 'no_further_gain'
           : (spent === 0 && budget < Math.min.apply(null, allowed.map(function (x) { return CONFIG.costKrw(x) || 1e12; }))
-            ? 'budget_exhausted' : 'no_further_gain');
+            ? 'budget_too_small'
+            : (regionScope ? 'no_candidate' : 'no_further_gain'));
         break;
       }
 
@@ -959,10 +972,13 @@
        요약만 필요하므로 배치 목록은 싣지 않습니다(응답 크기 절약). */
     var alternatives = null;
     if (body.includeAlternatives) {
-      alternatives = STRATEGY_ORDER.map(function (sid) {
+      alternatives = STRATEGY_ORDER.filter(function (sid) {
+        /* 동 범위에서는 '지역 균형'이 성립하지 않으므로 대안표에서도 뺍니다 */
+        return !(regionScope && sid === 'balance');
+      }).map(function (sid) {
         var alt = sid === stratId ? null : runRecommendation({
           period: period, budgetKrw: budget, maxPlacements: maxN,
-          allowedTypes: body.allowedTypes, strategy: sid
+          allowedTypes: body.allowedTypes, strategy: sid, region: regionScope
         });
         var su = alt ? alt.summary : null;
         var mix = { stop: 0, drt: 0, freq: 0 };
@@ -992,9 +1008,13 @@
       methodNote: '미해결 통행량(고수요·저공급 + DRT후보, 교통약자 가중)을 ' +
         (CONFIG.COST.compareBasis === 'annual' ? '연간 환산 사업비' : '총사업비') +
         ' 1원당 가장 많이 줄이는 지점을 순차 선택했습니다. ' +
-        '이미 개선된 지역은 다음 회차에 효율이 낮아져 중복 배치되지 않습니다.',
+        '이미 개선된 지역은 다음 회차에 효율이 낮아져 중복 배치되지 않습니다.' +
+        (regionScope ? ' 추천 범위: ' + regionScope + '.' : ''),
       period: period,
       generatedAt: C.nowStamp(),
+
+      /* 추천 범위 (null = 화성시 전체). 범위를 좁혀도 알고리즘은 같습니다. */
+      region: regionScope,
 
       /* 어떤 목적으로 고른 안인지. 같은 알고리즘에 목적만 바꿔 끼운 것입니다. */
       strategy: stratId,
@@ -1137,14 +1157,16 @@
     sections.push({ key: 'plan', heading: '4. 개선 방안', body: planBody, bullets: planBullets });
 
     var effBody, effBullets;
-    if (sim && simPeriod) {
+    /* 배치가 한 건도 없으면 전후가 같아 빈 표·"변동 없음" 문장만 남습니다.
+       그때는 기준선 보고서 문안으로 처리합니다. */
+    if (sim && simPeriod && sim.placements.length) {
       var dn = simPeriod.delta.needCells, dt = simPeriod.delta.potentialTripsPerDay;
       effBody = '시뮬레이션 결과 ' + P.name + '시간대 고수요·저공급 격자는 ' +
         f(simPeriod.baseline.needCells) + '개에서 ' + f(simPeriod.kpi.needCells) + '개로 ' +
-        (dn < 0 ? f(-dn) + '개 감소' : dn > 0 ? f(dn) + '개 증가' : '변동 없음') + '하였다.\n' +
+        (dn < 0 ? f(-dn) + '개 감소하였다' : dn > 0 ? f(dn) + '개 증가하였다' : '변동이 없었다') + '.\n' +
         '사각지대 잠재수요는 일 ' + f(simPeriod.baseline.potentialTripsPerDay) + '통행에서 ' +
         f(simPeriod.kpi.potentialTripsPerDay) + '통행으로 ' +
-        (dt < 0 ? f(-dt) + '통행 해소' : '변동 없음') + '되는 것으로 추정된다.';
+        (dt < 0 ? f(-dt) + '통행 해소되는 것으로 추정된다' : '변동이 없는 것으로 추정된다') + '.';
       effBullets = [
         '고수요·저공급 격자: ' + f(simPeriod.baseline.needCells) + '개 → ' + f(simPeriod.kpi.needCells) + '개',
         '사각지대 잠재수요: 일 ' + f(simPeriod.baseline.potentialTripsPerDay) + '통행 → ' + f(simPeriod.kpi.potentialTripsPerDay) + '통행',
@@ -1196,7 +1218,7 @@
       });
     }
 
-    if (sim) {
+    if (sim && sim.placements.length) {
       tables.push({
         key: 'placements', title: '시뮬레이션 배치 내역',
         columns: ['수단', '격자', '위치', '수량', '파급반경(km)', '소요액(원)'],

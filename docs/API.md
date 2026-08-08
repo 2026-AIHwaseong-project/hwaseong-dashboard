@@ -463,10 +463,18 @@ mid  : 그 외                                   → 균형권
   "includeAlternatives": true,    // 다른 전략 요약도 함께 (기본 false)
   "period": "am",
   "budgetKrw": 3000000000,
-  "maxPlacements": 5,
-  "allowedTypes": ["stop", "drt", "freq"]   // 선택. 생략하면 전부
+  "maxPlacements": 10,
+  "allowedTypes": ["stop", "drt", "freq"],  // 선택. 생략하면 전부
+  "region": "동탄8동"             // 선택. 후보를 해당 읍면동으로 제한 (생략 시 화성시 전체)
 }
 ```
+
+`region` 은 대시보드에서 "이 격자로 시뮬레이션 하기"로 넘어온 흐름을 위한 것입니다.
+후보 격자만 좁힐 뿐 선정 알고리즘은 같아서 결정성이 유지됩니다. 주의:
+
+- `region` 지정 시 `balance`(지역 균형) 전략은 성립하지 않으므로(동별 1건 상한 = 곧 1건 추천)
+  `efficiency` 로 대체 처리되고, `alternatives` 목록에서도 빠집니다.
+- 해당 동에 해소할 사각지대가 없으면 `stoppedBecause: "no_candidate"` 로 0건이 옵니다.
 
 #### 응답
 
@@ -475,6 +483,8 @@ mid  : 그 외                                   → 균형권
   "method": "budget-constrained greedy marginal benefit",
   "methodLabel": "예산 제약 하 한계효과 최대화",
   "methodNote": "미해결 통행량을 사업비 1원당 가장 많이 줄이는 지점을 순차 선택…",
+
+  "region": "동탄8동",            // 추천 범위 에코 (요청에 없었으면 null = 화성시 전체)
 
   // 어떤 목적으로 고른 안인지 (§ 추천 전략 참고)
   "strategy": "efficiency",
@@ -515,7 +525,9 @@ mid  : 그 외                                   → 균형권
     "count": 5, "totalKrw": 210000000, "budgetKrw": 3000000000, "budgetUsedPct": 7.0,
     "expectedResolvedCells": 11, "expectedResolvedTrips": 22190,
     "expectedResolvedElderlyTrips": 1870, "krwPerTrip": 3883,
-    "stoppedBecause": "max_reached",  // budget_exhausted | max_reached | no_further_gain | no_candidate
+    "stoppedBecause": "max_reached",  // budget_exhausted | budget_too_small | max_reached | no_further_gain | no_candidate
+                                      // budget_too_small: 한 건도 못 넣고 종료(예산 < 최소 단가).
+                                      //   '예산 소진'과 구분해야 "0건·0원·예산 소진" 같은 모순 문구가 안 나옵니다.
     "costCompareBasis": "total",      // total | annual  (CONFIG.COST.compareBasis)
     "costCompareLabel": "총사업비 기준",
     "costCompareNote": "예산 한도와 같은 기준(총사업비)으로 비교했습니다. 똑버스·증편은 이듬해에도 같은 예산이 필요합니다."

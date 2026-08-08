@@ -25,8 +25,11 @@
   var C = HW.core;
   var esc = C.esc;
 
+  /* prefix 는 셀 클래스(.c.m0), varPrefix 는 CSS 변수(--mi0)에 씁니다.
+     MI 만 둘이 달라서, 범례를 prefix 로 그리면 존재하지 않는 --m0 을 참조해
+     색 띠가 투명하게 나옵니다. */
   var LAYERS = {
-    mi: { key: 'mi', prefix: 'm', steps: 7, title: '미스매칭 지수 MI', unit: '(z)', kind: 'diverging' },
+    mi: { key: 'mi', prefix: 'm', varPrefix: 'mi', steps: 7, title: '미스매칭 지수 MI', unit: '(z)', kind: 'diverging' },
     demand: { key: 'demand', prefix: 'sb', steps: 5, title: '수요지수 D', unit: '5분위', kind: 'sequential' },
     supply: { key: 'supply', prefix: 'so', steps: 5, title: '공급지수 S', unit: '5분위', kind: 'sequential' },
     flow: { key: 'flow', prefix: 'sb', steps: 5, title: '유동인구(잠재수요)', unit: '5분위', kind: 'sequential' }
@@ -40,6 +43,7 @@
     var mapMeta = meta.map || {};
     var vb = mapMeta.viewBox || [0, 0, 960, 580];   // meta 가 없을 때만 쓰는 폴백
     var W = vb[2], H = vb[3];
+    var zoom = { x: vb[0], y: vb[1], w: W, h: H };  // 현재 viewBox (확대·이동 상태)
 
     if (meta.grid && meta.grid.bbox) C.setProjection(meta.grid.bbox, W, H);
 
@@ -116,7 +120,7 @@
         '<text class="compass-t" x="' + (sbPx / 2).toFixed(1) + '" y="-6" text-anchor="middle">0 \u2500 ' +
         sbKm + ' km</text></g>';
 
-      svg.setAttribute('viewBox', vb.join(' '));
+      applyZoom();          /* 다시 그려도 확대 상태를 유지합니다 */
       svg.innerHTML = h;
     }
 
@@ -250,7 +254,7 @@
         var th = (state.scale && state.scale.miThresholds) || [-1.5, -0.75, -0.25, 0.25, 0.75, 1.5];
         h += '<span class="lg-end">공급 여유</span>';
         h += '<div class="lg-scale"><div class="lg-sw">';
-        for (var i = 0; i < L.steps; i++) h += '<i style="background:var(--' + L.prefix + i + ')"></i>';
+        for (var i = 0; i < L.steps; i++) h += '<i style="background:var(--' + (L.varPrefix || L.prefix) + i + ')"></i>';
         h += '</div><div class="lg-tick">';
         /* 눈금은 색 칸 사이 경계에 옵니다 */
         h += '<span></span>';
@@ -262,7 +266,7 @@
       } else {
         h += '<span class="lg-end">낮음</span>';
         h += '<div class="lg-scale"><div class="lg-sw">';
-        for (var j = 0; j < L.steps; j++) h += '<i style="background:var(--' + L.prefix + j + ')" title="' + QUINTILE_LABELS[j] + '"></i>';
+        for (var j = 0; j < L.steps; j++) h += '<i style="background:var(--' + (L.varPrefix || L.prefix) + j + ')" title="' + QUINTILE_LABELS[j] + '"></i>';
         h += '</div><div class="lg-tick lg-tick5">' +
           QUINTILE_LABELS.map(function (t) { return '<span>' + t + '</span>'; }).join('') +
           '</div></div>';
@@ -422,12 +426,18 @@
 
     svg.addEventListener('mousemove', function (e) {
       var s = e.target.closest('.sthit');
-      if (!s) return;
+      if (!s) {
+        /* 격자 위 툴팁은 gCells 핸들러가 관리하므로 건드리지 않습니다.
+           그 밖(바다·여백)으로 나가면 정류장 툴팁이 남지 않게 접습니다. */
+        if (!e.target.closest('.cells')) C.hideTip();
+        return;
+      }
       var stop = findStop(s.getAttribute('data-stophit'));
       if (!stop) return;
       C.showTip('<b>' + esc(stop.name) + '</b><br>경유 ' + stop.routes.join('·') +
         '선 · 클릭하면 시간대 프로파일', e);
     });
+    svg.addEventListener('mouseleave', C.hideTip);
     svg.addEventListener('click', function (e) {
       var s = e.target.closest('.sthit');
       if (!s) return;
@@ -440,6 +450,135 @@
     function findStop(id) {
       for (var i = 0; i < state.stops.length; i++) if (state.stops[i].id === id) return state.stops[i];
       return null;
+    }
+
+    /* ------------------------------------------------------ 확대·이동
+       SVG viewBox 를 조작합니다. 동탄처럼 면적이 작은 동은 전체 뷰에서
+       배치 기호가 겹쳐 안 보입니다. 축척바는 지도 좌표계에 있어서
+       확대해도 표시 거리(0─5km)가 그대로 맞습니다. */
+    var MIN_W = W / 8;                 // 최대 8배
+    var zoomAnim = null;
+
+    function isZoomed() { return zoom.w < W - 0.5; }
+
+    function applyZoom() {
+      svg.setAttribute('viewBox', zoom.x.toFixed(1) + ' ' + zoom.y.toFixed(1) + ' ' +
+        zoom.w.toFixed(1) + ' ' + zoom.h.toFixed(1));
+      if (zctl) zctl.classList.toggle('zoomed', isZoomed());
+    }
+
+    function clampBox(x, y, w) {
+      w = Math.max(MIN_W, Math.min(W, w));
+      var h = w * H / W;
+      return {
+        x: Math.max(0, Math.min(W - w, x)),
+        y: Math.max(0, Math.min(H - h, y)),
+        w: w, h: h
+      };
+    }
+
+    function animateTo(t) {
+      if (zoomAnim) cancelAnimationFrame(zoomAnim);
+      var reduce = global.matchMedia &&
+        global.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduce || !global.requestAnimationFrame) { zoom = t; applyZoom(); return; }
+      var from = { x: zoom.x, y: zoom.y, w: zoom.w, h: zoom.h }, t0 = null;
+      function step(ts) {
+        if (t0 == null) t0 = ts;
+        var k = Math.min(1, (ts - t0) / 200);
+        k = k * (2 - k);                             // ease-out
+        zoom = {
+          x: from.x + (t.x - from.x) * k, y: from.y + (t.y - from.y) * k,
+          w: from.w + (t.w - from.w) * k, h: from.h + (t.h - from.h) * k
+        };
+        applyZoom();
+        zoomAnim = k < 1 ? requestAnimationFrame(step) : null;
+      }
+      zoomAnim = requestAnimationFrame(step);
+    }
+
+    function zoomReset() { animateTo({ x: 0, y: 0, w: W, h: H }); }
+
+    /** 해당 읍면동의 격자들이 화면을 채우도록 확대합니다 */
+    function zoomToRegion(regionName) {
+      var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, n = 0;
+      state.cells.forEach(function (c) {
+        if (c.region !== regionName) return;
+        var p = C.xy(c);
+        x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y);
+        x1 = Math.max(x1, p.x + (c.w || 20)); y1 = Math.max(y1, p.y + (c.h || 20));
+        n++;
+      });
+      if (!n) return;
+      var w = Math.max((x1 - x0) * 1.35, (y1 - y0) * 1.35 * W / H, MIN_W);
+      animateTo(clampBox((x0 + x1) / 2 - w / 2, (y0 + y1) / 2 - (w * H / W) / 2, w));
+    }
+
+    /** factor 배 확대(>1)/축소(<1). (sx,sy)는 고정점(SVG 좌표) */
+    function zoomAt(factor, sx, sy) {
+      zoom = clampBox(sx - (sx - zoom.x) / factor, sy - (sy - zoom.y) / factor, zoom.w / factor);
+      applyZoom();
+    }
+
+    function toSvgXY(e) {
+      var r = svg.getBoundingClientRect();
+      if (!r.width || !r.height) return { x: zoom.x, y: zoom.y };
+      return { x: zoom.x + (e.clientX - r.left) / r.width * zoom.w,
+               y: zoom.y + (e.clientY - r.top) / r.height * zoom.h };
+    }
+
+    /* 휠 = 커서 기준 확대/축소 */
+    svg.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var p = toSvgXY(e);
+      zoomAt(e.deltaY < 0 ? 1.25 : 0.8, p.x, p.y);
+    }, { passive: false });
+
+    /* 드래그 = 이동. 4px 미만 움직임은 클릭으로 취급해 배치·선택을 방해하지 않습니다 */
+    var pan = null, panMoved = false;
+    svg.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      pan = { cx: e.clientX, cy: e.clientY, x: zoom.x, y: zoom.y };
+      panMoved = false;
+    });
+    svg.addEventListener('pointermove', function (e) {
+      if (!pan) return;
+      var dx = e.clientX - pan.cx, dy = e.clientY - pan.cy;
+      if (!panMoved && dx * dx + dy * dy < 16) return;
+      if (!panMoved) {
+        panMoved = true;
+        svg.classList.add('panning');
+        try { svg.setPointerCapture(e.pointerId); } catch (err) { /* 미지원 환경 */ }
+      }
+      var r = svg.getBoundingClientRect();
+      if (!r.width) return;
+      zoom = clampBox(pan.x - dx / r.width * zoom.w, pan.y - dy / r.height * zoom.h, zoom.w);
+      applyZoom();
+    });
+    svg.addEventListener('pointerup', function () { pan = null; svg.classList.remove('panning'); });
+    svg.addEventListener('pointercancel', function () { pan = null; svg.classList.remove('panning'); });
+    /* 드래그 직후의 click 이 배치·선택으로 이어지지 않게 캡처 단계에서 삼킵니다 */
+    svg.addEventListener('click', function (e) {
+      if (panMoved) { e.stopPropagation(); panMoved = false; }
+    }, true);
+
+    /* 확대 버튼 — 우상단에는 나침반·가상수치 배지가 있어 좌상단에 둡니다 */
+    var zctl = null;
+    if (svg.parentNode && global.document) {
+      zctl = global.document.createElement('div');
+      zctl.className = 'zctl';
+      zctl.innerHTML =
+        '<button type="button" data-z="in" aria-label="지도 확대">+</button>' +
+        '<button type="button" data-z="out" aria-label="지도 축소">−</button>' +
+        '<button type="button" data-z="reset" aria-label="전체 보기">전체</button>';
+      svg.parentNode.appendChild(zctl);
+      zctl.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-z]');
+        if (!b) return;
+        var z = b.getAttribute('data-z');
+        if (z === 'reset') zoomReset();
+        else zoomAt(z === 'in' ? 1.5 : 1 / 1.5, zoom.x + zoom.w / 2, zoom.y + zoom.h / 2);
+      });
     }
 
     function defaultCellTip(c) {
@@ -484,7 +623,11 @@
       cellById: function (id) { return state.byId[id] || null; },
       cells: function () { return state.cells; },
       repaint: paint,
-      defaultCellTip: defaultCellTip
+      defaultCellTip: defaultCellTip,
+      /** 읍면동으로 확대 / 전체 복귀 / 확대 여부 */
+      zoomToRegion: zoomToRegion,
+      zoomReset: zoomReset,
+      isZoomed: isZoomed
     };
   }
 

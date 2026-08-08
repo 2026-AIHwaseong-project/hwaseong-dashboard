@@ -39,7 +39,8 @@
     selectedCellId: null,
     recommendation: null,   // 추천 결과 원본
     recEdited: false,       // 추천안을 사용자가 손봤는지
-    recStrategy: 'efficiency'   // 어떤 목적으로 고를지 (효율/약자/균형/즉시)
+    recStrategy: 'efficiency',  // 어떤 목적으로 고를지 (효율/약자/균형/즉시)
+    recRegion: null         // 추천 범위 읍면동 (null = 화성시 전체)
   };
 
   /* =====================================================================
@@ -97,8 +98,19 @@
       if (cellId) {
         S.selectedCellId = cellId;
         S.map.select(cellId);
-        C.toast('대시보드에서 <b>' + esc(cellId) + '</b> 격자를 가져왔습니다. 수단을 골라 지도를 클릭하세요.');
+        /* 특정 격자를 보러 온 사람의 질문은 "이 지역을 어떻게 고칠까"입니다.
+           추천 범위를 그 격자의 읍면동으로 기본 설정합니다(칩에서 전체로 전환 가능). */
+        var fromCell = S.map.cellById(cellId);
+        if (fromCell && fromCell.region) {
+          S.recRegion = fromCell.region;
+          S.map.zoomToRegion(fromCell.region);   /* 그 동이 화면을 채우게 확대 */
+          C.toast('대시보드에서 <b>' + esc(fromCell.region) + '</b>(' + esc(cellId) +
+            ') 격자를 가져왔습니다. AI 추천도 <b>' + esc(fromCell.region) + '</b> 범위로 짭니다.');
+        } else {
+          C.toast('대시보드에서 <b>' + esc(cellId) + '</b> 격자를 가져왔습니다. 수단을 골라 지도를 클릭하세요.');
+        }
       }
+      paintRecScope();
       return runSim();
     }).catch(fail);
   }
@@ -148,8 +160,10 @@
     inp.value = Math.round(S.budget / 100000000);
     inp.addEventListener('change', function () {
       var v = Math.max(0, Number(inp.value) || 0);
+      inp.value = v;                 /* 음수 입력이 화면에 남지 않게 클램프 값을 되씁니다 */
       S.budget = v * 100000000;
       paintBudget();
+      paintPolicy();                 /* '예산 초과' 판정도 새 한도로 다시 씁니다 */
     });
     $('#scenName').value = S.name;
     $('#scenName').addEventListener('input', function () { S.name = this.value || '이름 없는 시나리오'; });
@@ -161,6 +175,7 @@
   function onCellClick(cell) {
     S.selectedCellId = cell.id;
     S.map.select(cell.id);
+    paintRecScope();   /* 선택한 격자의 동으로 추천 범위를 좁힐 수 있게 칩을 갱신 */
     if (!S.tool) {
       C.toast('먼저 상단에서 배치할 수단을 선택하세요.');
       return;
@@ -210,7 +225,14 @@
    *   결과는 그대로 배치 목록에 들어가며, 사용자가 자유롭게 고칠 수 있습니다.
    * =================================================================== */
   function requestRecommendation(strategy) {
+    /* 수동 배치나 사용자가 고친 추천안이 있으면 확인 없이 지우지 않습니다 */
+    var manual = S.placements.some(function (p) { return !p.fromAI; });
+    if (S.placements.length && (manual || S.recEdited)) {
+      if (!confirm('현재 배치 ' + S.placements.length + '건이 추천안으로 교체됩니다. 계속할까요?')) return;
+    }
     if (strategy) S.recStrategy = strategy;
+    /* 동 범위에서 '지역 균형'(동별 1건 상한)은 성립하지 않습니다 */
+    if (S.recRegion && S.recStrategy === 'balance') S.recStrategy = 'efficiency';
     var btn = $('#btnRecommend');
     btn.disabled = true;
     btn.textContent = '계산 중…';
@@ -220,10 +242,21 @@
     api.recommend({
       period: S.period,
       budgetKrw: S.budget,
-      maxPlacements: 5,
+      maxPlacements: 10,
       strategy: S.recStrategy,
+      region: S.recRegion || undefined,   // 추천 범위 (없으면 화성시 전체)
       includeAlternatives: true    // 다른 목적으로 짜면 어떻게 되는지 함께
     }).then(function (rec) {
+      if (!rec.placements.length) {
+        /* 빈 추천으로 기존 작업을 덮지 않습니다 — 이전 상태를 그대로 복원 */
+        btn.disabled = false;
+        btn.innerHTML = '<i>✦</i>' + (S.recommendation ? '추천 다시 받기' : 'AI 추천 배치안');
+        paintRecBox();
+        C.toast(rec.summary && rec.summary.stoppedBecause === 'budget_too_small'
+          ? '예산이 최소 단가보다 작아 배치할 수 없습니다. 예산을 늘려 보세요.'
+          : '현재 예산·조건에서 추천할 배치가 없습니다. 예산을 늘려 보세요.', 'err', 5000);
+        return;
+      }
       S.recommendation = rec;
       S.recEdited = false;
       /* 기존 배치는 교체합니다 */
@@ -235,12 +268,11 @@
       });
       btn.disabled = false;
       btn.innerHTML = '<i>\u2726</i>추천 다시 받기';
-      if (!rec.placements.length) {
-        C.toast('현재 예산·조건에서 추천할 배치가 없습니다. 예산을 늘려 보세요.', 'err', 5000);
-      } else {
-        C.toast('<b>' + esc(rec.strategyLabel || '추천') + '</b> 기준으로 <b>' +
-          rec.placements.length + '건</b>을 짰습니다. 마음에 안 드는 항목은 지우셔도 됩니다.');
-      }
+      /* 동 범위 추천이면 그 동으로 확대해 어디에 뭘 놓았는지 바로 보이게 합니다 */
+      if (rec.region) S.map.zoomToRegion(rec.region);
+      else S.map.zoomReset();
+      C.toast('<b>' + esc(rec.strategyLabel || '추천') + '</b> 기준으로 <b>' +
+        rec.placements.length + '건</b>을 짰습니다. 마음에 안 드는 항목은 지우셔도 됩니다.');
       runSim();
     }).catch(function (err) {
       btn.disabled = false;
@@ -250,6 +282,29 @@
     });
   }
 
+  /* 추천 범위 칩 — 어느 범위로 추천할지 버튼 위에 항상 보여 줍니다.
+     대시보드에서 격자를 들고 넘어오면 그 읍면동이 기본값이 됩니다. */
+  function paintRecScope() {
+    var host = $('#recScope');
+    if (!host) return;
+    var selCell = (S.selectedCellId && S.map) ? S.map.cellById(S.selectedCellId) : null;
+    var selRegion = selCell ? selCell.region : null;
+    var h = '<span class="rs-lb">추천 범위</span>';
+    if (S.recRegion) {
+      h += '<b>' + esc(S.recRegion) + '</b>' +
+        '<button class="rs-btn" data-scope="all" type="button">화성시 전체로</button>';
+      if (selRegion && selRegion !== S.recRegion) {
+        h += '<button class="rs-btn" data-scope="region" type="button">' + esc(selRegion) + '만</button>';
+      }
+    } else {
+      h += '<b>화성시 전체</b>' +
+        (selRegion
+          ? '<button class="rs-btn" data-scope="region" type="button">' + esc(selRegion) + '만</button>'
+          : '');
+    }
+    host.innerHTML = h;
+  }
+
   function paintRecBox() {
     var box = $('#recBox');
     var rec = S.recommendation;
@@ -257,6 +312,7 @@
     var su = rec.summary;
     var reasonText = {
       budget_exhausted: '예산을 모두 소진해 중단',
+      budget_too_small: '예산이 최소 단가보다 작아 배치 불가',
       max_reached: '요청한 건수를 채워 중단',
       no_further_gain: '더 이상 개선 효과가 없어 중단',
       no_candidate: '조건에 맞는 후보가 없음'
@@ -266,6 +322,7 @@
       '<div class="rec-box">' +
       '<div class="rec-head"><span class="rec-badge">AI 추천</span>' +
       esc(rec.methodLabel) +
+      (rec.region ? '<span class="rec-scope-tag">' + esc(rec.region) + '</span>' : '') +
       (S.recEdited ? '<span class="rec-edited">사용자 수정됨</span>' : '') + '</div>' +
       '<div class="rec-nums">' +
       '<span><b>' + su.count + '</b>건</span>' +
@@ -346,6 +403,8 @@
   }
 
   function resetAll() {
+    if (S.placements.length &&
+        !confirm('배치 ' + S.placements.length + '건을 모두 지웁니다. 되돌릴 수 없습니다. 계속할까요?')) return;
     S.placements = [];
     S.recommendation = null;
     S.recEdited = false;
@@ -472,7 +531,14 @@
     }
     $('#btnReset').disabled = false;
     $('#btnUndo').disabled = false;
-    host.innerHTML = '<ul class="plist">' + S.placements.map(function (p, i) {
+    /* 10건이 넘으면 스크롤 아래에 숨습니다 — 총량은 항상 위에 보여 줍니다 */
+    var totalCnt = S.placements.reduce(function (a, p) { return a + p.count; }, 0);
+    var totalKrw = S.placements.reduce(function (a, p) {
+      return a + ((S.effects[p.type] || {}).unitKrw || 0) * p.count;
+    }, 0);
+    host.innerHTML = '<div class="plist-head">배치 <b>' + totalCnt + '건</b> · 합계 <b>' +
+      esc(won(totalKrw)) + '</b></div>' +
+      '<ul class="plist">' + S.placements.map(function (p, i) {
       var e = S.effects[p.type] || {};
       var cell = S.map.cellById(p.cellId);
       return '<li' + (p.fromAI ? ' class="from-ai"' : '') + '><span class="ic">' + esc(e.icon || '●') + '</span>' +
@@ -692,6 +758,20 @@
   function saveCurrent() {
     if (!S.result) return;
     var list = loadScenarios();
+    /* 같은 이름을 조용히 쌓으면 어느 카드가 최신인지 구분할 수 없습니다 */
+    var dup = -1;
+    list.forEach(function (s, idx) { if (dup < 0 && s.name === S.name) dup = idx; });
+    if (dup >= 0) {
+      if (!confirm('같은 이름 「' + S.name + '」 이(가) 이미 있습니다. 덮어쓸까요?')) {
+        C.toast('이름을 바꾼 뒤 다시 저장하세요.');
+        return;
+      }
+      list.splice(dup, 1);
+    }
+    if (list.length >= 12) {
+      C.toast('저장은 최대 12개입니다 — 가장 오래된 <b>' +
+        esc(list[list.length - 1].name) + '</b> 이(가) 삭제됩니다.', 'err', 5000);
+    }
     list.unshift({
       name: S.name,
       savedAt: C.nowStamp(),
@@ -717,16 +797,20 @@
       host.innerHTML = '<div class="empty">저장된 시나리오가 없습니다.<br>배치안을 만든 뒤 [시나리오 저장]을 누르세요.</div>';
       return;
     }
+    /* 삭제 버튼을 불러오기 버튼 안에 중첩하면(HTML 위반) 키보드로 삭제할 수 없습니다.
+       카드 = div, 불러오기·삭제 = 각각 실제 button 으로 분리합니다. */
     host.innerHTML = list.map(function (s, i) {
-      return '<button class="scen" data-load="' + i + '" type="button">' +
+      return '<div class="scen">' +
+        '<button class="sload" data-load="' + i + '" type="button" title="' + esc(s.name) + '">' +
         '<span class="snm">' + esc(s.name) + '</span>' +
-        '<span class="sdel" data-del="' + i + '" role="button" aria-label="삭제">×</span>' +
         '<span class="smeta"><span>' + esc(s.savedAt) + '</span>' +
         '<span>배치 ' + s.placements.length + '건</span>' +
         '<span>' + esc(won(s.summary.costKrw)) + '</span>' +
         '<span>' + (s.summary.needDelta < 0 ? '사각지대 −' + Math.abs(s.summary.needDelta) + '개' : '변화 없음') + '</span>' +
         (s.summary.krwPerTrip != null ? '<span>' + fmt(s.summary.krwPerTrip) + '원/통행</span>' : '') +
-        '</span></button>';
+        '</span></button>' +
+        '<button class="sdel" data-del="' + i + '" type="button" aria-label="시나리오 삭제">×</button>' +
+        '</div>';
     }).join('');
   }
 
@@ -734,6 +818,13 @@
     var list = loadScenarios();
     var s = list[i];
     if (!s) return;
+    if (S.placements.length &&
+        !confirm('불러오면 현재 배치 ' + S.placements.length + '건이 교체됩니다. 계속할까요?')) return;
+    /* 이전 추천 박스가 남으면 배치 목록과 안 맞습니다 — 추천 상태를 접습니다 */
+    S.recommendation = null;
+    S.recEdited = false;
+    var rbtn = $('#btnRecommend');
+    if (rbtn) rbtn.innerHTML = '<i>✦</i>AI 추천 배치안';
     S.name = s.name;
     S.period = s.period || S.period;
     S.budget = s.budgetKrw || S.budget;
@@ -751,9 +842,13 @@
 
   function deleteScenario(i) {
     var list = loadScenarios();
+    var s = list[i];
+    if (!s) return;
+    if (!confirm('시나리오 「' + s.name + '」 을(를) 삭제할까요?')) return;
     list.splice(i, 1);
     saveScenarios(list);
     renderScenarioList();
+    C.toast('시나리오 <b>' + esc(s.name) + '</b> 을(를) 삭제했습니다.');
   }
 
   /* =====================================================================
@@ -797,7 +892,24 @@
       runSim();
     });
     $('#btnReset').addEventListener('click', resetAll);
-    $('#btnRecommend').addEventListener('click', requestRecommendation);
+    /* 직접 바인딩하면 MouseEvent 가 strategy 인자로 들어가 전략이 초기화됩니다 */
+    $('#btnRecommend').addEventListener('click', function () { requestRecommendation(); });
+
+    $('#recScope').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-scope]');
+      if (!b) return;
+      if (b.getAttribute('data-scope') === 'all') {
+        S.recRegion = null;
+      } else {
+        var c = S.selectedCellId ? S.map.cellById(S.selectedCellId) : null;
+        if (c && c.region) S.recRegion = c.region;
+      }
+      if (S.recRegion && S.recStrategy === 'balance') S.recStrategy = 'efficiency';
+      /* 범위 전환에 맞춰 지도도 따라갑니다 */
+      if (S.recRegion) S.map.zoomToRegion(S.recRegion);
+      else S.map.zoomReset();
+      paintRecScope();
+    });
     $('#btnSave').addEventListener('click', saveCurrent);
 
     $('#scenList').addEventListener('click', function (e) {

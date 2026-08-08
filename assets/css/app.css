@@ -695,3 +695,55 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .scen-floor-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .scen-floor-list .empty{grid-column:1/-1;padding:14px 0;text-align:center}
 .scen-floor-list .scen .smeta{white-space:normal}
+/* 3열 고정은 좁은 화면에서 카드가 ~100px 로 쪼그라듭니다 */
+@media (max-width:1020px){.scen-floor-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.scen-floor-list{grid-template-columns:1fr}}
+
+/* ===========================================================================
+ * [24] 시나리오 카드 접근성 구조 + 배치 목록 요약
+ *   .scen 이 button 하나였을 때는 삭제 ×(span)가 그 안에 중첩되어
+ *   키보드로 삭제할 수 없었습니다. 카드 = div, 불러오기·삭제 = 각각 button.
+ *   기존 .scen/.snm/.smeta/.sdel 규칙은 자손 선택자라 그대로 적용됩니다.
+ * ======================================================================== */
+.scen .sload{display:block;width:100%;min-width:0;text-align:left;padding:0;
+  background:none;border:0;font:inherit;color:inherit;cursor:pointer}
+.plist-head{display:flex;justify-content:space-between;gap:10px;
+  padding:0 14px 6px;font-size:11.5px;color:var(--ink2)}
+.plist-head b{font-variant-numeric:tabular-nums}
+
+/* 다크에서 배치 마커 수량 배지 — [22]는 color 만 덮어 SVG fill 이 빠졌습니다 */
+:root[data-theme="dark"] .placed .pmk-badge{fill:var(--bg)}
+@media (prefers-color-scheme:dark){
+  :root:where(:not([data-theme="light"])) .placed .pmk-badge{fill:var(--bg)}
+}
+
+/* ===========================================================================
+ * [25] 추천 범위 칩
+ *   대시보드에서 격자를 들고 넘어오면 추천 범위가 그 읍면동으로 좁혀집니다.
+ *   어느 범위로 추천할지 버튼 위에 항상 보이게 하고, 한 번에 전환합니다.
+ * ======================================================================== */
+.rec-scope{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px;
+  font-size:11.5px;color:var(--ink2)}
+.rec-scope:empty{display:none}
+.rec-scope b{font-weight:650;color:var(--ink)}
+.rec-scope .rs-btn{font-size:10.5px;padding:2px 8px;border:1px solid var(--line);
+  border-radius:999px;color:var(--ink2)}
+.rec-scope .rs-btn:hover{border-color:var(--sel);color:var(--ink)}
+.rec-scope-tag{display:inline-block;font-size:10px;font-weight:600;
+  border:1px solid var(--sel);color:var(--sel);border-radius:999px;
+  padding:1px 7px;margin-left:6px;vertical-align:1px}
+
+/* ===========================================================================
+ * [26] 지도 확대·이동 컨트롤
+ *   동 단위 추천처럼 좁은 지역은 전체 뷰에서 배치 기호가 겹쳐 안 보입니다.
+ *   휠 줌·드래그 이동은 map.js 가 처리하고, 여기는 버튼과 커서만 담당합니다.
+ *   우상단에는 나침반·가상수치 배지가 있어 버튼은 좌상단에 둡니다.
+ * ======================================================================== */
+.zctl{position:absolute;left:10px;top:10px;display:flex;flex-direction:column;gap:4px;z-index:5}
+.zctl button{width:26px;height:26px;border:1px solid var(--line);border-radius:7px;
+  background:color-mix(in srgb,var(--card) 92%,transparent);color:var(--ink2);
+  font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center}
+.zctl button:hover{border-color:var(--sel);color:var(--ink)}
+.zctl [data-z="reset"]{display:none;width:auto;height:22px;padding:0 7px;font-size:10.5px}
+.zctl.zoomed [data-z="reset"]{display:flex}
+.mapsvg.panning{cursor:grabbing}

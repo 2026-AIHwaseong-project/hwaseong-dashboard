@@ -342,7 +342,7 @@
   function buildRtf(draft) {
     var b = '';
     b += '{\\rtf1\\ansi\\ansicpg949\\deff0\\uc1\n';
-    b += '{\\fonttbl{\\f0\\fnil\\fcharset129 \\\'b8\\\'bc\\\'c0\\\'ba \\\'b0\\\'edN;}{\\f1\\fnil\\fcharset129 Malgun Gothic;}}\n';
+    b += '{\\fonttbl{\\f0\\fnil\\fcharset129 \\\'b8\\\'bc\\\'c0\\\'ba \\\'b0\\\'ed\\\'b5\\\'f1;}{\\f1\\fnil\\fcharset129 Malgun Gothic;}}\n';
     b += '{\\colortbl;\\red0\\green0\\blue0;\\red90\\green90\\blue90;}\n';
     b += '\\paperw11906\\paperh16838\\margl1134\\margr1134\\margt1134\\margb1134\n';
     b += '\\f1\\fs20\n';

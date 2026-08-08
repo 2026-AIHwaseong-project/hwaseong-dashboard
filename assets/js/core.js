@@ -140,6 +140,9 @@
     t.style.top = Math.max(6, y) + 'px';
   }
   function hideTip() { if (_tt) _tt.style.display = 'none'; }
+  /* 터치에서는 mouseleave 가 오지 않아 툴팁이 화면에 눌어붙습니다.
+     다음 탭이 시작되는 순간 접습니다(탭 대상의 툴팁은 그 뒤 이벤트에서 다시 뜹니다). */
+  document.addEventListener('pointerdown', hideTip);
 
   /* -------------------------------------------------------------- 토스트 */
   var _toasts = null;
@@ -345,7 +348,12 @@
       b.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        showTip(html, e);
+        /* 키보드(Enter/Space)로 누르면 clientX/Y 가 0이라 툴팁이 화면 구석에 뜹니다.
+           그때는 버튼 위치를 기준으로 띄웁니다. */
+        if (!e.clientX && !e.clientY) {
+          var r = b.getBoundingClientRect();
+          showTip(html, { clientX: r.left + r.width / 2, clientY: r.bottom + 4 });
+        } else showTip(html, e);
       });
     });
   }

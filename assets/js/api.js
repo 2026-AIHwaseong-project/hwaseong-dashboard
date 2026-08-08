@@ -173,7 +173,8 @@
 
     /** 정류장 시간대별 승하차 프로파일 */
     stopProfile: function (stopId, period) {
-      return cached('stopProfile:' + stopId, function () {
+      /* 캐시 키에 period 가 빠지면 다른 시간대의 프로파일이 재사용됩니다 */
+      return cached('stopProfile:' + stopId + ':' + period, function () {
         return call('stops.profile', { stopId: stopId, period: period });
       });
     },

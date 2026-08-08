@@ -706,6 +706,58 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .scen-floor-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .scen-floor-list .empty{grid-column:1/-1;padding:14px 0;text-align:center}
 .scen-floor-list .scen .smeta{white-space:normal}
+/* 3열 고정은 좁은 화면에서 카드가 ~100px 로 쪼그라듭니다 */
+@media (max-width:1020px){.scen-floor-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.scen-floor-list{grid-template-columns:1fr}}
+
+/* ===========================================================================
+ * [24] 시나리오 카드 접근성 구조 + 배치 목록 요약
+ *   .scen 이 button 하나였을 때는 삭제 ×(span)가 그 안에 중첩되어
+ *   키보드로 삭제할 수 없었습니다. 카드 = div, 불러오기·삭제 = 각각 button.
+ *   기존 .scen/.snm/.smeta/.sdel 규칙은 자손 선택자라 그대로 적용됩니다.
+ * ======================================================================== */
+.scen .sload{display:block;width:100%;min-width:0;text-align:left;padding:0;
+  background:none;border:0;font:inherit;color:inherit;cursor:pointer}
+.plist-head{display:flex;justify-content:space-between;gap:10px;
+  padding:0 14px 6px;font-size:11.5px;color:var(--ink2)}
+.plist-head b{font-variant-numeric:tabular-nums}
+
+/* 다크에서 배치 마커 수량 배지 — [22]는 color 만 덮어 SVG fill 이 빠졌습니다 */
+:root[data-theme="dark"] .placed .pmk-badge{fill:var(--bg)}
+@media (prefers-color-scheme:dark){
+  :root:where(:not([data-theme="light"])) .placed .pmk-badge{fill:var(--bg)}
+}
+
+/* ===========================================================================
+ * [25] 추천 범위 칩
+ *   대시보드에서 격자를 들고 넘어오면 추천 범위가 그 읍면동으로 좁혀집니다.
+ *   어느 범위로 추천할지 버튼 위에 항상 보이게 하고, 한 번에 전환합니다.
+ * ======================================================================== */
+.rec-scope{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px;
+  font-size:11.5px;color:var(--ink2)}
+.rec-scope:empty{display:none}
+.rec-scope b{font-weight:650;color:var(--ink)}
+.rec-scope .rs-btn{font-size:10.5px;padding:2px 8px;border:1px solid var(--line);
+  border-radius:999px;color:var(--ink2)}
+.rec-scope .rs-btn:hover{border-color:var(--sel);color:var(--ink)}
+.rec-scope-tag{display:inline-block;font-size:10px;font-weight:600;
+  border:1px solid var(--sel);color:var(--sel);border-radius:999px;
+  padding:1px 7px;margin-left:6px;vertical-align:1px}
+
+/* ===========================================================================
+ * [26] 지도 확대·이동 컨트롤
+ *   동 단위 추천처럼 좁은 지역은 전체 뷰에서 배치 기호가 겹쳐 안 보입니다.
+ *   휠 줌·드래그 이동은 map.js 가 처리하고, 여기는 버튼과 커서만 담당합니다.
+ *   우상단에는 나침반·가상수치 배지가 있어 버튼은 좌상단에 둡니다.
+ * ======================================================================== */
+.zctl{position:absolute;left:10px;top:10px;display:flex;flex-direction:column;gap:4px;z-index:5}
+.zctl button{width:26px;height:26px;border:1px solid var(--line);border-radius:7px;
+  background:color-mix(in srgb,var(--card) 92%,transparent);color:var(--ink2);
+  font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center}
+.zctl button:hover{border-color:var(--sel);color:var(--ink)}
+.zctl [data-z="reset"]{display:none;width:auto;height:22px;padding:0 7px;font-size:10.5px}
+.zctl.zoomed [data-z="reset"]{display:flex}
+.mapsvg.panning{cursor:grabbing}
 
 </style>
 </head>
@@ -822,6 +874,7 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
       </div>
 
       <div style="padding:0 14px 10px">
+        <div class="rec-scope" id="recScope"></div>
         <button class="btn primary" id="btnRecommend" type="button" style="width:100%">
           <i>✦</i>AI 추천 배치안</button>
         <div class="rec-hint">예산 범위에서 효과가 가장 큰 지점을 알고리즘이 골라 줍니다.
@@ -1270,6 +1323,9 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     t.style.top = Math.max(6, y) + 'px';
   }
   function hideTip() { if (_tt) _tt.style.display = 'none'; }
+  /* 터치에서는 mouseleave 가 오지 않아 툴팁이 화면에 눌어붙습니다.
+     다음 탭이 시작되는 순간 접습니다(탭 대상의 툴팁은 그 뒤 이벤트에서 다시 뜹니다). */
+  document.addEventListener('pointerdown', hideTip);
 
   /* -------------------------------------------------------------- 토스트 */
   var _toasts = null;
@@ -1475,7 +1531,12 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       b.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        showTip(html, e);
+        /* 키보드(Enter/Space)로 누르면 clientX/Y 가 0이라 툴팁이 화면 구석에 뜹니다.
+           그때는 버튼 위치를 기준으로 띄웁니다. */
+        if (!e.clientX && !e.clientY) {
+          var r = b.getBoundingClientRect();
+          showTip(html, { clientX: r.left + r.width / 2, clientY: r.bottom + 4 });
+        } else showTip(html, e);
       });
     });
   }
@@ -2391,7 +2452,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     var period = body.period || 'am';
     var t = periodIndex(period);
     var budget = body.budgetKrw != null ? body.budgetKrw : CONFIG.COST.defaultBudget;
-    var maxN = Math.max(1, Math.min(20, body.maxPlacements || 5));
+    var maxN = Math.max(1, Math.min(20, body.maxPlacements || 10));
     var allowed = body.allowedTypes && body.allowedTypes.length
       ? body.allowedTypes : Object.keys(EFFECT);
 
@@ -2401,6 +2462,15 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     if (strat.types) {
       allowed = allowed.filter(function (x) { return strat.types.indexOf(x) >= 0; });
       if (!allowed.length) allowed = strat.types.slice();
+    }
+
+    /* 추천 범위 — 대시보드에서 특정 격자를 보고 넘어왔다면 그 읍면동으로 후보를
+       제한합니다. 후보만 좁힐 뿐 선정 방식은 같아서 결정성이 유지됩니다. */
+    var regionScope = body.region || null;
+    /* 단일 동 안에서 '지역 균형'(동별 1건 상한)은 곧 1건 추천이라 성립하지 않습니다 */
+    if (regionScope && stratId === 'balance') {
+      stratId = 'efficiency';
+      strat = STRATEGIES[stratId];
     }
 
     /* 기존 배치는 무시하고 기준선에서 새로 짭니다(교체 방식) */
@@ -2415,6 +2485,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       for (var i = 0; i < N; i++) {
         var q = d.quad[i];
         if (q !== 'need' && q !== 'drt') continue;          // 후보: 미해결 격자만
+        if (regionScope && CELLS[i].region !== regionScope) continue;   // 범위 제한
 
         /* 지역 균형 — 이미 상한을 채운 읍면동은 건너뜁니다 */
         if (strat.maxPerRegion &&
@@ -2438,9 +2509,12 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       }
 
       if (!best) {
+        /* 한 건도 못 넣고 끝났는데 사유가 '예산 소진'이면
+           "0건 · 0원 · 예산 소진"이라는 모순 문장이 화면에 나옵니다 */
         stopped = chosen.length ? 'no_further_gain'
           : (spent === 0 && budget < Math.min.apply(null, allowed.map(function (x) { return CONFIG.costKrw(x) || 1e12; }))
-            ? 'budget_exhausted' : 'no_further_gain');
+            ? 'budget_too_small'
+            : (regionScope ? 'no_candidate' : 'no_further_gain'));
         break;
       }
 
@@ -2494,10 +2568,13 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
        요약만 필요하므로 배치 목록은 싣지 않습니다(응답 크기 절약). */
     var alternatives = null;
     if (body.includeAlternatives) {
-      alternatives = STRATEGY_ORDER.map(function (sid) {
+      alternatives = STRATEGY_ORDER.filter(function (sid) {
+        /* 동 범위에서는 '지역 균형'이 성립하지 않으므로 대안표에서도 뺍니다 */
+        return !(regionScope && sid === 'balance');
+      }).map(function (sid) {
         var alt = sid === stratId ? null : runRecommendation({
           period: period, budgetKrw: budget, maxPlacements: maxN,
-          allowedTypes: body.allowedTypes, strategy: sid
+          allowedTypes: body.allowedTypes, strategy: sid, region: regionScope
         });
         var su = alt ? alt.summary : null;
         var mix = { stop: 0, drt: 0, freq: 0 };
@@ -2527,9 +2604,13 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       methodNote: '미해결 통행량(고수요·저공급 + DRT후보, 교통약자 가중)을 ' +
         (CONFIG.COST.compareBasis === 'annual' ? '연간 환산 사업비' : '총사업비') +
         ' 1원당 가장 많이 줄이는 지점을 순차 선택했습니다. ' +
-        '이미 개선된 지역은 다음 회차에 효율이 낮아져 중복 배치되지 않습니다.',
+        '이미 개선된 지역은 다음 회차에 효율이 낮아져 중복 배치되지 않습니다.' +
+        (regionScope ? ' 추천 범위: ' + regionScope + '.' : ''),
       period: period,
       generatedAt: C.nowStamp(),
+
+      /* 추천 범위 (null = 화성시 전체). 범위를 좁혀도 알고리즘은 같습니다. */
+      region: regionScope,
 
       /* 어떤 목적으로 고른 안인지. 같은 알고리즘에 목적만 바꿔 끼운 것입니다. */
       strategy: stratId,
@@ -2672,14 +2753,16 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     sections.push({ key: 'plan', heading: '4. 개선 방안', body: planBody, bullets: planBullets });
 
     var effBody, effBullets;
-    if (sim && simPeriod) {
+    /* 배치가 한 건도 없으면 전후가 같아 빈 표·"변동 없음" 문장만 남습니다.
+       그때는 기준선 보고서 문안으로 처리합니다. */
+    if (sim && simPeriod && sim.placements.length) {
       var dn = simPeriod.delta.needCells, dt = simPeriod.delta.potentialTripsPerDay;
       effBody = '시뮬레이션 결과 ' + P.name + '시간대 고수요·저공급 격자는 ' +
         f(simPeriod.baseline.needCells) + '개에서 ' + f(simPeriod.kpi.needCells) + '개로 ' +
-        (dn < 0 ? f(-dn) + '개 감소' : dn > 0 ? f(dn) + '개 증가' : '변동 없음') + '하였다.\n' +
+        (dn < 0 ? f(-dn) + '개 감소하였다' : dn > 0 ? f(dn) + '개 증가하였다' : '변동이 없었다') + '.\n' +
         '사각지대 잠재수요는 일 ' + f(simPeriod.baseline.potentialTripsPerDay) + '통행에서 ' +
         f(simPeriod.kpi.potentialTripsPerDay) + '통행으로 ' +
-        (dt < 0 ? f(-dt) + '통행 해소' : '변동 없음') + '되는 것으로 추정된다.';
+        (dt < 0 ? f(-dt) + '통행 해소되는 것으로 추정된다' : '변동이 없는 것으로 추정된다') + '.';
       effBullets = [
         '고수요·저공급 격자: ' + f(simPeriod.baseline.needCells) + '개 → ' + f(simPeriod.kpi.needCells) + '개',
         '사각지대 잠재수요: 일 ' + f(simPeriod.baseline.potentialTripsPerDay) + '통행 → ' + f(simPeriod.kpi.potentialTripsPerDay) + '통행',
@@ -2731,7 +2814,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       });
     }
 
-    if (sim) {
+    if (sim && sim.placements.length) {
       tables.push({
         key: 'placements', title: '시뮬레이션 배치 내역',
         columns: ['수단', '격자', '위치', '수량', '파급반경(km)', '소요액(원)'],
@@ -3118,7 +3201,8 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
 
     /** 정류장 시간대별 승하차 프로파일 */
     stopProfile: function (stopId, period) {
-      return cached('stopProfile:' + stopId, function () {
+      /* 캐시 키에 period 가 빠지면 다른 시간대의 프로파일이 재사용됩니다 */
+      return cached('stopProfile:' + stopId + ':' + period, function () {
         return call('stops.profile', { stopId: stopId, period: period });
       });
     },
@@ -3200,8 +3284,11 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
   var C = HW.core;
   var esc = C.esc;
 
+  /* prefix 는 셀 클래스(.c.m0), varPrefix 는 CSS 변수(--mi0)에 씁니다.
+     MI 만 둘이 달라서, 범례를 prefix 로 그리면 존재하지 않는 --m0 을 참조해
+     색 띠가 투명하게 나옵니다. */
   var LAYERS = {
-    mi: { key: 'mi', prefix: 'm', steps: 7, title: '미스매칭 지수 MI', unit: '(z)', kind: 'diverging' },
+    mi: { key: 'mi', prefix: 'm', varPrefix: 'mi', steps: 7, title: '미스매칭 지수 MI', unit: '(z)', kind: 'diverging' },
     demand: { key: 'demand', prefix: 'sb', steps: 5, title: '수요지수 D', unit: '5분위', kind: 'sequential' },
     supply: { key: 'supply', prefix: 'so', steps: 5, title: '공급지수 S', unit: '5분위', kind: 'sequential' },
     flow: { key: 'flow', prefix: 'sb', steps: 5, title: '유동인구(잠재수요)', unit: '5분위', kind: 'sequential' }
@@ -3215,6 +3302,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     var mapMeta = meta.map || {};
     var vb = mapMeta.viewBox || [0, 0, 960, 580];   // meta 가 없을 때만 쓰는 폴백
     var W = vb[2], H = vb[3];
+    var zoom = { x: vb[0], y: vb[1], w: W, h: H };  // 현재 viewBox (확대·이동 상태)
 
     if (meta.grid && meta.grid.bbox) C.setProjection(meta.grid.bbox, W, H);
 
@@ -3291,7 +3379,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
         '<text class="compass-t" x="' + (sbPx / 2).toFixed(1) + '" y="-6" text-anchor="middle">0 \u2500 ' +
         sbKm + ' km</text></g>';
 
-      svg.setAttribute('viewBox', vb.join(' '));
+      applyZoom();          /* 다시 그려도 확대 상태를 유지합니다 */
       svg.innerHTML = h;
     }
 
@@ -3425,7 +3513,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
         var th = (state.scale && state.scale.miThresholds) || [-1.5, -0.75, -0.25, 0.25, 0.75, 1.5];
         h += '<span class="lg-end">공급 여유</span>';
         h += '<div class="lg-scale"><div class="lg-sw">';
-        for (var i = 0; i < L.steps; i++) h += '<i style="background:var(--' + L.prefix + i + ')"></i>';
+        for (var i = 0; i < L.steps; i++) h += '<i style="background:var(--' + (L.varPrefix || L.prefix) + i + ')"></i>';
         h += '</div><div class="lg-tick">';
         /* 눈금은 색 칸 사이 경계에 옵니다 */
         h += '<span></span>';
@@ -3437,7 +3525,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       } else {
         h += '<span class="lg-end">낮음</span>';
         h += '<div class="lg-scale"><div class="lg-sw">';
-        for (var j = 0; j < L.steps; j++) h += '<i style="background:var(--' + L.prefix + j + ')" title="' + QUINTILE_LABELS[j] + '"></i>';
+        for (var j = 0; j < L.steps; j++) h += '<i style="background:var(--' + (L.varPrefix || L.prefix) + j + ')" title="' + QUINTILE_LABELS[j] + '"></i>';
         h += '</div><div class="lg-tick lg-tick5">' +
           QUINTILE_LABELS.map(function (t) { return '<span>' + t + '</span>'; }).join('') +
           '</div></div>';
@@ -3597,12 +3685,18 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
 
     svg.addEventListener('mousemove', function (e) {
       var s = e.target.closest('.sthit');
-      if (!s) return;
+      if (!s) {
+        /* 격자 위 툴팁은 gCells 핸들러가 관리하므로 건드리지 않습니다.
+           그 밖(바다·여백)으로 나가면 정류장 툴팁이 남지 않게 접습니다. */
+        if (!e.target.closest('.cells')) C.hideTip();
+        return;
+      }
       var stop = findStop(s.getAttribute('data-stophit'));
       if (!stop) return;
       C.showTip('<b>' + esc(stop.name) + '</b><br>경유 ' + stop.routes.join('·') +
         '선 · 클릭하면 시간대 프로파일', e);
     });
+    svg.addEventListener('mouseleave', C.hideTip);
     svg.addEventListener('click', function (e) {
       var s = e.target.closest('.sthit');
       if (!s) return;
@@ -3615,6 +3709,135 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     function findStop(id) {
       for (var i = 0; i < state.stops.length; i++) if (state.stops[i].id === id) return state.stops[i];
       return null;
+    }
+
+    /* ------------------------------------------------------ 확대·이동
+       SVG viewBox 를 조작합니다. 동탄처럼 면적이 작은 동은 전체 뷰에서
+       배치 기호가 겹쳐 안 보입니다. 축척바는 지도 좌표계에 있어서
+       확대해도 표시 거리(0─5km)가 그대로 맞습니다. */
+    var MIN_W = W / 8;                 // 최대 8배
+    var zoomAnim = null;
+
+    function isZoomed() { return zoom.w < W - 0.5; }
+
+    function applyZoom() {
+      svg.setAttribute('viewBox', zoom.x.toFixed(1) + ' ' + zoom.y.toFixed(1) + ' ' +
+        zoom.w.toFixed(1) + ' ' + zoom.h.toFixed(1));
+      if (zctl) zctl.classList.toggle('zoomed', isZoomed());
+    }
+
+    function clampBox(x, y, w) {
+      w = Math.max(MIN_W, Math.min(W, w));
+      var h = w * H / W;
+      return {
+        x: Math.max(0, Math.min(W - w, x)),
+        y: Math.max(0, Math.min(H - h, y)),
+        w: w, h: h
+      };
+    }
+
+    function animateTo(t) {
+      if (zoomAnim) cancelAnimationFrame(zoomAnim);
+      var reduce = global.matchMedia &&
+        global.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduce || !global.requestAnimationFrame) { zoom = t; applyZoom(); return; }
+      var from = { x: zoom.x, y: zoom.y, w: zoom.w, h: zoom.h }, t0 = null;
+      function step(ts) {
+        if (t0 == null) t0 = ts;
+        var k = Math.min(1, (ts - t0) / 200);
+        k = k * (2 - k);                             // ease-out
+        zoom = {
+          x: from.x + (t.x - from.x) * k, y: from.y + (t.y - from.y) * k,
+          w: from.w + (t.w - from.w) * k, h: from.h + (t.h - from.h) * k
+        };
+        applyZoom();
+        zoomAnim = k < 1 ? requestAnimationFrame(step) : null;
+      }
+      zoomAnim = requestAnimationFrame(step);
+    }
+
+    function zoomReset() { animateTo({ x: 0, y: 0, w: W, h: H }); }
+
+    /** 해당 읍면동의 격자들이 화면을 채우도록 확대합니다 */
+    function zoomToRegion(regionName) {
+      var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, n = 0;
+      state.cells.forEach(function (c) {
+        if (c.region !== regionName) return;
+        var p = C.xy(c);
+        x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y);
+        x1 = Math.max(x1, p.x + (c.w || 20)); y1 = Math.max(y1, p.y + (c.h || 20));
+        n++;
+      });
+      if (!n) return;
+      var w = Math.max((x1 - x0) * 1.35, (y1 - y0) * 1.35 * W / H, MIN_W);
+      animateTo(clampBox((x0 + x1) / 2 - w / 2, (y0 + y1) / 2 - (w * H / W) / 2, w));
+    }
+
+    /** factor 배 확대(>1)/축소(<1). (sx,sy)는 고정점(SVG 좌표) */
+    function zoomAt(factor, sx, sy) {
+      zoom = clampBox(sx - (sx - zoom.x) / factor, sy - (sy - zoom.y) / factor, zoom.w / factor);
+      applyZoom();
+    }
+
+    function toSvgXY(e) {
+      var r = svg.getBoundingClientRect();
+      if (!r.width || !r.height) return { x: zoom.x, y: zoom.y };
+      return { x: zoom.x + (e.clientX - r.left) / r.width * zoom.w,
+               y: zoom.y + (e.clientY - r.top) / r.height * zoom.h };
+    }
+
+    /* 휠 = 커서 기준 확대/축소 */
+    svg.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var p = toSvgXY(e);
+      zoomAt(e.deltaY < 0 ? 1.25 : 0.8, p.x, p.y);
+    }, { passive: false });
+
+    /* 드래그 = 이동. 4px 미만 움직임은 클릭으로 취급해 배치·선택을 방해하지 않습니다 */
+    var pan = null, panMoved = false;
+    svg.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      pan = { cx: e.clientX, cy: e.clientY, x: zoom.x, y: zoom.y };
+      panMoved = false;
+    });
+    svg.addEventListener('pointermove', function (e) {
+      if (!pan) return;
+      var dx = e.clientX - pan.cx, dy = e.clientY - pan.cy;
+      if (!panMoved && dx * dx + dy * dy < 16) return;
+      if (!panMoved) {
+        panMoved = true;
+        svg.classList.add('panning');
+        try { svg.setPointerCapture(e.pointerId); } catch (err) { /* 미지원 환경 */ }
+      }
+      var r = svg.getBoundingClientRect();
+      if (!r.width) return;
+      zoom = clampBox(pan.x - dx / r.width * zoom.w, pan.y - dy / r.height * zoom.h, zoom.w);
+      applyZoom();
+    });
+    svg.addEventListener('pointerup', function () { pan = null; svg.classList.remove('panning'); });
+    svg.addEventListener('pointercancel', function () { pan = null; svg.classList.remove('panning'); });
+    /* 드래그 직후의 click 이 배치·선택으로 이어지지 않게 캡처 단계에서 삼킵니다 */
+    svg.addEventListener('click', function (e) {
+      if (panMoved) { e.stopPropagation(); panMoved = false; }
+    }, true);
+
+    /* 확대 버튼 — 우상단에는 나침반·가상수치 배지가 있어 좌상단에 둡니다 */
+    var zctl = null;
+    if (svg.parentNode && global.document) {
+      zctl = global.document.createElement('div');
+      zctl.className = 'zctl';
+      zctl.innerHTML =
+        '<button type="button" data-z="in" aria-label="지도 확대">+</button>' +
+        '<button type="button" data-z="out" aria-label="지도 축소">−</button>' +
+        '<button type="button" data-z="reset" aria-label="전체 보기">전체</button>';
+      svg.parentNode.appendChild(zctl);
+      zctl.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-z]');
+        if (!b) return;
+        var z = b.getAttribute('data-z');
+        if (z === 'reset') zoomReset();
+        else zoomAt(z === 'in' ? 1.5 : 1 / 1.5, zoom.x + zoom.w / 2, zoom.y + zoom.h / 2);
+      });
     }
 
     function defaultCellTip(c) {
@@ -3659,7 +3882,11 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       cellById: function (id) { return state.byId[id] || null; },
       cells: function () { return state.cells; },
       repaint: paint,
-      defaultCellTip: defaultCellTip
+      defaultCellTip: defaultCellTip,
+      /** 읍면동으로 확대 / 전체 복귀 / 확대 여부 */
+      zoomToRegion: zoomToRegion,
+      zoomReset: zoomReset,
+      isZoomed: isZoomed
     };
   }
 
@@ -4013,7 +4240,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
   function buildRtf(draft) {
     var b = '';
     b += '{\\rtf1\\ansi\\ansicpg949\\deff0\\uc1\n';
-    b += '{\\fonttbl{\\f0\\fnil\\fcharset129 \\\'b8\\\'bc\\\'c0\\\'ba \\\'b0\\\'edN;}{\\f1\\fnil\\fcharset129 Malgun Gothic;}}\n';
+    b += '{\\fonttbl{\\f0\\fnil\\fcharset129 \\\'b8\\\'bc\\\'c0\\\'ba \\\'b0\\\'ed\\\'b5\\\'f1;}{\\f1\\fnil\\fcharset129 Malgun Gothic;}}\n';
     b += '{\\colortbl;\\red0\\green0\\blue0;\\red90\\green90\\blue90;}\n';
     b += '\\paperw11906\\paperh16838\\margl1134\\margr1134\\margt1134\\margb1134\n';
     b += '\\f1\\fs20\n';
@@ -4438,7 +4665,8 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     selectedCellId: null,
     recommendation: null,   // 추천 결과 원본
     recEdited: false,       // 추천안을 사용자가 손봤는지
-    recStrategy: 'efficiency'   // 어떤 목적으로 고를지 (효율/약자/균형/즉시)
+    recStrategy: 'efficiency',  // 어떤 목적으로 고를지 (효율/약자/균형/즉시)
+    recRegion: null         // 추천 범위 읍면동 (null = 화성시 전체)
   };
 
   /* =====================================================================
@@ -4496,8 +4724,19 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       if (cellId) {
         S.selectedCellId = cellId;
         S.map.select(cellId);
-        C.toast('대시보드에서 <b>' + esc(cellId) + '</b> 격자를 가져왔습니다. 수단을 골라 지도를 클릭하세요.');
+        /* 특정 격자를 보러 온 사람의 질문은 "이 지역을 어떻게 고칠까"입니다.
+           추천 범위를 그 격자의 읍면동으로 기본 설정합니다(칩에서 전체로 전환 가능). */
+        var fromCell = S.map.cellById(cellId);
+        if (fromCell && fromCell.region) {
+          S.recRegion = fromCell.region;
+          S.map.zoomToRegion(fromCell.region);   /* 그 동이 화면을 채우게 확대 */
+          C.toast('대시보드에서 <b>' + esc(fromCell.region) + '</b>(' + esc(cellId) +
+            ') 격자를 가져왔습니다. AI 추천도 <b>' + esc(fromCell.region) + '</b> 범위로 짭니다.');
+        } else {
+          C.toast('대시보드에서 <b>' + esc(cellId) + '</b> 격자를 가져왔습니다. 수단을 골라 지도를 클릭하세요.');
+        }
       }
+      paintRecScope();
       return runSim();
     }).catch(fail);
   }
@@ -4547,8 +4786,10 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     inp.value = Math.round(S.budget / 100000000);
     inp.addEventListener('change', function () {
       var v = Math.max(0, Number(inp.value) || 0);
+      inp.value = v;                 /* 음수 입력이 화면에 남지 않게 클램프 값을 되씁니다 */
       S.budget = v * 100000000;
       paintBudget();
+      paintPolicy();                 /* '예산 초과' 판정도 새 한도로 다시 씁니다 */
     });
     $('#scenName').value = S.name;
     $('#scenName').addEventListener('input', function () { S.name = this.value || '이름 없는 시나리오'; });
@@ -4560,6 +4801,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
   function onCellClick(cell) {
     S.selectedCellId = cell.id;
     S.map.select(cell.id);
+    paintRecScope();   /* 선택한 격자의 동으로 추천 범위를 좁힐 수 있게 칩을 갱신 */
     if (!S.tool) {
       C.toast('먼저 상단에서 배치할 수단을 선택하세요.');
       return;
@@ -4609,7 +4851,14 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
    *   결과는 그대로 배치 목록에 들어가며, 사용자가 자유롭게 고칠 수 있습니다.
    * =================================================================== */
   function requestRecommendation(strategy) {
+    /* 수동 배치나 사용자가 고친 추천안이 있으면 확인 없이 지우지 않습니다 */
+    var manual = S.placements.some(function (p) { return !p.fromAI; });
+    if (S.placements.length && (manual || S.recEdited)) {
+      if (!confirm('현재 배치 ' + S.placements.length + '건이 추천안으로 교체됩니다. 계속할까요?')) return;
+    }
     if (strategy) S.recStrategy = strategy;
+    /* 동 범위에서 '지역 균형'(동별 1건 상한)은 성립하지 않습니다 */
+    if (S.recRegion && S.recStrategy === 'balance') S.recStrategy = 'efficiency';
     var btn = $('#btnRecommend');
     btn.disabled = true;
     btn.textContent = '계산 중…';
@@ -4619,10 +4868,21 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     api.recommend({
       period: S.period,
       budgetKrw: S.budget,
-      maxPlacements: 5,
+      maxPlacements: 10,
       strategy: S.recStrategy,
+      region: S.recRegion || undefined,   // 추천 범위 (없으면 화성시 전체)
       includeAlternatives: true    // 다른 목적으로 짜면 어떻게 되는지 함께
     }).then(function (rec) {
+      if (!rec.placements.length) {
+        /* 빈 추천으로 기존 작업을 덮지 않습니다 — 이전 상태를 그대로 복원 */
+        btn.disabled = false;
+        btn.innerHTML = '<i>✦</i>' + (S.recommendation ? '추천 다시 받기' : 'AI 추천 배치안');
+        paintRecBox();
+        C.toast(rec.summary && rec.summary.stoppedBecause === 'budget_too_small'
+          ? '예산이 최소 단가보다 작아 배치할 수 없습니다. 예산을 늘려 보세요.'
+          : '현재 예산·조건에서 추천할 배치가 없습니다. 예산을 늘려 보세요.', 'err', 5000);
+        return;
+      }
       S.recommendation = rec;
       S.recEdited = false;
       /* 기존 배치는 교체합니다 */
@@ -4634,12 +4894,11 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       });
       btn.disabled = false;
       btn.innerHTML = '<i>\u2726</i>추천 다시 받기';
-      if (!rec.placements.length) {
-        C.toast('현재 예산·조건에서 추천할 배치가 없습니다. 예산을 늘려 보세요.', 'err', 5000);
-      } else {
-        C.toast('<b>' + esc(rec.strategyLabel || '추천') + '</b> 기준으로 <b>' +
-          rec.placements.length + '건</b>을 짰습니다. 마음에 안 드는 항목은 지우셔도 됩니다.');
-      }
+      /* 동 범위 추천이면 그 동으로 확대해 어디에 뭘 놓았는지 바로 보이게 합니다 */
+      if (rec.region) S.map.zoomToRegion(rec.region);
+      else S.map.zoomReset();
+      C.toast('<b>' + esc(rec.strategyLabel || '추천') + '</b> 기준으로 <b>' +
+        rec.placements.length + '건</b>을 짰습니다. 마음에 안 드는 항목은 지우셔도 됩니다.');
       runSim();
     }).catch(function (err) {
       btn.disabled = false;
@@ -4649,6 +4908,29 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     });
   }
 
+  /* 추천 범위 칩 — 어느 범위로 추천할지 버튼 위에 항상 보여 줍니다.
+     대시보드에서 격자를 들고 넘어오면 그 읍면동이 기본값이 됩니다. */
+  function paintRecScope() {
+    var host = $('#recScope');
+    if (!host) return;
+    var selCell = (S.selectedCellId && S.map) ? S.map.cellById(S.selectedCellId) : null;
+    var selRegion = selCell ? selCell.region : null;
+    var h = '<span class="rs-lb">추천 범위</span>';
+    if (S.recRegion) {
+      h += '<b>' + esc(S.recRegion) + '</b>' +
+        '<button class="rs-btn" data-scope="all" type="button">화성시 전체로</button>';
+      if (selRegion && selRegion !== S.recRegion) {
+        h += '<button class="rs-btn" data-scope="region" type="button">' + esc(selRegion) + '만</button>';
+      }
+    } else {
+      h += '<b>화성시 전체</b>' +
+        (selRegion
+          ? '<button class="rs-btn" data-scope="region" type="button">' + esc(selRegion) + '만</button>'
+          : '');
+    }
+    host.innerHTML = h;
+  }
+
   function paintRecBox() {
     var box = $('#recBox');
     var rec = S.recommendation;
@@ -4656,6 +4938,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     var su = rec.summary;
     var reasonText = {
       budget_exhausted: '예산을 모두 소진해 중단',
+      budget_too_small: '예산이 최소 단가보다 작아 배치 불가',
       max_reached: '요청한 건수를 채워 중단',
       no_further_gain: '더 이상 개선 효과가 없어 중단',
       no_candidate: '조건에 맞는 후보가 없음'
@@ -4665,6 +4948,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       '<div class="rec-box">' +
       '<div class="rec-head"><span class="rec-badge">AI 추천</span>' +
       esc(rec.methodLabel) +
+      (rec.region ? '<span class="rec-scope-tag">' + esc(rec.region) + '</span>' : '') +
       (S.recEdited ? '<span class="rec-edited">사용자 수정됨</span>' : '') + '</div>' +
       '<div class="rec-nums">' +
       '<span><b>' + su.count + '</b>건</span>' +
@@ -4745,6 +5029,8 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
   }
 
   function resetAll() {
+    if (S.placements.length &&
+        !confirm('배치 ' + S.placements.length + '건을 모두 지웁니다. 되돌릴 수 없습니다. 계속할까요?')) return;
     S.placements = [];
     S.recommendation = null;
     S.recEdited = false;
@@ -4871,7 +5157,14 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     }
     $('#btnReset').disabled = false;
     $('#btnUndo').disabled = false;
-    host.innerHTML = '<ul class="plist">' + S.placements.map(function (p, i) {
+    /* 10건이 넘으면 스크롤 아래에 숨습니다 — 총량은 항상 위에 보여 줍니다 */
+    var totalCnt = S.placements.reduce(function (a, p) { return a + p.count; }, 0);
+    var totalKrw = S.placements.reduce(function (a, p) {
+      return a + ((S.effects[p.type] || {}).unitKrw || 0) * p.count;
+    }, 0);
+    host.innerHTML = '<div class="plist-head">배치 <b>' + totalCnt + '건</b> · 합계 <b>' +
+      esc(won(totalKrw)) + '</b></div>' +
+      '<ul class="plist">' + S.placements.map(function (p, i) {
       var e = S.effects[p.type] || {};
       var cell = S.map.cellById(p.cellId);
       return '<li' + (p.fromAI ? ' class="from-ai"' : '') + '><span class="ic">' + esc(e.icon || '●') + '</span>' +
@@ -5091,6 +5384,20 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
   function saveCurrent() {
     if (!S.result) return;
     var list = loadScenarios();
+    /* 같은 이름을 조용히 쌓으면 어느 카드가 최신인지 구분할 수 없습니다 */
+    var dup = -1;
+    list.forEach(function (s, idx) { if (dup < 0 && s.name === S.name) dup = idx; });
+    if (dup >= 0) {
+      if (!confirm('같은 이름 「' + S.name + '」 이(가) 이미 있습니다. 덮어쓸까요?')) {
+        C.toast('이름을 바꾼 뒤 다시 저장하세요.');
+        return;
+      }
+      list.splice(dup, 1);
+    }
+    if (list.length >= 12) {
+      C.toast('저장은 최대 12개입니다 — 가장 오래된 <b>' +
+        esc(list[list.length - 1].name) + '</b> 이(가) 삭제됩니다.', 'err', 5000);
+    }
     list.unshift({
       name: S.name,
       savedAt: C.nowStamp(),
@@ -5116,16 +5423,20 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       host.innerHTML = '<div class="empty">저장된 시나리오가 없습니다.<br>배치안을 만든 뒤 [시나리오 저장]을 누르세요.</div>';
       return;
     }
+    /* 삭제 버튼을 불러오기 버튼 안에 중첩하면(HTML 위반) 키보드로 삭제할 수 없습니다.
+       카드 = div, 불러오기·삭제 = 각각 실제 button 으로 분리합니다. */
     host.innerHTML = list.map(function (s, i) {
-      return '<button class="scen" data-load="' + i + '" type="button">' +
+      return '<div class="scen">' +
+        '<button class="sload" data-load="' + i + '" type="button" title="' + esc(s.name) + '">' +
         '<span class="snm">' + esc(s.name) + '</span>' +
-        '<span class="sdel" data-del="' + i + '" role="button" aria-label="삭제">×</span>' +
         '<span class="smeta"><span>' + esc(s.savedAt) + '</span>' +
         '<span>배치 ' + s.placements.length + '건</span>' +
         '<span>' + esc(won(s.summary.costKrw)) + '</span>' +
         '<span>' + (s.summary.needDelta < 0 ? '사각지대 −' + Math.abs(s.summary.needDelta) + '개' : '변화 없음') + '</span>' +
         (s.summary.krwPerTrip != null ? '<span>' + fmt(s.summary.krwPerTrip) + '원/통행</span>' : '') +
-        '</span></button>';
+        '</span></button>' +
+        '<button class="sdel" data-del="' + i + '" type="button" aria-label="시나리오 삭제">×</button>' +
+        '</div>';
     }).join('');
   }
 
@@ -5133,6 +5444,13 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     var list = loadScenarios();
     var s = list[i];
     if (!s) return;
+    if (S.placements.length &&
+        !confirm('불러오면 현재 배치 ' + S.placements.length + '건이 교체됩니다. 계속할까요?')) return;
+    /* 이전 추천 박스가 남으면 배치 목록과 안 맞습니다 — 추천 상태를 접습니다 */
+    S.recommendation = null;
+    S.recEdited = false;
+    var rbtn = $('#btnRecommend');
+    if (rbtn) rbtn.innerHTML = '<i>✦</i>AI 추천 배치안';
     S.name = s.name;
     S.period = s.period || S.period;
     S.budget = s.budgetKrw || S.budget;
@@ -5150,9 +5468,13 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
 
   function deleteScenario(i) {
     var list = loadScenarios();
+    var s = list[i];
+    if (!s) return;
+    if (!confirm('시나리오 「' + s.name + '」 을(를) 삭제할까요?')) return;
     list.splice(i, 1);
     saveScenarios(list);
     renderScenarioList();
+    C.toast('시나리오 <b>' + esc(s.name) + '</b> 을(를) 삭제했습니다.');
   }
 
   /* =====================================================================
@@ -5196,7 +5518,24 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       runSim();
     });
     $('#btnReset').addEventListener('click', resetAll);
-    $('#btnRecommend').addEventListener('click', requestRecommendation);
+    /* 직접 바인딩하면 MouseEvent 가 strategy 인자로 들어가 전략이 초기화됩니다 */
+    $('#btnRecommend').addEventListener('click', function () { requestRecommendation(); });
+
+    $('#recScope').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-scope]');
+      if (!b) return;
+      if (b.getAttribute('data-scope') === 'all') {
+        S.recRegion = null;
+      } else {
+        var c = S.selectedCellId ? S.map.cellById(S.selectedCellId) : null;
+        if (c && c.region) S.recRegion = c.region;
+      }
+      if (S.recRegion && S.recStrategy === 'balance') S.recStrategy = 'efficiency';
+      /* 범위 전환에 맞춰 지도도 따라갑니다 */
+      if (S.recRegion) S.map.zoomToRegion(S.recRegion);
+      else S.map.zoomReset();
+      paintRecScope();
+    });
     $('#btnSave').addEventListener('click', saveCurrent);
 
     $('#scenList').addEventListener('click', function (e) {
