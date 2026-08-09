@@ -81,6 +81,8 @@
     var url = CONFIG.url(buildPath(op.path, params));
     var headers = { 'Accept': op.binary ? 'application/octet-stream, application/json' : 'application/json' };
     if (body) headers['Content-Type'] = 'application/json';
+    /* ngrok 경고 페이지 우회 등 서버 주소에 따라 필요한 추가 헤더 (config.js) */
+    for (var hk in (CONFIG.EXTRA_HEADERS || {})) headers[hk] = CONFIG.EXTRA_HEADERS[hk];
     if (CONFIG.AUTH && CONFIG.AUTH.enabled) {
       var tk = typeof CONFIG.AUTH.getToken === 'function' ? CONFIG.AUTH.getToken() : CONFIG.AUTH.getToken;
       if (tk) headers[CONFIG.AUTH.header] = (CONFIG.AUTH.scheme ? CONFIG.AUTH.scheme + ' ' : '') + tk;
