@@ -31,9 +31,27 @@
    *     - 백엔드가 직접 서빙(/app)했을 때    → 같은 원점 (포트 그대로)
    *     - 개발 서버(예: :5500)로 서빙했을 때 → 같은 호스트의 :8000
    *
-   *   ⚠️ ngrok 무료 터널은 주소가 재시작마다 바뀝니다. 시연 직전에 갱신하세요.
+   *   ⚠️ 터널 주소를 여기에 적어 커밋하지 마세요.
+   *      ngrok 무료 터널은 재시작마다 주소가 바뀝니다. 커밋해 두면 그 순간
+   *      저장소를 클론한 모두가 죽은 주소를 보게 되고, 공개 저장소라면
+   *      살아 있는 동안 누구나 그 PC 로 접근할 수 있습니다.
+   *
+   *   시연 때는 코드를 고치지 말고 주소 뒤에 ?server= 를 붙이세요.
+   *      index.html?server=https://xxxx.ngrok-free.app
+   *   한 번 열면 브라우저에 기억되고, ?server= 만 붙이면 지워집니다.
    * ================================================================== */
-  var SERVER_URL = 'https://581f-218-145-154-236.ngrok-free.app';
+  var SERVER_URL = '';
+
+  /* URL 쿼리(?server=)로 덮어쓰기. 코드를 안 고치고 시연 대상을 바꾸기 위한 것.
+     값이 있으면 localStorage 에 기억하고, 빈 값(?server=)이면 지웁니다. */
+  try {
+    var _q = new URLSearchParams(location.search).get('server');
+    if (_q !== null) {
+      if (_q) { localStorage.setItem('hw.serverUrl', _q); }
+      else { localStorage.removeItem('hw.serverUrl'); }
+    }
+    SERVER_URL = SERVER_URL || localStorage.getItem('hw.serverUrl') || '';
+  } catch (e) { /* file:// 등에서 localStorage 가 막히면 자동 결정으로 간다 */ }
 
   var CONFIG = {
 

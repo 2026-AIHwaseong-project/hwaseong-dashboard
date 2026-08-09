@@ -424,22 +424,48 @@
     /* 3) 산출식·주석 시트 — 수치의 출처를 문서 안에 남깁니다 */
     var meta = draft.meta || {};
     var f = meta.formula || {};
+
+    /* 서버 meta.dataQuality 에서 출처 문장을 만든다. 없으면 폴백 문구를 쓴다. */
+    var dq = meta.dataQuality || {};
+    function dqOne(key, fallback) {
+      var e = dq[key];
+      if (!e) return fallback;
+      var lv = e.level === 'observed' ? '실측' : '추정';
+      var src = e.source || e.method || '';
+      return src ? lv + ' — ' + src : lv;
+    }
+    function dqList(fallback) {
+      var seen = {}, out = [];
+      Object.keys(dq).forEach(function (k) {
+        var s = dq[k] && dq[k].source;
+        if (s && !seen[s]) { seen[s] = 1; out.push(s); }
+      });
+      return out.length ? out.join(', ') : fallback;
+    }
+
     sheets.push({
       name: '산출식·주석',
       cols: [18, 92],
       rows: [
         ['항목', '내용'],
-        ['수요지수 D', f.demand || 'D = 0.5·정규화(교통카드 승하차) + 0.5·정규화(통신 유동인구)'],
+        ['수요지수 D', f.demand || 'D = 0.5·정규화(교통카드 승하차) + 0.5·정규화(연령가중 유동인구)'],
         ['공급지수 S', f.supply || 'S = 0.78·정규화(운행빈도) + 0.22·정류장 커버리지 + 배치효과'],
         ['미스매칭 MI', f.mismatch || (f.mi ? 'MI = ' + f.mi : 'MI = z(D) − z(S), 수요 규모로 가중 감쇠')],
         ['우선순위', f.priority || '우선순위 = MI⁺ × 수요규모 × (1 + 1.6·고령인구비)'],
         ['생성 모델', draft.model || '-'],
         ['생성 일시', draft.generatedAt || '-'],
-        ['데이터 출처', '교통카드빅데이터(STCIS), 통신사 유동인구, GBIS 노선·정류장, SGIS 격자 인구·읍면동 경계'],
-        ['행정경계', '실측 — SGIS 읍면동 경계'],
-        ['일별 승하차', '실측 — 교통카드빅데이터'],
-        ['시간대별 승하차', '추정 — 원자료에 시간대 정보가 없어 통신 유동인구 시간배율로 안분'],
-        ['시간대별 유동인구', '실측 — 통신사 유동인구'],
+        /* 출처는 서버 meta.dataQuality 를 쓴다. 하드코딩하면 안 되는 이유:
+           예전에 STCIS·통신사 유동인구로 적혀 있었는데 둘 다 실제로 안 쓰는
+           데이터다. STCIS 는 신청 리드타임 때문에 제외했고 통신사는 SKT 가
+           제공 불가 회신을 보냈다. 이 시트는 공문서로 나가므로 출처가 틀리면
+           심사에서 답할 수 없다. 서버 값이 없을 때만 실제 출처로 폴백한다. */
+        ['데이터 출처', dqList('경기데이터드림 정류소별 승하차, 경기도 분석갤러리 유동인구, '
+                            + 'GBIS 노선·배차, SGIS 격자 인구·읍면동 경계')],
+        ['행정경계', dqOne('boundary', '실측 — SGIS 읍면동 경계')],
+        ['일별 승하차', dqOne('boardingDaily', '실측 — 경기데이터드림 정류소별 승하차 인원 집계')],
+        ['시간대별 승하차', dqOne('boardingHourly',
+          '추정 — 원자료에 시간대 정보가 없어 유동인구 연령가중 시간배율로 안분')],
+        ['시간대별 유동인구', dqOne('flowHourly', '실측 — 경기도 분석갤러리 유동인구(화성시)')],
         ['사업비·내용연수', '가정값 — 실제 사업비 미확정. 확정 시 재산정 필요'],
         ['비용 비교 기준', (meta.costCompare && meta.costCompare.label)
           ? meta.costCompare.label + ' — ' + (meta.costCompare.note || '')
