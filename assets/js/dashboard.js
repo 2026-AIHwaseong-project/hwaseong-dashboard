@@ -57,7 +57,7 @@
         /* 정류장 위에 있는 격자도 선택되게 합니다.
            예전에는 정류장이 클릭을 가로채 그 격자를 고를 방법이 없었습니다. */
         onStopClick: function (stop, cell) {
-          selectStop(stop.id);
+          selectStop(stop.id, true);
           if (cell) selectCell(cell.id, false);
         }
       });
@@ -371,21 +371,48 @@
    * =================================================================== */
   var STC = { l: 44, r: 12, t: 26, b: 34, w: 640, h: 268 };
 
+  var refreshStopOptions = null;   // 검색어로 선택 목록을 다시 채웁니다 (selectStop 에서도 사용)
+
   function fillStopSelect() {
     var sel = $('#stopSelect');
-    sel.innerHTML = S.stops.slice().sort(function (a, b) {
+    var search = $('#stopSearch');
+    var sorted = S.stops.slice().sort(function (a, b) {
       return a.name.localeCompare(b.name, 'ko');
-    }).map(function (s) {
-      return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>';
-    }).join('');
-    sel.addEventListener('change', function () { selectStop(sel.value); });
+    });
+    refreshStopOptions = function (query) {
+      var q = (query || '').trim().toLowerCase();
+      var list = q ? sorted.filter(function (s) {
+        return s.name.toLowerCase().indexOf(q) >= 0;
+      }) : sorted;
+      sel.innerHTML = list.map(function (s) {
+        return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>';
+      }).join('');
+      if (!list.length) return;
+      var kept = list.some(function (s) { return s.id === S.selectedStopId; });
+      /* 검색 결과에 현재 선택이 없으면 첫 결과를 바로 보여줍니다 */
+      if (q && !kept) selectStop(list[0].id, true);
+      else if (S.selectedStopId) sel.value = S.selectedStopId;
+    };
+    refreshStopOptions('');
+    sel.addEventListener('change', function () { selectStop(sel.value, true); });
+    if (search) search.addEventListener('input', function () { refreshStopOptions(search.value); });
   }
 
-  function selectStop(stopId) {
+  /** focus 가 참이면 지도도 그 정류장이 화면 중심에 오게 이동합니다 (사용자 조작에서만) */
+  function selectStop(stopId, focus) {
     if (!stopId) return;
     S.selectedStopId = stopId;
-    $('#stopSelect').value = stopId;
+    var sel = $('#stopSelect');
+    sel.value = stopId;
+    /* 지도에서 클릭한 정류장이 검색으로 걸러져 있으면 검색을 풀어 목록에 보이게 합니다 */
+    if (sel.value !== stopId && refreshStopOptions) {
+      var search = $('#stopSearch');
+      if (search) search.value = '';
+      refreshStopOptions('');
+      sel.value = stopId;
+    }
     S.map.highlightStop(stopId);
+    if (focus && S.map.focusStop) S.map.focusStop(stopId);
     api.stopProfile(stopId, S.period).then(function (p) {
       S.profile = p;
       drawProfile(p);
@@ -486,7 +513,8 @@
   /* =====================================================================
    * 8. 선택 연동
    * =================================================================== */
-  function selectCell(cellId, linkStation) {
+  /** focus 가 참이면 지도도 해당 위치(가까운 정류장, 없으면 격자)로 중심 이동합니다 */
+  function selectCell(cellId, linkStation, focus) {
     S.selectedCellId = cellId;
     S.map.select(cellId);
     placeScatterRing();
@@ -496,7 +524,12 @@
       var simPage = (HW.CONFIG.PAGES && HW.CONFIG.PAGES.simulation) || 'simulation.html';
       $('#simLink').href = simPage + '?cell=' + encodeURIComponent(cellId) + '&period=' + encodeURIComponent(S.period);
       $('#simLink').style.display = '';
-      if (linkStation && c.nearestStopId && c.nearestStopId !== S.selectedStopId) selectStop(c.nearestStopId);
+      if (linkStation && c.nearestStopId) {
+        if (c.nearestStopId !== S.selectedStopId) selectStop(c.nearestStopId, focus);
+        else if (focus) S.map.focusStop(c.nearestStopId);
+      } else if (focus) {
+        S.map.focusCell(cellId);
+      }
     }
   }
 
@@ -546,7 +579,7 @@
 
     $('#t10').addEventListener('click', function (e) {
       var r = e.target.closest('[data-cell]');
-      if (r) selectCell(r.getAttribute('data-cell'), true);
+      if (r) selectCell(r.getAttribute('data-cell'), true, true);
     });
     $('#scatter').addEventListener('mousemove', function (e) {
       var d = e.target.closest('.dot');

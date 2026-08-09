@@ -222,6 +222,11 @@
       });
       state.stops.forEach(function (s) {
         var p = C.xy(s);
+        h += '<text class="stlab" x="' + p.x + '" y="' + p.y + '" dy="-1.1em" text-anchor="middle">' +
+          esc(s.name) + '</text>';
+      });
+      state.stops.forEach(function (s) {
+        var p = C.xy(s);
         h += '<circle class="sthit" data-stophit="' + esc(s.id) + '" cx="' + p.x + '" cy="' + p.y + '" r="11"><title>' +
           esc(s.name) + '</title></circle>';
       });
@@ -481,7 +486,7 @@
        SVG viewBox 를 조작합니다. 동탄처럼 면적이 작은 동은 전체 뷰에서
        배치 기호가 겹쳐 안 보입니다. 축척바는 지도 좌표계에 있어서
        확대해도 표시 거리(0─5km)가 그대로 맞습니다. */
-    var MIN_W = W / 8;                 // 최대 8배
+    var MIN_W = W / 24;                // 최대 24배
     var zoomAnim = null;
 
     function isZoomed() { return zoom.w < W - 0.5; }
@@ -489,6 +494,12 @@
     function applyZoom() {
       svg.setAttribute('viewBox', zoom.x.toFixed(1) + ' ' + zoom.y.toFixed(1) + ' ' +
         zoom.w.toFixed(1) + ' ' + zoom.h.toFixed(1));
+      /* --zk(배율)는 CSS 가 점·선·글자를 역스케일해 화면 크기를 유지하는 데 씁니다.
+         정류장 이름은 이름끼리 겹쳐 범벅이 되지 않도록 충분히 확대했을 때만
+         (.zdetail, 최대 24배의 약 70% 수준인 10배부터) 드러냅니다. */
+      var k = W / zoom.w;
+      svg.style.setProperty('--zk', k.toFixed(3));
+      svg.classList.toggle('zdetail', k >= 10);
       if (zctl) zctl.classList.toggle('zoomed', isZoomed());
     }
 
@@ -523,6 +534,26 @@
     }
 
     function zoomReset() { animateTo({ x: 0, y: 0, w: W, h: H }); }
+
+    /** (x,y)가 화면 중심에 오도록 이동합니다. 전체 뷰 상태면 4배로 당겨서 보여줍니다 */
+    function focusPoint(x, y) {
+      var w = isZoomed() ? zoom.w : W / 4;
+      animateTo(clampBox(x - w / 2, y - (w * H / W) / 2, w));
+    }
+
+    function focusStop(stopId) {
+      var s = findStop(stopId);
+      if (!s) return;
+      var p = C.xy(s);
+      focusPoint(p.x, p.y);
+    }
+
+    function focusCell(cellId) {
+      var c = state.byId[cellId];
+      if (!c) return;
+      var r = cellRect(c);
+      focusPoint(r.x + r.w / 2, r.y + r.h / 2);
+    }
 
     /** 해당 읍면동의 격자들이 화면을 채우도록 확대합니다 */
     function zoomToRegion(regionName) {
@@ -649,8 +680,10 @@
       cells: function () { return state.cells; },
       repaint: paint,
       defaultCellTip: defaultCellTip,
-      /** 읍면동으로 확대 / 전체 복귀 / 확대 여부 */
+      /** 읍면동으로 확대 / 정류장·격자 중심 이동 / 전체 복귀 / 확대 여부 */
       zoomToRegion: zoomToRegion,
+      focusStop: focusStop,
+      focusCell: focusCell,
       zoomReset: zoomReset,
       isZoomed: isZoomed
     };

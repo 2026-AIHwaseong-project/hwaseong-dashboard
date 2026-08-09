@@ -126,7 +126,11 @@
           <span><i style="background:var(--c-board)"></i>승차</span>
           <span><i style="background:var(--c-alight)"></i>하차</span>
         </div>
-        <select class="stsel" id="stopSelect" aria-label="정류장 선택"></select>
+        <div class="stpick">
+          <input class="stsearch" id="stopSearch" type="search" placeholder="🔍 정류장 검색"
+                 aria-label="정류장 이름 검색">
+          <select class="stsel" id="stopSelect" aria-label="정류장 선택"></select>
+        </div>
       </div>
       <svg id="stchart" class="chart" viewBox="0 0 640 268" role="img"
            aria-label="선택한 정류장의 시간대별 승차·하차 인원"></svg>

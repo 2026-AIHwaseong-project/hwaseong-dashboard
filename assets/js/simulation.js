@@ -97,7 +97,10 @@
         onCellHover: function (cell, ev) { C.showTip(cellTip(cell), ev); },
         /* 정류장을 눌러도 그 정류장이 놓인 격자에 배치됩니다.
            "이 정류장 증편하자"가 가장 자연스러운 동작인데 예전에는 무반응이었습니다. */
-        onStopClick: function (stop, cell) { if (cell) onCellClick(cell); }
+        onStopClick: function (stop, cell) {
+          S.map.focusStop(stop.id);
+          if (cell) onCellClick(cell);
+        }
       });
       return Promise.all([api.stops(), api.routes(), api.grid(S.period)]);
     }).then(function (r) {
