@@ -761,15 +761,20 @@
   function paintDeltaTable() {
     if (!S.result) return;
     $('#deltaTbl').innerHTML =
+      /* 평균 MI 열은 뺐습니다. 기준통계가 시간대별 z 라 평균이 항상 ≈0 인
+         항등식이어서 백엔드가 avgMi 를 응답에서 제거했고, 그대로 두면
+         p.delta.avgMi 가 undefined 라 toFixed 에서 터집니다.
+         대신 실제로 의미가 있는 고령 통행 증감을 보여줍니다. */
       '<tr><th>시간대</th><th>사각지대(전)</th><th>사각지대(후)</th><th>증감</th>' +
-      '<th>잠재수요(전)</th><th>잠재수요(후)</th><th>증감</th><th>평균 MI 변화</th></tr>' +
+      '<th>잠재수요(전)</th><th>잠재수요(후)</th><th>증감</th><th>고령 통행 증감</th></tr>' +
       S.result.periods.map(function (p) {
+        var eld = p.delta.elderlyTripsPerDay;
         return '<tr><td>' + esc(p.periodName) + '</td>' +
           '<td>' + fmt(p.baseline.needCells) + '</td><td>' + fmt(p.kpi.needCells) + '</td>' +
           '<td>' + (p.delta.needCells > 0 ? '+' : '') + p.delta.needCells + '</td>' +
           '<td>' + fmt(p.baseline.potentialTripsPerDay) + '</td><td>' + fmt(p.kpi.potentialTripsPerDay) + '</td>' +
           '<td>' + (p.delta.potentialTripsPerDay > 0 ? '+' : '') + fmt(p.delta.potentialTripsPerDay) + '</td>' +
-          '<td>' + (p.delta.avgMi > 0 ? '+' : '') + p.delta.avgMi.toFixed(3) + '</td></tr>';
+          '<td>' + (eld == null ? '—' : (eld > 0 ? '+' : '') + fmt(eld)) + '</td></tr>';
       }).join('');
   }
 
