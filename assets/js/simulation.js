@@ -43,6 +43,17 @@
     recRegion: null         // 추천 범위 읍면동 (null = 화성시 전체)
   };
 
+  /* 보고서·저장용 요약본. cellsByPeriod(786셀×4시간대, 약 1.7MB)를 떼어냅니다.
+     통째로 넘기면 AI 프롬프트가 모델 한도를 넘고 localStorage 도 금방 찹니다. */
+  function slimSimulation(res) {
+    if (!res) return null;
+    return {
+      id: res.id, name: res.name, createdAt: res.createdAt,
+      placements: res.placements, cost: res.cost, budgetKrw: res.budgetKrw,
+      periods: res.periods, effectiveness: res.effectiveness
+    };
+  }
+
   /* =====================================================================
    * 1. 부팅
    * =================================================================== */
@@ -57,7 +68,7 @@
         meta: S.meta,
         kpi: currentPeriodBlock() ? currentPeriodBlock().kpi : null,
         priorities: null,
-        simulation: S.result,
+        simulation: slimSimulation(S.result),
         recommendation: S.recommendation
           ? { placements: S.recommendation.placements, summary: S.recommendation.summary,
               methodLabel: S.recommendation.methodLabel, methodNote: S.recommendation.methodNote,
@@ -351,6 +362,32 @@
   function altTable(rec) {
     var alts = rec.alternatives;
     if (!alts || alts.length < 2) return '';
+    /* 실서버 대안에는 기대효과 수치가 없습니다(전략·건수·사업비만).
+       효과 열 없이 간이 표로 그리고, 전략 전환 탭 기능은 그대로 유지합니다. */
+    var hasEffect = alts.some(function (a) { return a.expectedResolvedTrips != null; });
+    if (!hasEffect) {
+      return '<div class="rec-alt">' +
+        '<div class="rec-alt-head">다른 목적으로 짜면' +
+          '<button class="help" data-help="strategy" type="button">?</button></div>' +
+        '<div class="rec-alt-wrap">' +
+        '<table class="rec-alt-tbl"><thead><tr>' +
+          '<th>목적</th><th>건수</th><th>사업비</th>' +
+        '</tr></thead><tbody>' +
+        alts.map(function (a) {
+          var mix = ['stop', 'drt', 'freq'].filter(function (k) { return a.mix && a.mix[k]; })
+            .map(function (k) { return TYPE_KO[k] + a.mix[k]; }).join('+') || '—';
+          return '<tr class="' + (a.selected ? 'is-on' : '') + '" data-strategy="' + a.strategy + '">' +
+            '<td><button class="rec-tab" type="button" data-strategy="' + a.strategy + '"' +
+              (a.selected ? ' aria-current="true"' : '') + '>' + esc(a.label) + '</button>' +
+              '<span class="rec-alt-sub">' + esc(mix) + '</span></td>' +
+            '<td>' + fmt(a.count) + '</td>' +
+            '<td>' + esc(won(a.totalKrw)) + '</td>' +
+            '</tr>';
+        }).join('') +
+        '</tbody></table></div>' +
+        '<div class="rec-note">' + esc((rec.strategyNote || '') + ' ' + (rec.strategyBasisNote || '')) + '</div>' +
+        '</div>';
+    }
     var best = alts.reduce(function (a, b) {
       return b.expectedResolvedTrips > a.expectedResolvedTrips ? b : a; });
     var bestOld = alts.reduce(function (a, b) {
@@ -429,7 +466,7 @@
       })
     }).then(function (res) {
       S.result = res;
-      try { localStorage.setItem(LS_LAST, JSON.stringify(res)); } catch (e) { /* 용량 초과 등 */ }
+      try { localStorage.setItem(LS_LAST, JSON.stringify(slimSimulation(res))); } catch (e) { /* 용량 초과 등 */ }
       S.busy = false;
       setRunning(false);
       paintAll();
@@ -939,11 +976,15 @@
     var costList = $('#costNote');
     if (costList && meta.effects) {
       costList.innerHTML = meta.effects.map(function (e) {
+        /* 실서버 meta.effects 에는 각주 문구가 없어 basis/lifeYears 로 파생합니다. */
+        var basisLabel = e.costBasisLabel ||
+          (e.basis === 'capital' ? '1회성 자본비(내용연수 ' + (e.lifeYears || 1) + '년)' :
+           e.basis === 'operating' ? '연간 운영비' : '');
         return '<span>' + esc(e.label) + ' <b>' + esc(won(e.unitKrw)) + '</b> ' +
-          '<i>' + esc(e.costBasisLabel || '') + '</i></span>';
+          '<i>' + esc(basisLabel) + '</i></span>';
       }).join('');
       /* 단가가 확정되지 않았으면 분명히 알립니다. 실제 사업비로 오해하면 안 됩니다. */
-      if (meta.effects.some(function (e) { return e.costAssumed; })) {
+      if (meta.effects.some(function (e) { return e.costAssumed; }) || HW.CONFIG.costIsAssumed()) {
         costList.innerHTML += '<span class="cost-assumed">' +
           '<span class="dq-badge">가정값</span>단가·내용연수 모두 미확정' +
           '<button class="help" data-help="assumedCost" type="button">?</button></span>';

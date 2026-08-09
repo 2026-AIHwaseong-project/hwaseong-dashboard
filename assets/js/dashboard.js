@@ -445,7 +445,13 @@
     $('#ss1').textContent = fmt(p.summary.boardingsPerDay) + '명';
     $('#ss2').textContent = fmt(p.summary.alightingsPerDay) + '명';
     $('#ss3').textContent = p.summary.peakSharePct + '%';
-    $('#ss4').textContent = p.routes.join(' · ') + '선';
+    /* 실서버 프로파일의 routes 는 노선ID 목록 — 노선번호로 바꿔 보여줍니다. */
+    var rn = {};
+    S.routes.forEach(function (r) { rn[r.id] = r.name || r.id; });
+    var rnames = (p.routes || []).map(function (id) { return rn[id] || id; });
+    $('#ss4').textContent = !rnames.length ? '—'
+      : rnames.length > 4 ? rnames.slice(0, 4).join(' · ') + ' 외 ' + (rnames.length - 4) + '개'
+      : rnames.join(' · ') + '선';
 
     /* 시간대 프로파일이 추정치면 눈에 띄게 알립니다.
        교통카드 원자료는 일자별 집계라 시간대 정보가 없어, 유동인구 배율로 안분한 값입니다.
@@ -591,8 +597,15 @@
 
   function renderFooter(meta) {
     var f = meta.formula || {};
-    $('#fxlist').innerHTML = [f.mismatch, f.demand, f.supply, f.priority]
-      .filter(Boolean).map(function (s) { return '<span>' + esc(s) + '</span>'; }).join('');
+    /* 실서버 meta 는 mismatch 대신 mi 키(수식만)를 씁니다. 표시용으로 이름을 붙입니다. */
+    var fx = f.mismatch
+      ? [f.mismatch, f.demand, f.supply, f.priority]
+      : [f.mi ? 'MI = ' + f.mi : null,
+         f.demand ? 'D = ' + f.demand : null,
+         f.supply ? 'S = ' + f.supply : null,
+         f.eldCoef != null ? '우선순위: 고령 가중 ×(1 + ' + f.eldCoef + '·고령비)' : null];
+    $('#fxlist').innerHTML = fx.filter(Boolean)
+      .map(function (s) { return '<span>' + esc(s) + '</span>'; }).join('');
     if (!meta.isMockData) {
       var d = $('#mockNote'); if (d) d.style.display = 'none';
       var badge = $('#mockBadge'); if (badge) badge.style.display = 'none';

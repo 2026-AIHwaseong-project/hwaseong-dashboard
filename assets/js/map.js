@@ -173,11 +173,26 @@
       renderPlacements();
     }
 
+    /* 셀의 px 사각형. 목 데이터는 x/y/w/h 를 들고 오고,
+       실서버 셀은 중심 경위도만 오므로 격자 실크기(m)로 직접 계산합니다. */
+    function cellRect(c) {
+      if (typeof c.x === 'number' && typeof c.w === 'number') {
+        return { x: c.x, y: c.y, w: c.w, h: c.h };
+      }
+      var km = ((meta.grid && meta.grid.sizeMeters) || 1000) / 1000;
+      var dLat = km / 110.574;
+      var dLon = km / (111.320 * Math.cos(((c.lat || 37)) * Math.PI / 180));
+      var p0 = C.project(c.lon - dLon / 2, c.lat + dLat / 2);   /* 좌상단 */
+      var p1 = C.project(c.lon + dLon / 2, c.lat - dLat / 2);   /* 우하단 */
+      return { x: p0.x + 0.4, y: p0.y + 0.4,
+               w: Math.max(2, p1.x - p0.x - 0.8), h: Math.max(2, p1.y - p0.y - 0.8) };
+    }
+
     function renderCells() {
       var h = '';
       state.cells.forEach(function (c) {
-        var p = C.xy(c);
-        h += '<rect x="' + p.x + '" y="' + p.y + '" width="' + (c.w || 20) + '" height="' + (c.h || 20) +
+        var r = cellRect(c);
+        h += '<rect x="' + r.x.toFixed(1) + '" y="' + r.y.toFixed(1) + '" width="' + r.w.toFixed(1) + '" height="' + r.h.toFixed(1) +
           '" rx="1.5" class="c m3" data-id="' + esc(c.id) + '"/>';
       });
       gCells.innerHTML = h;
@@ -324,7 +339,7 @@
       if (!state.selectedCellId) { gSelRing.setAttribute('visibility', 'hidden'); return; }
       var c = state.byId[state.selectedCellId];
       if (!c) { gSelRing.setAttribute('visibility', 'hidden'); return; }
-      var p = C.xy(c), cw = c.w || 20, ch = c.h || 20;
+      var r = cellRect(c), p = { x: r.x, y: r.y }, cw = r.w, ch = r.h;
       Array.prototype.forEach.call(gSelRing.children, function (r, i) {
         var pad = i === 0 ? 3 : 1.5;   // 바깥 링이 더 크게
         r.setAttribute('x', p.x - pad);
@@ -351,14 +366,14 @@
     /** 좌표가 들어 있는 격자를 찾습니다 (정류장 → 격자 매핑에 사용) */
     function cellAt(x, y) {
       for (var i = 0; i < state.cells.length; i++) {
-        var c = state.cells[i], p = C.xy(c);
-        if (x >= p.x && x <= p.x + (c.w || 20) && y >= p.y && y <= p.y + (c.h || 20)) return c;
+        var c = state.cells[i], r = cellRect(c);
+        if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return c;
       }
       /* 격자 사이 틈에 걸렸으면 가장 가까운 격자 */
       var best = null, bd = 1e9;
       state.cells.forEach(function (c) {
-        var p = C.xy(c);
-        var d = Math.hypot(x - (p.x + (c.w || 20) / 2), y - (p.y + (c.h || 20) / 2));
+        var r = cellRect(c);
+        var d = Math.hypot(x - (r.x + r.w / 2), y - (r.y + r.h / 2));
         if (d < bd) { bd = d; best = c; }
       });
       return bd < 30 ? best : null;
@@ -385,8 +400,8 @@
         var list = byCell[cellId];
         var c = state.byId[cellId];
         if (!c) return;
-        var q = C.xy(c);
-        var cx = q.x + (c.w || 20) / 2, cy = q.y + (c.h || 20) / 2;
+        var r = cellRect(c);
+        var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
         var offs = OFFSETS[Math.min(list.length, 3)] || OFFSETS[3];
         list.slice(0, 3).forEach(function (p, i) {
           var o = offs[i] || [0, 0];
@@ -434,8 +449,8 @@
       }
       var stop = findStop(s.getAttribute('data-stophit'));
       if (!stop) return;
-      C.showTip('<b>' + esc(stop.name) + '</b><br>경유 ' + stop.routes.join('·') +
-        '선 · 클릭하면 시간대 프로파일', e);
+      C.showTip('<b>' + esc(stop.name) + '</b><br>경유 ' + routeNames(stop.routes) +
+        ' · 클릭하면 시간대 프로파일', e);
     });
     svg.addEventListener('mouseleave', C.hideTip);
     svg.addEventListener('click', function (e) {
@@ -450,6 +465,16 @@
     function findStop(id) {
       for (var i = 0; i < state.stops.length; i++) if (state.stops[i].id === id) return state.stops[i];
       return null;
+    }
+
+    /* 실서버 stop.routes 는 노선ID 목록입니다. 화면에는 노선번호로 보여줍니다. */
+    function routeNames(ids) {
+      var by = {};
+      state.routes.forEach(function (r) { by[r.id] = r.name || r.id; });
+      var names = (ids || []).map(function (id) { return by[id] || id; });
+      if (!names.length) return '노선 정보 없음';
+      if (names.length > 5) return names.slice(0, 5).join('·') + ' 외 ' + (names.length - 5) + '개 노선';
+      return names.join('·') + '선';
     }
 
     /* ------------------------------------------------------ 확대·이동
@@ -504,9 +529,9 @@
       var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, n = 0;
       state.cells.forEach(function (c) {
         if (c.region !== regionName) return;
-        var p = C.xy(c);
-        x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y);
-        x1 = Math.max(x1, p.x + (c.w || 20)); y1 = Math.max(y1, p.y + (c.h || 20));
+        var r = cellRect(c);
+        x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y);
+        x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h);
         n++;
       });
       if (!n) return;
