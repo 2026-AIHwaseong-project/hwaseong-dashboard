@@ -211,6 +211,19 @@
       res.cost.breakdown = aggregateBreakdown(res.cost.breakdown);
     }
 
+    /* 서버 버전에 따라 delta 에 needCells·avgMi 가 빠져 오기도 한다.
+       kpi−baseline 으로 보충하지 않으면 상세 표의 .toFixed 가 undefined 로 죽는다. */
+    res.periods.forEach(function (blk) {
+      var k = blk.kpi || {}, b = blk.baseline || {};
+      blk.delta = blk.delta || {};
+      if (blk.delta.needCells == null && k.needCells != null && b.needCells != null) {
+        blk.delta.needCells = k.needCells - b.needCells;
+      }
+      if (blk.delta.avgMi == null && k.avgMi != null && b.avgMi != null) {
+        blk.delta.avgMi = +(k.avgMi - b.avgMi).toFixed(4);
+      }
+    });
+
     /* delta 에 통행량 키가 이미 있으면(목, 또는 서버가 자체 정합한 버전)
        KPI 보정은 건너뛴다 */
     var d0 = res.periods[0].delta;

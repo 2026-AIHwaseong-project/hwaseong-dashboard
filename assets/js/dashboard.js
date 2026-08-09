@@ -637,7 +637,9 @@
          f.demand ? 'D = ' + f.demand : null,
          f.supply ? 'S = ' + f.supply : null,
          f.eldCoef != null ? '우선순위: 고령 가중 ×(1 + ' + f.eldCoef + '·고령비)' : null];
-    $('#fxlist').innerHTML = fx.filter(Boolean)
+    /* 수식·출처 표기는 화면에서 뺐습니다 — 요소가 없으면 건너뜁니다 */
+    var fxHost = $('#fxlist');
+    if (fxHost) fxHost.innerHTML = fx.filter(Boolean)
       .map(function (s) { return '<span>' + esc(s) + '</span>'; }).join('');
     if (!meta.isMockData) {
       var d = $('#mockNote'); if (d) d.style.display = 'none';

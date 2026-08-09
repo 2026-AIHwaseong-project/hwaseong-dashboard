@@ -925,11 +925,6 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 
   <footer class="pg">
     <div class="dq" id="dataQuality"></div>
-    <div class="fx" id="fxlist"></div>
-    <div class="srcs">
-      <i>교통카드빅데이터 STCIS</i><i>통신사 유동인구</i><i>GBIS 노선·정류장</i><i>SGIS 격자 인구</i>
-      <span>← 실제 구현 시 연동 예정 데이터</span>
-    </div>
     <div class="dis" id="mockNote">
       본 화면은 제안용 UI 목업입니다. 지도 경계·격자·노선·정류장·모든 수치는 로직 시연을 위한
       <b>가상 예시 데이터</b>이며 실제 지리·운행 정보와 다릅니다.
@@ -973,9 +968,27 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
    *     - 백엔드가 직접 서빙(/app)했을 때    → 같은 원점 (포트 그대로)
    *     - 개발 서버(예: :5500)로 서빙했을 때 → 같은 호스트의 :8000
    *
-   *   ⚠️ ngrok 무료 터널은 주소가 재시작마다 바뀝니다. 시연 직전에 갱신하세요.
+   *   ⚠️ 터널 주소를 여기에 적어 커밋하지 마세요.
+   *      ngrok 무료 터널은 재시작마다 주소가 바뀝니다. 커밋해 두면 그 순간
+   *      저장소를 클론한 모두가 죽은 주소를 보게 되고, 공개 저장소라면
+   *      살아 있는 동안 누구나 그 PC 로 접근할 수 있습니다.
+   *
+   *   시연 때는 코드를 고치지 말고 주소 뒤에 ?server= 를 붙이세요.
+   *      index.html?server=https://xxxx.ngrok-free.app
+   *   한 번 열면 브라우저에 기억되고, ?server= 만 붙이면 지워집니다.
    * ================================================================== */
-  var SERVER_URL = 'https://581f-218-145-154-236.ngrok-free.app';
+  var SERVER_URL = 'https://581f-218-145-154-236.ngrok-free.app/';
+
+  /* URL 쿼리(?server=)로 덮어쓰기. 코드를 안 고치고 시연 대상을 바꾸기 위한 것.
+     값이 있으면 localStorage 에 기억하고, 빈 값(?server=)이면 지웁니다. */
+  try {
+    var _q = new URLSearchParams(location.search).get('server');
+    if (_q !== null) {
+      if (_q) { localStorage.setItem('hw.serverUrl', _q); }
+      else { localStorage.removeItem('hw.serverUrl'); }
+    }
+    SERVER_URL = SERVER_URL || localStorage.getItem('hw.serverUrl') || '';
+  } catch (e) { /* file:// 등에서 localStorage 가 막히면 자동 결정으로 간다 */ }
 
   var CONFIG = {
 
@@ -1451,7 +1464,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     },
     demand: {
       t: '수요지수 D',
-      d: '교통카드 실제 승하차와 통신 유동인구를 절반씩 반영해 0~100으로 환산한 값입니다. ' +
+      d: '교통카드 실제 승하차와 유동인구를 절반씩 반영해 0~100으로 환산한 값입니다. ' +
          '버스가 없어서 발생하지 못한 통행까지 잡아내기 위해 유동인구를 함께 봅니다.'
     },
     supply: {
@@ -1472,7 +1485,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     },
     potential: {
       t: '잠재수요',
-      d: '통신사 유동인구로 추정한 이동 총량입니다. ' +
+      d: '경기도 유동인구 통계로 추정한 이동 총량입니다. ' +
          '실제 버스 이용 실적이 아니라 <b>버스가 있었다면 발생했을 통행</b>까지 포함한 값이라, ' +
          '사각지대 규모를 가늠하는 데 씁니다.'
     },
@@ -1494,7 +1507,7 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     estimated: {
       t: '추정치 (실측 아님)',
       d: '교통카드 원자료는 <b>일자별 집계</b>라 시간대 정보가 없습니다. ' +
-         '시간대별 승하차는 통신 유동인구의 시간배율로 안분해 채운 <b>추정치</b>입니다. ' +
+         '시간대별 승하차는 유동인구의 연령가중 시간배율로 안분해 채운 <b>추정치</b>입니다. ' +
          '하루 총량은 실측이지만, 시간대별 배분은 추정입니다. ' +
          '시간대별 지표를 해석할 때 이 점을 감안하십시오.'
     },
@@ -3243,11 +3256,34 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
 
   function adaptSimulation(res) {
     if (!res || !res.periods || !res.periods.length) return Promise.resolve(res);
-    /* 목 응답 판별: delta 에 통행량 키가 이미 있으면 완전한 스키마 */
+
+    /* 서버 breakdown 은 배치 건별 1행(cellId 포함)이라 수단별로 집계한다.
+       같은 수단을 여러 격자에 놓으면 비용 차트에 같은 라벨 막대가 반복된다.
+       목 응답은 이미 수단별(cellId 없음)이라 그대로 통과. KPI delta 보정과
+       별개로, 서버가 delta 를 채워 보내는 버전에서도 집계는 필요하다. */
+    if (res.cost && res.cost.breakdown &&
+        res.cost.breakdown.some(function (b) { return b.cellId != null; })) {
+      res.cost.breakdown = aggregateBreakdown(res.cost.breakdown);
+    }
+
+    /* 서버 버전에 따라 delta 에 needCells·avgMi 가 빠져 오기도 한다.
+       kpi−baseline 으로 보충하지 않으면 상세 표의 .toFixed 가 undefined 로 죽는다. */
+    res.periods.forEach(function (blk) {
+      var k = blk.kpi || {}, b = blk.baseline || {};
+      blk.delta = blk.delta || {};
+      if (blk.delta.needCells == null && k.needCells != null && b.needCells != null) {
+        blk.delta.needCells = k.needCells - b.needCells;
+      }
+      if (blk.delta.avgMi == null && k.avgMi != null && b.avgMi != null) {
+        blk.delta.avgMi = +(k.avgMi - b.avgMi).toFixed(4);
+      }
+    });
+
+    /* delta 에 통행량 키가 이미 있으면(목, 또는 서버가 자체 정합한 버전)
+       KPI 보정은 건너뛴다 */
     var d0 = res.periods[0].delta;
     if (d0 && d0.potentialTripsPerDay != null) return Promise.resolve(res);
 
-    if (res.cost) res.cost.breakdown = aggregateBreakdown(res.cost.breakdown);
     return baselineKpis().then(function (base) {
       res.periods.forEach(function (blk) {
         var cells = res.cellsByPeriod ? res.cellsByPeriod[blk.period] : null;
@@ -3271,8 +3307,12 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     });
   }
 
+  /* 추천 응답 보정 — "전부 아니면 통과"가 아니라 **빠진 키만** 보충합니다.
+     서버가 summary 등을 자체 구현해 나가는 중이라(버전에 따라 채워진 정도가
+     다름), 있는 값은 서버 것을 그대로 쓰고 없는 것만 파생값으로 채웁니다.
+     목 응답은 처음부터 완전해서 전 항목이 그대로 통과합니다. */
   function adaptRecommendation(rec, body) {
-    if (!rec || rec.summary) return Promise.resolve(rec);   /* 목 응답은 그대로 */
+    if (!rec) return Promise.resolve(rec);
     var period = (body && body.period) || rec.period || 'am';
     var maxN = (body && body.maxPlacements) || 10;
     var simP = (rec.simulation && rec.simulation.periods)
@@ -3281,52 +3321,66 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
       var sim = r[0], meta = r[1];
       var blk = null;
       if (sim) sim.periods.forEach(function (p) { if (p.period === period) blk = p; });
-      var units = (meta.effects || []).map(function (e) { return e.unitKrw; });
-      var minUnit = units.length ? Math.min.apply(null, units) : 42000000;
 
       var count = (rec.placements || []).length;
       var used = rec.usedKrw != null ? rec.usedKrw
         : (rec.placements || []).reduce(function (a, p) { return a + (p.costKrw || 0); }, 0);
       var budget = rec.budgetKrw != null ? rec.budgetKrw : ((body && body.budgetKrw) || 0);
-      var remaining = rec.remainingKrw != null ? rec.remainingKrw : budget - used;
 
-      var stopped;
-      if (!count) stopped = budget < minUnit ? 'budget_too_small' : 'no_candidate';
-      else if (count >= maxN) stopped = 'max_reached';
-      else if (remaining < minUnit) stopped = 'budget_exhausted';
-      else stopped = 'no_further_gain';
+      /* ── summary: 없으면 전체 생성, 있으면 빠진 키만 보충 ── */
+      if (!rec.summary) {
+        var units = (meta.effects || []).map(function (e) { return e.unitKrw; });
+        var minUnit = units.length ? Math.min.apply(null, units) : 42000000;
+        var remaining = rec.remainingKrw != null ? rec.remainingKrw : budget - used;
+        var stopped;
+        if (!count) stopped = budget < minUnit ? 'budget_too_small' : 'no_candidate';
+        else if (count >= maxN) stopped = 'max_reached';
+        else if (remaining < minUnit) stopped = 'budget_exhausted';
+        else stopped = 'no_further_gain';
+        rec.summary = {
+          count: count,
+          totalKrw: used,
+          budgetKrw: budget,
+          budgetUsedPct: budget > 0 ? +(100 * used / budget).toFixed(1) : 0,
+          krwPerTrip: (sim && sim.effectiveness) ? sim.effectiveness.krwPerTripPerDay : null,
+          stoppedBecause: stopped,
+          /* 서버 그리디는 총사업비 1원당 개선량으로 순위를 매깁니다 */
+          costCompareLabel: '총사업비 기준',
+          costCompareNote: '예산 한도와 같은 기준(총사업비)으로 비교했습니다. '
+            + '똑버스·증편은 이듬해에도 같은 예산이 필요합니다.'
+        };
+      }
+      var su = rec.summary;
+      if (su.expectedResolvedCells == null) {
+        su.expectedResolvedCells = blk ? Math.max(0, -(blk.delta.needCells || 0)) : 0;
+      }
+      if (su.expectedResolvedTrips == null) {
+        su.expectedResolvedTrips = blk ? Math.max(0, -(blk.delta.potentialTripsPerDay || 0)) : 0;
+      }
+      if (su.expectedResolvedElderlyTrips == null) {
+        su.expectedResolvedElderlyTrips = blk ? Math.max(0, -(blk.delta.elderlyTripsPerDay || 0)) : 0;
+      }
 
-      rec.summary = {
-        count: count,
-        totalKrw: used,
-        budgetKrw: budget,
-        budgetUsedPct: budget > 0 ? +(100 * used / budget).toFixed(1) : 0,
-        expectedResolvedCells: blk ? Math.max(0, -(blk.delta.needCells || 0)) : 0,
-        expectedResolvedTrips: blk ? Math.max(0, -(blk.delta.potentialTripsPerDay || 0)) : 0,
-        expectedResolvedElderlyTrips: blk ? Math.max(0, -(blk.delta.elderlyTripsPerDay || 0)) : 0,
-        krwPerTrip: (sim && sim.effectiveness) ? sim.effectiveness.krwPerTripPerDay : null,
-        stoppedBecause: stopped,
-        /* 서버 그리디는 총사업비 1원당 개선량으로 순위를 매깁니다 */
-        costCompareLabel: '총사업비 기준',
-        costCompareNote: '예산 한도와 같은 기준(총사업비)으로 비교했습니다. '
-          + '똑버스·증편은 이듬해에도 같은 예산이 필요합니다.'
-      };
-      rec.methodLabel = '예산 제약 하 한계효과 최대화';
-      rec.methodNote = rec.note || '';
-      rec.strategyNote = rec.note || '';
-      rec.strategyBasisNote = '';
-      rec.region = (body && body.region) || null;
+      if (rec.methodLabel == null) rec.methodLabel = '예산 제약 하 한계효과 최대화';
+      if (rec.methodNote == null) rec.methodNote = rec.note || '';
+      if (rec.strategyNote == null) rec.strategyNote = rec.note || '';
+      if (rec.strategyBasisNote == null) rec.strategyBasisNote = '';
+      if (rec.region === undefined) rec.region = (body && body.region) || null;
       /* 배치를 AI 가 고른다고 오해하면 검증 단계에서 그대로 지적당합니다 */
-      rec.producedBy = {
-        placements: '최적화 알고리즘 (예산 제약 하 그리디)',
-        narrative: 'AI (보고서 생성 시)',
-        deterministic: true,
-        deterministicNote: '같은 조건이면 항상 같은 결과가 나옵니다. '
-          + '다른 안이 필요하면 난수가 아니라 전략(목적)을 바꿉니다.'
-      };
+      if (!rec.producedBy) {
+        rec.producedBy = {
+          placements: '최적화 알고리즘 (예산 제약 하 그리디)',
+          narrative: 'AI (보고서 생성 시)',
+          deterministic: true,
+          deterministicNote: '같은 조건이면 항상 같은 결과가 나옵니다. '
+            + '다른 안이 필요하면 난수가 아니라 전략(목적)을 바꿉니다.'
+        };
+      }
 
-      /* 대안 비교표 — 선택 전략을 포함해 전략 순서대로 */
-      if (rec.alternatives) {
+      /* ── 대안 비교표: 서버는 선택 전략을 빼고 주므로, selected 행이
+         없으면 현재 추천을 추가하고 전략 순서대로 정렬 ── */
+      if (rec.alternatives && rec.alternatives.length &&
+          !rec.alternatives.some(function (a) { return a.selected; })) {
         var mix = { stop: 0, drt: 0, freq: 0 };
         (rec.placements || []).forEach(function (p) { if (mix[p.type] != null) mix[p.type]++; });
         var all = rec.alternatives.map(function (a) {
@@ -4548,22 +4602,48 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
     /* 3) 산출식·주석 시트 — 수치의 출처를 문서 안에 남깁니다 */
     var meta = draft.meta || {};
     var f = meta.formula || {};
+
+    /* 서버 meta.dataQuality 에서 출처 문장을 만든다. 없으면 폴백 문구를 쓴다. */
+    var dq = meta.dataQuality || {};
+    function dqOne(key, fallback) {
+      var e = dq[key];
+      if (!e) return fallback;
+      var lv = e.level === 'observed' ? '실측' : '추정';
+      var src = e.source || e.method || '';
+      return src ? lv + ' — ' + src : lv;
+    }
+    function dqList(fallback) {
+      var seen = {}, out = [];
+      Object.keys(dq).forEach(function (k) {
+        var s = dq[k] && dq[k].source;
+        if (s && !seen[s]) { seen[s] = 1; out.push(s); }
+      });
+      return out.length ? out.join(', ') : fallback;
+    }
+
     sheets.push({
       name: '산출식·주석',
       cols: [18, 92],
       rows: [
         ['항목', '내용'],
-        ['수요지수 D', f.demand || 'D = 0.5·정규화(교통카드 승하차) + 0.5·정규화(통신 유동인구)'],
+        ['수요지수 D', f.demand || 'D = 0.5·정규화(교통카드 승하차) + 0.5·정규화(연령가중 유동인구)'],
         ['공급지수 S', f.supply || 'S = 0.78·정규화(운행빈도) + 0.22·정류장 커버리지 + 배치효과'],
         ['미스매칭 MI', f.mismatch || (f.mi ? 'MI = ' + f.mi : 'MI = z(D) − z(S), 수요 규모로 가중 감쇠')],
         ['우선순위', f.priority || '우선순위 = MI⁺ × 수요규모 × (1 + 1.6·고령인구비)'],
         ['생성 모델', draft.model || '-'],
         ['생성 일시', draft.generatedAt || '-'],
-        ['데이터 출처', '교통카드빅데이터(STCIS), 통신사 유동인구, GBIS 노선·정류장, SGIS 격자 인구·읍면동 경계'],
-        ['행정경계', '실측 — SGIS 읍면동 경계'],
-        ['일별 승하차', '실측 — 교통카드빅데이터'],
-        ['시간대별 승하차', '추정 — 원자료에 시간대 정보가 없어 통신 유동인구 시간배율로 안분'],
-        ['시간대별 유동인구', '실측 — 통신사 유동인구'],
+        /* 출처는 서버 meta.dataQuality 를 쓴다. 하드코딩하면 안 되는 이유:
+           예전에 STCIS·통신사 유동인구로 적혀 있었는데 둘 다 실제로 안 쓰는
+           데이터다. STCIS 는 신청 리드타임 때문에 제외했고 통신사는 SKT 가
+           제공 불가 회신을 보냈다. 이 시트는 공문서로 나가므로 출처가 틀리면
+           심사에서 답할 수 없다. 서버 값이 없을 때만 실제 출처로 폴백한다. */
+        ['데이터 출처', dqList('경기데이터드림 정류소별 승하차, 경기도 분석갤러리 유동인구, '
+                            + 'GBIS 노선·배차, SGIS 격자 인구·읍면동 경계')],
+        ['행정경계', dqOne('boundary', '실측 — SGIS 읍면동 경계')],
+        ['일별 승하차', dqOne('boardingDaily', '실측 — 경기데이터드림 정류소별 승하차 인원 집계')],
+        ['시간대별 승하차', dqOne('boardingHourly',
+          '추정 — 원자료에 시간대 정보가 없어 유동인구 연령가중 시간배율로 안분')],
+        ['시간대별 유동인구', dqOne('flowHourly', '실측 — 경기도 분석갤러리 유동인구(화성시)')],
         ['사업비·내용연수', '가정값 — 실제 사업비 미확정. 확정 시 재산정 필요'],
         ['비용 비교 기준', (meta.costCompare && meta.costCompare.label)
           ? meta.costCompare.label + ' — ' + (meta.costCompare.note || '')
@@ -5489,7 +5569,9 @@ HW.CONFIG.APP.buildNote = "단일 파일 버전 (오프라인·목 데이터)";
          f.demand ? 'D = ' + f.demand : null,
          f.supply ? 'S = ' + f.supply : null,
          f.eldCoef != null ? '우선순위: 고령 가중 ×(1 + ' + f.eldCoef + '·고령비)' : null];
-    $('#fxlist').innerHTML = fx.filter(Boolean)
+    /* 수식·출처 표기는 화면에서 뺐습니다 — 요소가 없으면 건너뜁니다 */
+    var fxHost = $('#fxlist');
+    if (fxHost) fxHost.innerHTML = fx.filter(Boolean)
       .map(function (s) { return '<span>' + esc(s) + '</span>'; }).join('');
     if (!meta.isMockData) {
       var d = $('#mockNote'); if (d) d.style.display = 'none';

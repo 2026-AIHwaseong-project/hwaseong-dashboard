@@ -760,6 +760,11 @@
 
   function paintDeltaTable() {
     if (!S.result) return;
+    /* 서버가 증감 값을 안 채워 보내는 경우가 있어 없는 값은 '–' 로 표시합니다 */
+    function sgn(v, digits) {
+      if (typeof v !== 'number' || !isFinite(v)) return '–';
+      return (v > 0 ? '+' : '') + (digits != null ? v.toFixed(digits) : fmt(v));
+    }
     $('#deltaTbl').innerHTML =
       /* 평균 MI 열은 뺐습니다. 기준통계가 시간대별 z 라 평균이 항상 ≈0 인
          항등식이어서 백엔드가 avgMi 를 응답에서 제거했고, 그대로 두면
@@ -768,23 +773,23 @@
       '<tr><th>시간대</th><th>사각지대(전)</th><th>사각지대(후)</th><th>증감</th>' +
       '<th>잠재수요(전)</th><th>잠재수요(후)</th><th>증감</th><th>고령 통행 증감</th></tr>' +
       S.result.periods.map(function (p) {
-        var eld = p.delta.elderlyTripsPerDay;
+        var d = p.delta || {};
         return '<tr><td>' + esc(p.periodName) + '</td>' +
           '<td>' + fmt(p.baseline.needCells) + '</td><td>' + fmt(p.kpi.needCells) + '</td>' +
-          '<td>' + (p.delta.needCells > 0 ? '+' : '') + p.delta.needCells + '</td>' +
+          '<td>' + sgn(d.needCells) + '</td>' +
           '<td>' + fmt(p.baseline.potentialTripsPerDay) + '</td><td>' + fmt(p.kpi.potentialTripsPerDay) + '</td>' +
-          '<td>' + (p.delta.potentialTripsPerDay > 0 ? '+' : '') + fmt(p.delta.potentialTripsPerDay) + '</td>' +
-          '<td>' + (eld == null ? '—' : (eld > 0 ? '+' : '') + fmt(eld)) + '</td></tr>';
+          '<td>' + sgn(d.potentialTripsPerDay) + '</td>' +
+          '<td>' + sgn(d.elderlyTripsPerDay) + '</td></tr>';
       }).join('');
   }
 
   function cellTip(c) {
     var e = S.tool ? S.effects[S.tool] : null;
     var hint = e ? '<br><span class="mono" style="color:var(--sel)">클릭 → ' + esc(e.label) + ' 배치 (반경 ' + e.radiusKm + 'km)</span>' : '';
+    var mi = typeof c.mi === 'number' ? (c.mi >= 0 ? '+' : '') + c.mi.toFixed(2) : '–';
     return '<b>' + esc(c.name) + '</b> <span class="mono">' + esc(c.id) + '</span><br>' +
-      '수요 D <b>' + c.demand + '</b> · 공급 S <b>' + c.supply + '</b> · MI <b>' +
-      (c.mi >= 0 ? '+' : '') + c.mi.toFixed(2) + '</b><br>' +
-      '잠재수요 ' + fmt(c.flowTripsPerDay) + '통행/일 · 고령비 ' + Math.round(c.elderlyRatio * 100) + '%' +
+      '수요 D <b>' + c.demand + '</b> · 공급 S <b>' + c.supply + '</b> · MI <b>' + mi + '</b><br>' +
+      '잠재수요 ' + fmt(c.flowTripsPerDay) + '통행/일 · 고령비 ' + Math.round((c.elderlyRatio || 0) * 100) + '%' +
       (c.adjusted ? '<br><span class="mono" style="color:var(--sel)">배치 효과 반영됨</span>' : '') + hint;
   }
 
