@@ -201,11 +201,21 @@
 
   function adaptSimulation(res) {
     if (!res || !res.periods || !res.periods.length) return Promise.resolve(res);
-    /* 목 응답 판별: delta 에 통행량 키가 이미 있으면 완전한 스키마 */
+
+    /* 서버 breakdown 은 배치 건별 1행(cellId 포함)이라 수단별로 집계한다.
+       같은 수단을 여러 격자에 놓으면 비용 차트에 같은 라벨 막대가 반복된다.
+       목 응답은 이미 수단별(cellId 없음)이라 그대로 통과. KPI delta 보정과
+       별개로, 서버가 delta 를 채워 보내는 버전에서도 집계는 필요하다. */
+    if (res.cost && res.cost.breakdown &&
+        res.cost.breakdown.some(function (b) { return b.cellId != null; })) {
+      res.cost.breakdown = aggregateBreakdown(res.cost.breakdown);
+    }
+
+    /* delta 에 통행량 키가 이미 있으면(목, 또는 서버가 자체 정합한 버전)
+       KPI 보정은 건너뛴다 */
     var d0 = res.periods[0].delta;
     if (d0 && d0.potentialTripsPerDay != null) return Promise.resolve(res);
 
-    if (res.cost) res.cost.breakdown = aggregateBreakdown(res.cost.breakdown);
     return baselineKpis().then(function (base) {
       res.periods.forEach(function (blk) {
         var cells = res.cellsByPeriod ? res.cellsByPeriod[blk.period] : null;
@@ -229,8 +239,12 @@
     });
   }
 
+  /* 추천 응답 보정 — "전부 아니면 통과"가 아니라 **빠진 키만** 보충합니다.
+     서버가 summary 등을 자체 구현해 나가는 중이라(버전에 따라 채워진 정도가
+     다름), 있는 값은 서버 것을 그대로 쓰고 없는 것만 파생값으로 채웁니다.
+     목 응답은 처음부터 완전해서 전 항목이 그대로 통과합니다. */
   function adaptRecommendation(rec, body) {
-    if (!rec || rec.summary) return Promise.resolve(rec);   /* 목 응답은 그대로 */
+    if (!rec) return Promise.resolve(rec);
     var period = (body && body.period) || rec.period || 'am';
     var maxN = (body && body.maxPlacements) || 10;
     var simP = (rec.simulation && rec.simulation.periods)
@@ -239,52 +253,66 @@
       var sim = r[0], meta = r[1];
       var blk = null;
       if (sim) sim.periods.forEach(function (p) { if (p.period === period) blk = p; });
-      var units = (meta.effects || []).map(function (e) { return e.unitKrw; });
-      var minUnit = units.length ? Math.min.apply(null, units) : 42000000;
 
       var count = (rec.placements || []).length;
       var used = rec.usedKrw != null ? rec.usedKrw
         : (rec.placements || []).reduce(function (a, p) { return a + (p.costKrw || 0); }, 0);
       var budget = rec.budgetKrw != null ? rec.budgetKrw : ((body && body.budgetKrw) || 0);
-      var remaining = rec.remainingKrw != null ? rec.remainingKrw : budget - used;
 
-      var stopped;
-      if (!count) stopped = budget < minUnit ? 'budget_too_small' : 'no_candidate';
-      else if (count >= maxN) stopped = 'max_reached';
-      else if (remaining < minUnit) stopped = 'budget_exhausted';
-      else stopped = 'no_further_gain';
+      /* ── summary: 없으면 전체 생성, 있으면 빠진 키만 보충 ── */
+      if (!rec.summary) {
+        var units = (meta.effects || []).map(function (e) { return e.unitKrw; });
+        var minUnit = units.length ? Math.min.apply(null, units) : 42000000;
+        var remaining = rec.remainingKrw != null ? rec.remainingKrw : budget - used;
+        var stopped;
+        if (!count) stopped = budget < minUnit ? 'budget_too_small' : 'no_candidate';
+        else if (count >= maxN) stopped = 'max_reached';
+        else if (remaining < minUnit) stopped = 'budget_exhausted';
+        else stopped = 'no_further_gain';
+        rec.summary = {
+          count: count,
+          totalKrw: used,
+          budgetKrw: budget,
+          budgetUsedPct: budget > 0 ? +(100 * used / budget).toFixed(1) : 0,
+          krwPerTrip: (sim && sim.effectiveness) ? sim.effectiveness.krwPerTripPerDay : null,
+          stoppedBecause: stopped,
+          /* 서버 그리디는 총사업비 1원당 개선량으로 순위를 매깁니다 */
+          costCompareLabel: '총사업비 기준',
+          costCompareNote: '예산 한도와 같은 기준(총사업비)으로 비교했습니다. '
+            + '똑버스·증편은 이듬해에도 같은 예산이 필요합니다.'
+        };
+      }
+      var su = rec.summary;
+      if (su.expectedResolvedCells == null) {
+        su.expectedResolvedCells = blk ? Math.max(0, -(blk.delta.needCells || 0)) : 0;
+      }
+      if (su.expectedResolvedTrips == null) {
+        su.expectedResolvedTrips = blk ? Math.max(0, -(blk.delta.potentialTripsPerDay || 0)) : 0;
+      }
+      if (su.expectedResolvedElderlyTrips == null) {
+        su.expectedResolvedElderlyTrips = blk ? Math.max(0, -(blk.delta.elderlyTripsPerDay || 0)) : 0;
+      }
 
-      rec.summary = {
-        count: count,
-        totalKrw: used,
-        budgetKrw: budget,
-        budgetUsedPct: budget > 0 ? +(100 * used / budget).toFixed(1) : 0,
-        expectedResolvedCells: blk ? Math.max(0, -(blk.delta.needCells || 0)) : 0,
-        expectedResolvedTrips: blk ? Math.max(0, -(blk.delta.potentialTripsPerDay || 0)) : 0,
-        expectedResolvedElderlyTrips: blk ? Math.max(0, -(blk.delta.elderlyTripsPerDay || 0)) : 0,
-        krwPerTrip: (sim && sim.effectiveness) ? sim.effectiveness.krwPerTripPerDay : null,
-        stoppedBecause: stopped,
-        /* 서버 그리디는 총사업비 1원당 개선량으로 순위를 매깁니다 */
-        costCompareLabel: '총사업비 기준',
-        costCompareNote: '예산 한도와 같은 기준(총사업비)으로 비교했습니다. '
-          + '똑버스·증편은 이듬해에도 같은 예산이 필요합니다.'
-      };
-      rec.methodLabel = '예산 제약 하 한계효과 최대화';
-      rec.methodNote = rec.note || '';
-      rec.strategyNote = rec.note || '';
-      rec.strategyBasisNote = '';
-      rec.region = (body && body.region) || null;
+      if (rec.methodLabel == null) rec.methodLabel = '예산 제약 하 한계효과 최대화';
+      if (rec.methodNote == null) rec.methodNote = rec.note || '';
+      if (rec.strategyNote == null) rec.strategyNote = rec.note || '';
+      if (rec.strategyBasisNote == null) rec.strategyBasisNote = '';
+      if (rec.region === undefined) rec.region = (body && body.region) || null;
       /* 배치를 AI 가 고른다고 오해하면 검증 단계에서 그대로 지적당합니다 */
-      rec.producedBy = {
-        placements: '최적화 알고리즘 (예산 제약 하 그리디)',
-        narrative: 'AI (보고서 생성 시)',
-        deterministic: true,
-        deterministicNote: '같은 조건이면 항상 같은 결과가 나옵니다. '
-          + '다른 안이 필요하면 난수가 아니라 전략(목적)을 바꿉니다.'
-      };
+      if (!rec.producedBy) {
+        rec.producedBy = {
+          placements: '최적화 알고리즘 (예산 제약 하 그리디)',
+          narrative: 'AI (보고서 생성 시)',
+          deterministic: true,
+          deterministicNote: '같은 조건이면 항상 같은 결과가 나옵니다. '
+            + '다른 안이 필요하면 난수가 아니라 전략(목적)을 바꿉니다.'
+        };
+      }
 
-      /* 대안 비교표 — 선택 전략을 포함해 전략 순서대로 */
-      if (rec.alternatives) {
+      /* ── 대안 비교표: 서버는 선택 전략을 빼고 주므로, selected 행이
+         없으면 현재 추천을 추가하고 전략 순서대로 정렬 ── */
+      if (rec.alternatives && rec.alternatives.length &&
+          !rec.alternatives.some(function (a) { return a.selected; })) {
         var mix = { stop: 0, drt: 0, freq: 0 };
         (rec.placements || []).forEach(function (p) { if (mix[p.type] != null) mix[p.type]++; });
         var all = rec.alternatives.map(function (a) {
