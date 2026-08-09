@@ -173,8 +173,8 @@
       renderPlacements();
     }
 
-    /* 셀의 px 사각형. 목 데이터는 x/y/w/h 를 들고 오고,
-       실서버 셀은 중심 경위도만 오므로 격자 실크기(m)로 직접 계산합니다. */
+    /* 셀의 px 사각형. 셀이 x/y/w/h(px)를 직접 들고 오면 그대로 쓰고,
+       서버 셀처럼 중심 경위도만 오면 격자 실크기(m)로 계산합니다. */
     function cellRect(c) {
       if (typeof c.x === 'number' && typeof c.w === 'number') {
         return { x: c.x, y: c.y, w: c.w, h: c.h };
@@ -359,7 +359,7 @@
       state.selectedStopId = stopId;
       var stop = null;
       state.stops.forEach(function (s) { if (s.id === stopId) stop = s; });
-      var routeIds = stop ? stop.routes : [];
+      var routeIds = (stop && stop.routes) || [];
       Array.prototype.forEach.call(gRoutes.querySelectorAll('.rt'), function (r) {
         r.classList.toggle('on', routeIds.indexOf(r.getAttribute('data-route')) >= 0);
       });
@@ -618,7 +618,7 @@
       if (panMoved) { e.stopPropagation(); panMoved = false; }
     }, true);
 
-    /* 확대 버튼 — 우상단에는 나침반·가상수치 배지가 있어 좌상단에 둡니다 */
+    /* 확대 버튼 — 우상단에는 나침반이 있어 좌상단에 둡니다 */
     var zctl = null;
     if (svg.parentNode && global.document) {
       zctl = global.document.createElement('div');
@@ -638,10 +638,11 @@
     }
 
     function defaultCellTip(c) {
+      var mi = typeof c.mi === 'number' ? (c.mi >= 0 ? '+' : '') + c.mi.toFixed(2) : '–';
       return '<b>' + esc(c.name) + '</b> <span class="mono">' + esc(c.id) + '</span><br>' +
-        '수요 D <b>' + c.demand + '</b> · 공급 S <b>' + c.supply + '</b> · MI <b>' +
-        (c.mi >= 0 ? '+' : '') + c.mi.toFixed(2) + '</b><br>' +
-        '잠재수요 ' + C.fmt(c.flowTripsPerDay) + '통행/일 · 고령비 <b>' + Math.round(c.elderlyRatio * 100) + '%</b>';
+        '수요 D <b>' + c.demand + '</b> · 공급 S <b>' + c.supply + '</b> · MI <b>' + mi + '</b><br>' +
+        '잠재수요 ' + C.fmt(c.flowTripsPerDay) + '통행/일 · 고령비 <b>' +
+        Math.round((c.elderlyRatio || 0) * 100) + '%</b>';
     }
 
     /* --------------------------------------------------------- 공개 */

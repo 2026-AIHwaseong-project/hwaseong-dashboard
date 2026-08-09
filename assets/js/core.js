@@ -2,7 +2,7 @@
  *  core.js — 공용 유틸리티 · UI 헬퍼 · 좌표 투영
  * ----------------------------------------------------------------------------
  *  화면 로직이 공통으로 쓰는 것들만 모았습니다. 도메인 계산(MI 산출 등)은
- *  여기 없습니다. 그건 서버(또는 목 모드에서는 mock.js)의 책임입니다.
+ *  여기 없습니다. 그건 서버의 책임입니다.
  * ========================================================================= */
 (function (global) {
   'use strict';
@@ -39,16 +39,6 @@
     var s = v > 0 ? '+' : v < 0 ? '−' : '';
     var arrow = !useArrow ? '' : (v > 0 ? '▲ ' : v < 0 ? '▼ ' : '');
     return arrow + s + fmt(Math.abs(v)) + (unit || '');
-  }
-
-  /* 결정론적 난수 — 새로고침해도 같은 값이 나오도록 */
-  function mulberry32(a) {
-    return function () {
-      a |= 0; a = a + 0x6D2B79F5 | 0;
-      var t = Math.imul(a ^ a >>> 15, 1 | a);
-      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
   }
 
   /* --------------------------------------------------------------- 날짜 */
@@ -275,7 +265,7 @@
     },
     potential: {
       t: '잠재수요',
-      d: '경기도 유동인구 통계로 추정한 이동 총량입니다. ' +
+      d: 'SGIS 격자 거주인구에 통행 원단위(1인당 하루 버스통행 0.25회 가정)를 곱해 추정한 이동 총량입니다. ' +
          '실제 버스 이용 실적이 아니라 <b>버스가 있었다면 발생했을 통행</b>까지 포함한 값이라, ' +
          '사각지대 규모를 가늠하는 데 씁니다.'
     },
@@ -316,15 +306,13 @@
          '있으니 순위도 같은 자로 재야 하기 때문입니다.<br><br>' +
          '다만 총사업비는 <b>1년차 관점</b>입니다. 정류장은 한 번 지으면 끝이지만 ' +
          '똑버스·배차 증편은 이듬해에도 같은 예산이 필요합니다. 다년도로 비교하면 ' +
-         '정류장 비중이 더 커집니다.<br><br>' +
-         '기준을 연환산으로 바꾸려면 config.js 의 <b>COST.compareBasis</b> 를 ' +
-         "'annual' 로 두면 됩니다."
+         '정류장 비중이 더 커집니다.'
     },
     assumedCost: {
       t: '가정값 사업비',
-      d: '정류장·똑버스·증편 단가와 내용연수는 아직 확정되지 않은 <b>시연용 가정값</b>입니다. ' +
-         '실제 사업비가 확정되면 <b>config.js</b> 의 COST 를 바꾸고 confirmed 를 true 로 두면 ' +
-         '이 표시가 사라집니다.'
+      d: '정류장·똑버스·증편 단가와 내용연수는 아직 확정되지 않은 <b>가정값</b>입니다. ' +
+         '실제 사업비가 확정되면 서버 설정에 반영해 재산정해야 하며, 그 전까지는 ' +
+         '이 표시가 유지됩니다.'
     },
     baseline: {
       t: '기준선',
@@ -371,8 +359,7 @@
     ];
     host.innerHTML =
       '<div class="tn-in">' +
-      '<div class="brand"><i></i>' + esc(app.name || '') +
-      (app.isMockData ? '<span>MOCK DATA</span>' : '') + '</div>' +
+      '<div class="brand"><i></i>' + esc(app.name || '') + '</div>' +
       '<nav class="navlinks" aria-label="주요 화면">' +
       links.map(function (l) {
         return '<a href="' + l.href + '"' + (l.id === current ? ' aria-current="page"' : '') + '>' + esc(l.label) + '</a>';
@@ -389,7 +376,6 @@
     $: $, $$: $$, el: el, esc: esc,
     HELP: HELP, wireHelp: wireHelp,
     clamp: clamp, fmt: fmt, fmt1: fmt1, pct: pct, won: won, delta: delta,
-    mulberry32: mulberry32,
     todayISO: todayISO, nowStamp: nowStamp, korDate: korDate,
     setProjection: setProjection, fitHeight: fitHeight, project: project, xy: xy,
     showTip: showTip, hideTip: hideTip, toast: toast,

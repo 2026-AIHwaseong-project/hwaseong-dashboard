@@ -3,11 +3,10 @@
  * ----------------------------------------------------------------------------
  *  화면 코드(dashboard.js / simulation.js / report.js)는 절대 fetch 를 직접
  *  호출하지 않습니다. 전부 이 파일의 HW.api.* 를 지나갑니다.
- *  덕분에 백엔드 연동은 config.js 의 값 두 개만 바꾸면 끝납니다.
  *
- *  ┌ 화면 ┐   ┌ api.js ┐   USE_MOCK=true  → mock.js (브라우저 안)
- *  │      │──▶│ 라우팅 │──▶
- *  └──────┘   └────────┘   USE_MOCK=false → fetch(BASE_URL + 경로)
+ *  ┌ 화면 ┐   ┌ api.js ┐
+ *  │      │──▶│ 라우팅 │──▶ fetch(BASE_URL + 경로)  — 백엔드 FastAPI
+ *  └──────┘   └────────┘
  *
  *  오퍼레이션 ID ↔ HTTP 경로 대응은 아래 OPS 표에 한눈에 정리돼 있습니다.
  *  같은 표가 docs/API.md 에도 있습니다.
@@ -48,10 +47,6 @@
       qs.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
     }
     return path + (qs.length ? '?' + qs.join('&') : '');
-  }
-
-  function delay(ms) {
-    return new Promise(function (res) { setTimeout(res, ms); });
   }
 
   /* ------------------------------------------------------------- 오류 */
@@ -121,22 +116,10 @@
     });
   }
 
-  /* ---------------------------------------------------------- 목 호출 */
-  function mockCall(opId, params, body) {
-    var lat = CONFIG.MOCK_LATENCY_MS || 0;
-    return delay(lat).then(function () {
-      return HW.mock.handle(opId, params, body);
-    });
-  }
-
   /* ------------------------------------------------------------ 진입점 */
   function call(opId, params, body, opts) {
     var op = OPS[opId];
     if (!op) return Promise.reject(ApiError('정의되지 않은 오퍼레이션: ' + opId, 0, opId));
-    if (CONFIG.useMock(opId)) {
-      if (!HW.mock) return Promise.reject(ApiError('mock.js 가 로드되지 않았습니다.', 0, opId));
-      return mockCall(opId, params, body);
-    }
     return httpCall(op, opId, params, body, opts);
   }
 
@@ -160,7 +143,6 @@
    *    서버 kpi 의 잠재수요는 전체 격자 합이라 라벨·대시보드와 안 맞습니다.
    *  - 비용 breakdown 을 수단별로 집계합니다(서버는 배치 건별 1행).
    *  - 추천: summary·대안 목록 등 화면 필드를 서버 값에서 파생합니다.
-   * 목 응답은 이미 완전한 스키마라 그대로 통과시킵니다.
    * =================================================================== */
   function needKpiOf(cells) {
     var trips = 0, eld = 0;
@@ -204,8 +186,7 @@
 
     /* 서버 breakdown 은 배치 건별 1행(cellId 포함)이라 수단별로 집계한다.
        같은 수단을 여러 격자에 놓으면 비용 차트에 같은 라벨 막대가 반복된다.
-       목 응답은 이미 수단별(cellId 없음)이라 그대로 통과. KPI delta 보정과
-       별개로, 서버가 delta 를 채워 보내는 버전에서도 집계는 필요하다. */
+       KPI delta 보정과 별개로, 서버가 delta 를 채워 보내는 버전에서도 집계는 필요하다. */
     if (res.cost && res.cost.breakdown &&
         res.cost.breakdown.some(function (b) { return b.cellId != null; })) {
       res.cost.breakdown = aggregateBreakdown(res.cost.breakdown);
@@ -224,8 +205,7 @@
       }
     });
 
-    /* delta 에 통행량 키가 이미 있으면(목, 또는 서버가 자체 정합한 버전)
-       KPI 보정은 건너뛴다 */
+    /* delta 에 통행량 키가 이미 있으면(서버가 자체 정합한 버전) KPI 보정은 건너뛴다 */
     var d0 = res.periods[0].delta;
     if (d0 && d0.potentialTripsPerDay != null) return Promise.resolve(res);
 
@@ -254,8 +234,7 @@
 
   /* 추천 응답 보정 — "전부 아니면 통과"가 아니라 **빠진 키만** 보충합니다.
      서버가 summary 등을 자체 구현해 나가는 중이라(버전에 따라 채워진 정도가
-     다름), 있는 값은 서버 것을 그대로 쓰고 없는 것만 파생값으로 채웁니다.
-     목 응답은 처음부터 완전해서 전 항목이 그대로 통과합니다. */
+     다름), 있는 값은 서버 것을 그대로 쓰고 없는 것만 파생값으로 채웁니다. */
   function adaptRecommendation(rec, body) {
     if (!rec) return Promise.resolve(rec);
     var period = (body && body.period) || rec.period || 'am';

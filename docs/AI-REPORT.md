@@ -267,7 +267,7 @@ const draft = res.parsed_output!;
 | 더 빠르게 하고 싶다 | `output_config.effort` 를 `"medium"` 또는 `"low"` 로 |
 | 비용을 줄이고 싶다 | ① 시스템 프롬프트 캐싱 유지 ② `effort` 낮추기 ③ 같은 입력이면 결과 캐시 |
 | 캐시가 안 먹는 것 같다 | 응답의 `usage.cache_read_input_tokens` 확인. 0이면 시스템 프롬프트에 매번 바뀌는 값(날짜 등)이 섞인 것 |
-| 데모 중 API 장애 | `config.js` 의 `ENDPOINT_OVERRIDES: { 'reports.draft': true }` 로 그 경로만 목으로 되돌릴 수 있습니다 |
+| 데모 중 API 장애 | 서버가 AI 키 부재·호출 실패 시 규칙 기반 초안으로 자동 폴백합니다 (isAiGenerated:false). 목 데이터로의 전환 경로는 없습니다 |
 
 동일 입력에 대한 캐시 예시:
 

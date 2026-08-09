@@ -128,7 +128,7 @@ svg text{font-family:inherit}
 .wrap{max-width:1340px;margin:0 auto;padding:14px 18px 30px}
 
 /* 상단 전역 내비게이션 */
-.topnav{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--bg) 92%,transparent);
+.topnav{position:sticky;top:0;z-index:30;background:var(--bg);background:color-mix(in srgb,var(--bg) 92%,transparent);
   backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
 .topnav .tn-in{max-width:1340px;margin:0 auto;padding:8px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
@@ -145,8 +145,6 @@ svg text{font-family:inherit}
 header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin:8px 0 14px}
 .eyebrow{font-family:"Cascadia Code",Consolas,ui-monospace,monospace;font-size:10.5px;letter-spacing:.14em;color:var(--ink3);margin:0 0 6px}
 h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balance}
-h1 .badge{display:inline-block;vertical-align:3px;margin-left:10px;font-size:10.5px;font-weight:600;letter-spacing:.06em;
-  color:var(--ink3);border:1px solid var(--line);border-radius:999px;padding:2px 9px}
 .sub{margin:5px 0 0;color:var(--ink2);font-size:13px;max-width:70ch}
 
 .periods{display:flex;gap:4px;border:1px solid var(--line);border-radius:10px;padding:4px;background:var(--card)}
@@ -218,8 +216,6 @@ h1 .badge{display:inline-block;vertical-align:3px;margin-left:10px;font-size:10.
 .legendbar .lg-note{width:100%;font-size:10.5px;color:var(--sel);display:flex;align-items:center;gap:5px}
 .legendbar .sw-elig{display:inline-block;width:10px;height:10px;border-radius:2px;
   border:1.2px solid var(--sel);background:var(--selbg)}
-.mock{position:absolute;right:12px;top:12px;font-size:10px;letter-spacing:.08em;color:var(--ink3);
-  border:1px solid var(--line);background:color-mix(in srgb,var(--card) 82%,transparent);border-radius:999px;padding:3px 9px}
 
 .wtr{fill:var(--water)}
 .land{fill:var(--land);stroke:var(--coast);stroke-width:1.2;stroke-linejoin:round}
@@ -337,7 +333,7 @@ h1 .badge{display:inline-block;vertical-align:3px;margin-left:10px;font-size:10.
 
 /* --------------------------------- 8. 시뮬레이터 · 시나리오 빌더 */
 .simbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 14px 10px;padding:8px 10px;
-  border:1px solid var(--line);border-radius:9px;background:color-mix(in srgb,var(--selbg) 45%,transparent)}
+  border:1px solid var(--line);border-radius:9px;background:var(--selbg);background:color-mix(in srgb,var(--selbg) 45%,transparent)}
 .simbar .sl{font-size:11px;color:var(--ink3);letter-spacing:.02em;margin-right:2px}
 .simtool{font-size:11.5px;padding:4px 11px;border:1px solid var(--line);border-radius:999px;color:var(--ink2);
   background:var(--card);display:inline-flex;align-items:center;gap:5px}
@@ -449,7 +445,7 @@ h1 .badge{display:inline-block;vertical-align:3px;margin-left:10px;font-size:10.
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}}
 .errbox{border:1px solid var(--bad);border-radius:9px;padding:12px 14px;font-size:12.5px;color:var(--bad);
-  background:color-mix(in srgb,var(--bad) 8%,transparent);line-height:1.6}
+  background:var(--card);background:color-mix(in srgb,var(--bad) 8%,transparent);line-height:1.6}
 
 /* 토스트 */
 .toasts{position:fixed;right:16px;bottom:16px;z-index:90;display:flex;flex-direction:column;gap:8px}
@@ -471,7 +467,7 @@ td{padding:3.5px 8px;text-align:right;border-bottom:1px solid var(--grid);color:
 td:nth-child(1),td:nth-child(2){text-align:left}
 td:first-child{font-family:Consolas,ui-monospace,monospace;color:var(--ink3)}
 
-.tt{position:fixed;z-index:70;pointer-events:none;background:color-mix(in srgb,var(--card) 96%,transparent);
+.tt{position:fixed;z-index:70;pointer-events:none;background:var(--card);background:color-mix(in srgb,var(--card) 96%,transparent);
   border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:11.5px;color:var(--ink2);
   box-shadow:var(--shadow);display:none;max-width:250px;line-height:1.45}
 .tt b{color:var(--ink);font-size:12px}
@@ -598,7 +594,7 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
   font-size:10.5px;color:var(--ink3);line-height:1.6}
 
 /* 배치 목록에서 추천 항목 구분 */
-.plist li.from-ai{border-color:var(--sel);background:color-mix(in srgb,var(--selbg) 55%,var(--bg))}
+.plist li.from-ai{border-color:var(--sel);background:var(--selbg);background:color-mix(in srgb,var(--selbg) 55%,var(--bg))}
 .plist .ai-tag{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:600;
   border-radius:999px;padding:1px 7px;background:var(--sel);color:#fff;vertical-align:1px}
 .plist .why{display:block;margin-top:3px;font-size:10.5px;line-height:1.5;
@@ -748,11 +744,11 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
  * [26] 지도 확대·이동 컨트롤
  *   동 단위 추천처럼 좁은 지역은 전체 뷰에서 배치 기호가 겹쳐 안 보입니다.
  *   휠 줌·드래그 이동은 map.js 가 처리하고, 여기는 버튼과 커서만 담당합니다.
- *   우상단에는 나침반·가상수치 배지가 있어 버튼은 좌상단에 둡니다.
+ *   우상단에는 나침반이 있어 버튼은 좌상단에 둡니다.
  * ======================================================================== */
 .zctl{position:absolute;left:10px;top:10px;display:flex;flex-direction:column;gap:4px;z-index:5}
 .zctl button{width:26px;height:26px;border:1px solid var(--line);border-radius:7px;
-  background:color-mix(in srgb,var(--card) 92%,transparent);color:var(--ink2);
+  background:var(--card);background:color-mix(in srgb,var(--card) 92%,transparent);color:var(--ink2);
   font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center}
 .zctl button:hover{border-color:var(--sel);color:var(--ink)}
 .zctl [data-z="reset"]{display:none;width:auto;height:22px;padding:0 7px;font-size:10.5px}

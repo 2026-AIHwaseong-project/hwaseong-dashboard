@@ -406,8 +406,9 @@
 
     /* 2) 표들 */
     (draft.tables || []).forEach(function (t) {
-      var r = [t.columns.slice()].concat(t.rows.map(function (row) {
-        return row.map(function (v) {
+      var cols = t.columns || [];
+      var r = [cols.slice()].concat((t.rows || []).map(function (row) {
+        return (row || []).map(function (v) {
           if (typeof v === 'number') return v;
           /* "1,234" 처럼 콤마가 들어간 숫자는 엑셀에서 숫자로 쓰이도록 되돌립니다 */
           if (typeof v === 'string' && /^-?[\d,]+$/.test(v) && v.replace(/,/g, '').length < 15) {
@@ -417,7 +418,7 @@
           return v;
         });
       }));
-      var widths = t.columns.map(function (c, i) { return i < 2 ? 14 : 12; });
+      var widths = cols.map(function (c, i) { return i < 2 ? 14 : 12; });
       sheets.push({ name: t.title, cols: widths, rows: r, headerRows: 1 });
     });
 
@@ -574,6 +575,10 @@
     ['[data-dl-xlsx]', '[data-dl-hwp]', '[data-copy]', '[data-regen]'].forEach(function (sel) {
       C.$(sel, m).disabled = busy || (sel !== '[data-regen]' && !currentDraft);
     });
+    /* 생성 중 체크박스를 토글하면 재요청이 겹쳐 낡은 초안이 남을 수 있습니다.
+       시뮬레이션이 없어 원래 비활성인 상태(data-nosim)는 그대로 둡니다. */
+    var chk = C.$('[data-incl-sim]', m);
+    if (chk) chk.disabled = busy || chk.getAttribute('data-nosim') === '1';
   }
 
   function renderDraft(draft) {
@@ -597,10 +602,12 @@
     });
 
     (draft.tables || []).forEach(function (t) {
+      /* AI 가 columns/rows 를 빠뜨린 표가 와도 미리보기 전체가 죽지 않게 */
+      var cols = t.columns || [], trs = t.rows || [];
       h += '<p class="dcap">[' + esc(t.title) + ']</p><div class="tblwrap" style="padding:0"><table>' +
-        '<tr>' + t.columns.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr>' +
-        t.rows.map(function (r) {
-          return '<tr>' + r.map(function (v) { return '<td>' + esc(v) + '</td>'; }).join('') + '</tr>';
+        '<tr>' + cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr>' +
+        trs.map(function (r) {
+          return '<tr>' + (r || []).map(function (v) { return '<td>' + esc(v) + '</td>'; }).join('') + '</tr>';
         }).join('') + '</table></div>';
     });
 
@@ -664,11 +671,16 @@
       });
   }
 
+  /* '다시 생성'을 연달아 누르거나 생성 중 체크박스가 바뀌어 요청이 겹치면,
+     늦게 도착한 옛 응답이 최신 초안을 덮을 수 있습니다. 마지막 요청만 반영합니다. */
+  var genSeq = 0;
+
   function generate() {
     var m = ensureModal();
     var body = C.$('[data-body]', m);
     var ctx = contextProvider ? contextProvider() : {};
     var inclSim = C.$('[data-incl-sim]', m).checked;
+    var seq = ++genSeq;
 
     currentDraft = null;
     setBusy(true, '생성 중…');
@@ -693,8 +705,12 @@
     };
 
     HW.api.draftReport(payload).then(function (draft) {
+      if (seq !== genSeq) return;   /* 그사이 새 생성 요청이 나갔으면 버립니다 */
       draft.meta = draft.meta || {};
       if (ctx.meta && ctx.meta.formula) draft.meta.formula = ctx.meta.formula;
+      if (ctx.meta && ctx.meta.dataQuality && !draft.meta.dataQuality) {
+        draft.meta.dataQuality = ctx.meta.dataQuality;   /* 출처 시트를 서버 값으로 */
+      }
       currentDraft = draft;
       renderDraft(draft);
       setBusy(false, '');
@@ -703,6 +719,7 @@
           ? '엑셀은 .xlsx, 한글은 .rtf(한컴오피스에서 열림)로 저장됩니다.'
           : '서버에서 파일을 생성합니다.');
     }).catch(function (err) {
+      if (seq !== genSeq) return;
       setBusy(false, '');
       body.innerHTML = '<div class="errbox"><b>보고서 초안을 생성하지 못했습니다.</b><br>' +
         esc(HW.api.humanize(err)) + '</div>';
@@ -714,6 +731,7 @@
     var ctx = contextProvider ? contextProvider() : {};
     var chk = C.$('[data-incl-sim]', m);
     var hasSim = !!(ctx && ctx.simulation);
+    chk.setAttribute('data-nosim', hasSim ? '0' : '1');
     chk.disabled = !hasSim;
     chk.checked = hasSim;
     chk.parentNode.style.opacity = hasSim ? '1' : '.45';

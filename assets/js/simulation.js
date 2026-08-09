@@ -82,6 +82,10 @@
 
     api.meta().then(function (meta) {
       S.meta = meta;
+      /* URL 의 ?period= 가 엉뚱한 값이면 탭·KPI·지도가 서로 다른 시간대를
+         보게 됩니다. 메타에 없는 값은 첫 시간대로 되돌립니다. */
+      var valid = (meta.periods || []).some(function (p) { return p.id === S.period; });
+      if (!valid) S.period = (meta.periods && meta.periods[0] && meta.periods[0].id) || 'am';
       S.budget = (meta.cost && meta.cost.defaultBudget) || 0;
       (meta.effects || []).forEach(function (e) { S.effects[e.type] = e; });
       renderPeriodTabs(meta.periods);
@@ -140,6 +144,12 @@
     C.toast('오류 — ' + esc(api.humanize(err)), 'err', 7000);
   }
 
+  /** 이후 요청이 성공하면 에러 배너를 접습니다 */
+  function clearFail() {
+    var box = $('#bootError');
+    if (box) box.style.display = 'none';
+  }
+
   /* =====================================================================
    * 2. 상단 컨트롤
    * =================================================================== */
@@ -178,6 +188,9 @@
       S.budget = v * 100000000;
       paintBudget();
       paintPolicy();                 /* '예산 초과' 판정도 새 한도로 다시 씁니다 */
+      /* 서버 결과(저장본·보고서 컨텍스트)의 budgetKrw 도 새 한도로 맞춥니다.
+         안 그러면 다음 배치 변경 전까지 화면 가드와 저장본이 서로 다른 한도를 봅니다. */
+      if (S.result) runSim();
     });
     $('#scenName').value = S.name;
     $('#scenName').addEventListener('input', function () { S.name = this.value || '이름 없는 시나리오'; });
@@ -204,14 +217,25 @@
     runSim();
   }
 
+  /* 수단별 커버리지 하한. 서버 규칙과 같은 값을 meta.effects.coverageRange 로
+     내려받아 씁니다 — 하드코딩 복제였다가 서버와 어긋나는 사고를 막기 위한 것.
+     메타에 없으면 예전 상수(freq 0.5 / stop 0.15)로 폴백합니다. */
+  function coverageMin(type) {
+    var e = S.effects[type] || {};
+    if (e.coverageRange && typeof e.coverageRange[0] === 'number') return e.coverageRange[0];
+    return type === 'freq' ? 0.5 : type === 'stop' ? 0.15 : 0;
+  }
+
   /** 수단별 적용 제약. 위반이면 안내 문구를, 아니면 null 을 돌려줍니다. */
   function guardFor(type, cell) {
-    if (type === 'freq' && cell.coverage < 0.5) {
-      return '배차 증편은 기존 정류장이 가까운 격자에만 적용할 수 있습니다. 이 격자는 정류장 도보권 밖입니다.';
+    if (type === 'freq' && cell.coverage < coverageMin('freq')) {
+      return '배차 증편은 기존 정류장이 도보권(약 300m) 안에 있는 격자에만 적용할 수 있습니다. ' +
+        '이 격자는 정류장 도보권 밖입니다.';
     }
-    if (type === 'stop' && cell.coverage < 0.15) {
-      return '정류장 신설은 기존 노선망에서 약 3km 이내인 격자에만 적용할 수 있습니다. ' +
-        '이보다 먼 지역은 노선 신설·연장 또는 똑버스 검토 대상입니다.';
+    if (type === 'stop' && cell.coverage < coverageMin('stop')) {
+      /* coverage = 1 − 최근접 정류장 거리/600m. 0.15 는 약 510m 에 해당합니다. */
+      return '정류장 신설은 기존 정류장에서 약 500m 안쪽인 격자에만 적용할 수 있습니다. ' +
+        '이보다 먼 고립 지역은 노선 신설·연장 또는 똑버스 검토 대상입니다.';
     }
     return null;
   }
@@ -406,7 +430,7 @@
         '<th>목적</th><th>격자</th><th>일 통행</th><th>고령</th>' +
       '</tr></thead><tbody>' +
       alts.map(function (a) {
-        var mix = ['stop', 'drt', 'freq'].filter(function (k) { return a.mix[k]; })
+        var mix = ['stop', 'drt', 'freq'].filter(function (k) { return a.mix && a.mix[k]; })
           .map(function (k) { return TYPE_KO[k] + a.mix[k]; }).join('+') || '—';
         return '<tr class="' + (a.selected ? 'is-on' : '') + '" data-strategy="' + a.strategy + '">' +
           '<td><button class="rec-tab" type="button" data-strategy="' + a.strategy + '"' +
@@ -469,6 +493,7 @@
       })
     }).then(function (res) {
       S.result = res;
+      clearFail();
       try { localStorage.setItem(LS_LAST, JSON.stringify(slimSimulation(res))); } catch (e) { /* 용량 초과 등 */ }
       S.busy = false;
       setRunning(false);
@@ -477,7 +502,12 @@
     }).catch(function (err) {
       S.busy = false;
       setRunning(false);
+      /* 진행 중 요청이 실패했는데 그사이 배치가 또 바뀌었으면(pending),
+         화면과 배치 목록이 어긋난 채 남습니다. 최신 상태로 한 번 더 시도합니다. */
+      var retry = S.pending;
+      S.pending = false;
       fail(err);
+      if (retry) runSim();
     });
   }
 
@@ -532,7 +562,7 @@
       has ? b.delta.elderlyTripsPerDay : null, '통행/일',
       '기준선 ' + fmt(b.baseline.elderlyTripsPerDay) + '통행/일');
 
-    var eff = S.result.effectiveness;
+    var eff = S.result.effectiveness || {};
     $('#k4').innerHTML = eff.krwPerTripPerDay != null
       ? fmt(eff.krwPerTripPerDay) + '<small>원/통행</small>'
       : '<span style="color:var(--ink3)">–</span>';
@@ -699,7 +729,7 @@
       return;
     }
 
-    var eff = r.effectiveness;
+    var eff = r.effectiveness || {};
     var dn = b.delta.needCells, dt = b.delta.potentialTripsPerDay, de = b.delta.elderlyTripsPerDay;
     var over = S.budget > 0 && r.cost.totalKrw > S.budget;
 
@@ -830,8 +860,8 @@
       placements: S.placements.map(function (p) { return { type: p.type, cellId: p.cellId, count: p.count }; }),
       summary: {
         costKrw: S.result.cost.totalKrw,
-        resolvedTrips: S.result.effectiveness.resolvedTripsPerDay,
-        krwPerTrip: S.result.effectiveness.krwPerTripPerDay,
+        resolvedTrips: (S.result.effectiveness || {}).resolvedTripsPerDay,
+        krwPerTrip: (S.result.effectiveness || {}).krwPerTripPerDay,
         needDelta: (currentPeriodBlock() || {}).delta ? currentPeriodBlock().delta.needCells : 0
       }
     });
@@ -850,14 +880,15 @@
     /* 삭제 버튼을 불러오기 버튼 안에 중첩하면(HTML 위반) 키보드로 삭제할 수 없습니다.
        카드 = div, 불러오기·삭제 = 각각 실제 button 으로 분리합니다. */
     host.innerHTML = list.map(function (s, i) {
+      var su = s.summary || {};   /* 구버전 저장본에 summary 가 없어도 목록이 죽지 않게 */
       return '<div class="scen">' +
         '<button class="sload" data-load="' + i + '" type="button" title="' + esc(s.name) + '">' +
         '<span class="snm">' + esc(s.name) + '</span>' +
         '<span class="smeta"><span>' + esc(s.savedAt) + '</span>' +
-        '<span>배치 ' + s.placements.length + '건</span>' +
-        '<span>' + esc(won(s.summary.costKrw)) + '</span>' +
-        '<span>' + (s.summary.needDelta < 0 ? '사각지대 −' + Math.abs(s.summary.needDelta) + '개' : '변화 없음') + '</span>' +
-        (s.summary.krwPerTrip != null ? '<span>' + fmt(s.summary.krwPerTrip) + '원/통행</span>' : '') +
+        '<span>배치 ' + (s.placements || []).length + '건</span>' +
+        '<span>' + esc(won(su.costKrw)) + '</span>' +
+        '<span>' + (su.needDelta < 0 ? '사각지대 −' + Math.abs(su.needDelta) + '개' : '변화 없음') + '</span>' +
+        (su.krwPerTrip != null ? '<span>' + fmt(su.krwPerTrip) + '원/통행</span>' : '') +
         '</span></button>' +
         '<button class="sdel" data-del="' + i + '" type="button" aria-label="시나리오 삭제">×</button>' +
         '</div>';
@@ -938,7 +969,10 @@
       if (b) removePlacement(+b.getAttribute('data-remove'));
     });
     $('#btnUndo').addEventListener('click', function () {
+      if (!S.placements.length) return;
       S.placements.pop();
+      /* 추천안을 되돌리기로 고친 것도 '사용자 수정'입니다 — 표시와 교체 확인이 걸리게 */
+      if (S.recommendation) S.recEdited = true;
       runSim();
     });
     $('#btnReset').addEventListener('click', resetAll);
@@ -981,11 +1015,6 @@
   }
 
   function renderFooter(meta) {
-    if (!meta.isMockData) {
-      ['#mockNote', '#mockBadge', '#mapMock'].forEach(function (s) {
-        var el = $(s); if (el) el.style.display = 'none';
-      });
-    }
     var costList = $('#costNote');
     if (costList && meta.effects) {
       costList.innerHTML = meta.effects.map(function (e) {

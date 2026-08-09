@@ -8,29 +8,18 @@
 
 ---
 
-## 0. 3단계 연동 절차
+## 0. 연동 상태
 
-```
-1) 이 문서의 엔드포인트를 구현한다
-2) assets/js/config.js 를 연다
-     BASE_URL : ''  →  'http://localhost:8000'   (백엔드 주소)
-     USE_MOCK : true →  false
-3) 브라우저 새로고침 — 끝
-```
+백엔드 연동은 **완료 상태**입니다. 프론트는 모든 요청을 실서버로 보내며,
+서버 주소는 `assets/js/config.js` 의 `SERVER_URL`(또는 주소창 `?server=`)로 정합니다.
 
-**점진적 연동**도 가능합니다. 격자 API만 먼저 붙였다면:
+**응답 스키마의 기준은 백엔드 실서버입니다.** 응답 형태가 헷갈리면 실서버를 직접 부르세요.
 
-```js
-ENDPOINT_OVERRIDES: { 'grid.list': false }   // 이 경로만 실서버, 나머지는 목
+```bash
+curl http://localhost:8000/api/v1/grid?period=am | python -m json.tool | head
 ```
 
-**목 데이터가 곧 규격입니다.** 응답 형태가 헷갈리면 `assets/js/mock.js` 의
-해당 함수가 무엇을 돌려주는지 보면 됩니다. 브라우저 콘솔에서 바로 확인할 수도 있습니다.
-
-```js
-HW.mock.handle('grid.list', { period: 'am' })      // 격자 응답 예시
-HW.mock.handle('priorities.list', { period:'am' }) // 우선순위 응답 예시
-```
+서버가 아직 안 주는 파생 필드는 `assets/js/api.js` 의 어댑터가 "빠진 키만" 보충합니다.
 
 ---
 
@@ -177,9 +166,8 @@ HTTP 상태 코드 + 아래 형태 중 아무거나. 프론트엔드는 `message
 프론트엔드(`assets/js/core.js` 의 `project()`)가 `grid.bbox` 기준으로 처리합니다.
 서버는 SVG 좌표를 계산할 필요가 없습니다.
 
-**현재 목 데이터의 경계는 실제 SGIS 읍면동 경계입니다.** 실서버에서도 같은 출처를
-쓰면 되고, 원본 SHP → 이 형식으로 변환하는 스크립트가 `tools/build-boundary.py` 에
-있습니다(좌표 단순화 포함, 63,204점 → 5,759점).
+**경계는 실제 SGIS 읍면동 경계입니다.** 원본 SHP → 이 형식으로 변환하는
+스크립트가 `tools/build-boundary.py` 에 있습니다(좌표 단순화 포함, 63,204점 → 5,759점).
 
 > 격자를 어느 읍면동에 넣을지는 **점-다각형 판정**으로 서버가 결정해
 > `cells[].region` / `regionCode` 에 실어 보냅니다.
@@ -258,9 +246,8 @@ HTTP 상태 코드 + 아래 형태 중 아무거나. 프론트엔드는 `message
 
 > **주의: 분위 기준은 "배치 없음" 상태에서 한 번 고정하고 재사용하세요.**
 > 시간대마다 또는 시뮬레이션마다 다시 잡으면 전후 비교가 서로 다른 자로 재는 셈이 됩니다.
-> 목 구현은 `mock.js` 의 `NORM` 변수가 이 역할을 합니다.
 
-#### 사분면(`quadrant`) 판정 기준 (목 구현 기준)
+#### 사분면(`quadrant`) 판정 기준
 
 ```
 need : zD ≥  0.20  AND  MI ≥ 0.55            → 고수요·저공급 (증차/신설)
@@ -832,10 +819,5 @@ def draft_report(req: ReportRequest):
 - [ ] `POST /recommendations` 가 같은 `(격자, 수단)` 조합을 두 번 추천하지 않는다
 - [ ] 추천 건수를 늘리면 수단이 다양해진다 (정류장만 나오면 제약 설정을 확인)
 - [ ] 브라우저 개발자도구 Network 탭에 CORS 오류가 없다
-- [ ] `USE_MOCK: false` 로 바꿔도 화면이 목 모드와 동일하게 보인다
 
-문제가 생기면 브라우저 콘솔에서 목 응답과 실서버 응답을 직접 비교해 보세요.
-
-```js
-HW.CONFIG.USE_MOCK = true;  HW.api.clearCache(); HW.mock.handle('grid.list', {period:'am'})
-```
+문제가 생기면 브라우저 개발자도구 Network 탭에서 실제 응답 본문을 확인하세요.

@@ -6,9 +6,10 @@
 출력 : assets/data/boundary.js   (window.HW.BOUNDARY 에 담김)
        assets/data/hwaseong-dong.geojson  (참고용 원본 형식)
 
-왜 .js 로 내보내는가
-    파일을 fetch 로 읽으면 file:// 로 열었을 때 막히고, 단일 파일 빌드에도
-    안 들어갑니다. JS 로 만들어 <script> 로 불러오면 두 경우 다 동작합니다.
+왜 .js 로도 내보내는가
+    과거 오프라인 단일 파일 빌드에서 <script> 로 불러 쓰던 형식입니다.
+    현재 화면은 백엔드 /meta 응답의 경계를 쓰므로 이 파일을 로드하지 않지만,
+    경계 재생성 파이프라인의 산출물 형식은 그대로 유지합니다.
 
 실행
     pip install pyshp pyproj

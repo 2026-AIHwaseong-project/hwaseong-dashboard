@@ -83,10 +83,24 @@
     if (box) {
       box.innerHTML = '<div class="errbox"><b>데이터를 불러오지 못했습니다.</b><br>' +
         esc(api.humanize(err)) +
-        '<br><span style="font-size:11.5px;opacity:.8">config.js 의 BASE_URL / USE_MOCK 설정을 확인해 주세요.</span></div>';
+        '<br><span style="font-size:11.5px;opacity:.8">서버가 켜져 있는지 확인해 주세요. ' +
+        '주소를 바꿔 열었다면 주소창에 <b>?server=</b> 만 붙여 저장된 서버 주소를 초기화할 수 있습니다.</span>' +
+        '<br><button class="btn sm" data-retry type="button" style="margin-top:8px">다시 시도</button></div>';
       box.style.display = '';
+      var rb = box.querySelector('[data-retry]');
+      /* 부팅(meta 로드) 전 실패면 이벤트 중복 배선을 피해 새로고침으로 재시도 */
+      if (rb) rb.addEventListener('click', function () {
+        if (S.meta) { clearFail(); loadPeriod(S.period); }
+        else location.reload();
+      });
     }
     C.toast('데이터 로드 실패 — ' + esc(api.humanize(err)), 'err', 7000);
+  }
+
+  /** 성공하면 에러 배너를 접습니다 — 일시 오류가 화면에 눌어붙지 않게 */
+  function clearFail() {
+    var box = $('#bootError');
+    if (box) box.style.display = 'none';
   }
 
   /* =====================================================================
@@ -105,8 +119,13 @@
     });
   }
 
+  /* 탭을 빠르게 연달아 누르면 먼저 보낸 요청이 늦게 도착해 이전 시간대
+     데이터가 화면을 덮을 수 있습니다. 마지막 요청만 반영합니다. */
+  var loadSeq = 0;
+
   function loadPeriod(pid) {
     S.period = pid;
+    var seq = ++loadSeq;
     var p = (S.meta.periods || []).filter(function (x) { return x.id === pid; })[0];
     S.periodName = p ? p.name : pid;
     $$('#periods [data-period]').forEach(function (b) {
@@ -117,6 +136,8 @@
     $('#pchip').textContent = p ? (p.name + ' ' + p.label) : pid;
 
     return Promise.all([api.grid(pid), api.priorities(pid, 10)]).then(function (r) {
+      if (seq !== loadSeq) return;   // 그사이 다른 탭으로 넘어갔으면 버립니다
+      clearFail();
       S.grid = r[0];
       S.priorities = r[1];
       S.map.setData({ cells: S.grid.cells, scale: S.grid.scale });
@@ -130,7 +151,10 @@
          정류장 프로파일 음영과 시뮬레이션 링크의 period 가 이전 탭에 머뭅니다. */
       if (S.selectedCellId) selectCell(S.selectedCellId);
       if (S.selectedStopId) selectStop(S.selectedStopId);
-    }).catch(fail);
+    }).catch(function (err) {
+      if (seq !== loadSeq) return;
+      fail(err);
+    });
   }
 
   /* =====================================================================
@@ -144,7 +168,7 @@
       (top ? ' · 최우선 ' + top.name : '');
 
     $('#k2').innerHTML = C.fmt1(k.potentialTripsPerDay / 10000) + '<small>만 통행/일</small>';
-    $('#k2s').textContent = '고수요·저공급 격자의 유동인구 합(추정)';
+    $('#k2s').textContent = '고수요·저공급 격자의 잠재수요 합(거주인구 기반 추정)';
 
     $('#k3').innerHTML = fmt(k.elderlyTripsPerDay) + '<small>통행/일</small>';
     var share = k.potentialTripsPerDay > 0 ? (100 * k.elderlyTripsPerDay / k.potentialTripsPerDay) : 0;
@@ -161,7 +185,9 @@
   function paintBrief() {
     var k = S.grid.kpi;
     var items = S.priorities.items;
-    var regions = aggregateRegions();
+    /* 권역표는 사용자가 아무 컬럼으로나 정렬할 수 있습니다. 브리핑의
+       "어디에 몰려 있다"는 정렬 상태와 무관하게 항상 need 최다 권역이어야 합니다. */
+    var regions = aggregateRegions().slice().sort(function (a, b) { return b.need - a.need; });
     var top = regions.filter(function (r) { return r.need > 0; })[0];
     var periodLabel = (S.meta.periods || []).filter(function (p) { return p.id === S.period; })[0];
     periodLabel = periodLabel ? (periodLabel.name + ' 시간대(' + periodLabel.label + ')') : S.period;
@@ -395,7 +421,14 @@
     };
     refreshStopOptions('');
     sel.addEventListener('change', function () { selectStop(sel.value, true); });
-    if (search) search.addEventListener('input', function () { refreshStopOptions(search.value); });
+    /* 키 입력마다 API 호출·지도 이동이 일어나지 않게 잠깐 모아서 처리합니다 */
+    if (search) {
+      var debounceTimer = null;
+      search.addEventListener('input', function () {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function () { refreshStopOptions(search.value); }, 250);
+      });
+    }
   }
 
   /** focus 가 참이면 지도도 그 정류장이 화면 중심에 오게 이동합니다 (사용자 조작에서만) */
@@ -414,9 +447,15 @@
     S.map.highlightStop(stopId);
     if (focus && S.map.focusStop) S.map.focusStop(stopId);
     api.stopProfile(stopId, S.period).then(function (p) {
+      /* 느린 이전 응답이 최신 선택을 덮지 않게 합니다 */
+      if (S.selectedStopId !== stopId) return;
       S.profile = p;
       drawProfile(p);
-    }).catch(fail);
+    }).catch(function (err) {
+      /* 프로파일 하나 실패로 전역 에러 배너를 띄우지 않습니다 — 위젯 단위 안내만 */
+      console.error(err);
+      C.toast('정류장 프로파일을 불러오지 못했습니다 — ' + esc(api.humanize(err)), 'err', 5000);
+    });
   }
 
   function drawProfile(p) {
@@ -433,6 +472,7 @@
 
     /* 현재 선택된 시간대 음영 */
     var per = (S.meta.periods || []).filter(function (x) { return x.id === S.period; })[0];
+    if (per && (!per.hours || per.hours.length < 2)) per = null;   /* hours 없는 메타 방어 */
     if (per) {
       var b0 = per.hours[0], b1 = Math.min(per.hours[1], hours[hours.length - 1] + 1);
       h += '<rect class="pband" x="' + hx(b0) + '" y="' + (STC.t - 4) + '" width="' +
@@ -629,23 +669,6 @@
   }
 
   function renderFooter(meta) {
-    var f = meta.formula || {};
-    /* 실서버 meta 는 mismatch 대신 mi 키(수식만)를 씁니다. 표시용으로 이름을 붙입니다. */
-    var fx = f.mismatch
-      ? [f.mismatch, f.demand, f.supply, f.priority]
-      : [f.mi ? 'MI = ' + f.mi : null,
-         f.demand ? 'D = ' + f.demand : null,
-         f.supply ? 'S = ' + f.supply : null,
-         f.eldCoef != null ? '우선순위: 고령 가중 ×(1 + ' + f.eldCoef + '·고령비)' : null];
-    /* 수식·출처 표기는 화면에서 뺐습니다 — 요소가 없으면 건너뜁니다 */
-    var fxHost = $('#fxlist');
-    if (fxHost) fxHost.innerHTML = fx.filter(Boolean)
-      .map(function (s) { return '<span>' + esc(s) + '</span>'; }).join('');
-    if (!meta.isMockData) {
-      var d = $('#mockNote'); if (d) d.style.display = 'none';
-      var badge = $('#mockBadge'); if (badge) badge.style.display = 'none';
-      var mk = $('#mapMock'); if (mk) mk.style.display = 'none';
-    }
     var up = $('#updatedAt'); if (up) up.textContent = meta.updatedAt || '';
   }
 
