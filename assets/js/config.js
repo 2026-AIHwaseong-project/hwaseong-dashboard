@@ -31,14 +31,17 @@
   var SERVER_URL = 'https://581f-218-145-154-236.ngrok-free.app/';
 
   /* URL 쿼리(?server=)로 덮어쓰기. 코드를 안 고치고 시연 대상을 바꾸기 위한 것.
-     값이 있으면 localStorage 에 기억하고, 빈 값(?server=)이면 지웁니다. */
+     값이 있으면 localStorage 에 기억하고, 빈 값(?server=)이면 지웁니다.
+     우선순위: ?server=(저장된 주소) → 위의 SERVER_URL → 자동 결정.
+     사용자가 명시한 주소가 하드코딩보다 우선입니다 — 예전엔 순서가 반대라
+     SERVER_URL 이 채워져 있으면 ?server= 가 조용히 무시됐습니다. */
   try {
     var _q = new URLSearchParams(location.search).get('server');
     if (_q !== null) {
       if (_q) { localStorage.setItem('hw.serverUrl', _q); }
       else { localStorage.removeItem('hw.serverUrl'); }
     }
-    SERVER_URL = SERVER_URL || localStorage.getItem('hw.serverUrl') || '';
+    SERVER_URL = localStorage.getItem('hw.serverUrl') || SERVER_URL || '';
   } catch (e) { /* file:// 등에서 localStorage 가 막히면 자동 결정으로 간다 */ }
 
   var CONFIG = {
@@ -117,20 +120,39 @@
     },
 
     /* ------------------------------------------------------------------
-     * [6] 격자 정의
-     *   분석 격자와 화면 표시 격자는 다릅니다. 혼동을 막기 위해 나눠 둡니다.
-     *   - analysis* : 실제 분석에 쓰는 격자 (SGIS 배포판 기준)
-     *   - display*  : 지도에 그리는 격자. 분석 격자를 묶어 보여 줍니다.
-     *   화면 격자를 분석 격자와 같게 하려면 displaySizeMeters 를 1000 으로.
+     * [6] 격자 정의 (참고용 문서)
+     *   ⚠️ 실값의 단일 출처는 백엔드 GET /meta 의 meta.grid 입니다.
+     *   지도·범례·부제가 전부 meta.grid.sizeMeters/cellCount 를 쓰므로
+     *   격자를 세분화(예: 500m)해도 프론트 코드는 고칠 것이 없습니다.
+     *   아래 값은 런타임에 참조되지 않는 기록용입니다.
      * ---------------------------------------------------------------- */
     GRID: {
-      analysisSizeMeters: 1000,   // SGIS 공공데이터포털 배포판이 1km 격자만 제공
-      analysisCellCount: 786,     // 화성시 1km 격자 수 (백엔드 05_load 실측)
-      displaySizeMeters: 1500     // 지도 표시 격자
+      analysisSizeMeters: 1000,   // 1km 배포판 기준 기록 — 실값은 /meta
+      analysisCellCount: 786
     },
 
     /* ------------------------------------------------------------------
-     * [7] 시뮬레이션 단가
+     * [7] 카카오맵 배경 (선택)
+     *   지도 카드의 SVG 뒤에 실제 카카오맵을 깔아, 확대하면 건물·지명이
+     *   보이게 합니다. 키가 비어 있거나 SDK 로드에 실패하면 자동으로
+     *   지금의 SVG 단독 지도로 돌아갑니다(map.js 참고).
+     *
+     *   ⚠️ 로컬 테스트 전용 키입니다. 카카오는 계정당 첫 번째로 활성화한
+     *      앱에만 무료 쿼터를 주기 때문에, 이미 무료 쿼터를 받은 다른 개인
+     *      프로젝트("오고 있어?")의 키를 빌려 쓰고 있습니다 — 그 앱의 콘솔에
+     *      이 도메인(localhost:8000)을 허용 도메인으로 등록해 뒀습니다.
+     *      프론트를 공개 저장소에 커밋하면 이 키도 같이 공개되니, 그 전에
+     *      화성 프로젝트 전용 앱을 새로 만들어 결제수단을 연결하거나
+     *      (지도 SDK 는 0.1원/건으로 저렴합니다), 아래 jsKey 를 비워
+     *      지금의 SVG 전용 지도로 되돌리세요.
+     * ---------------------------------------------------------------- */
+    KAKAO: {
+      enabled: true,
+      jsKey: '70b0a9642cb9a174f2946debfde84cb0'
+    },
+
+    /* ------------------------------------------------------------------
+     * [8] 시뮬레이션 단가
      *   ⚠️ 전부 시연용 가정값입니다. confirmed 를 true 로 바꾸기 전까지
      *      화면과 보고서에 "가정값" 표시가 자동으로 붙습니다.
      *

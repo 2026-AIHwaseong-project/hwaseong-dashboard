@@ -49,10 +49,20 @@
       renderPeriodTabs(meta.periods);
       renderFooter(meta);
       renderDataQuality(meta);
+      /* 격자 크기는 서버 meta 를 따른다 — HTML 에 1km 를 박아두면 세분화 때 틀어진다 */
+      var sub = $('#mapSub');
+      if (sub && meta.grid && meta.grid.sizeMeters) {
+        sub.textContent = '붉을수록 수요 대비 버스가 부족한 격자 · 격자 ' +
+          (meta.grid.sizeMeters / 1000) + 'km · 실제 읍면동 경계';
+      }
       S.map = HW.createMap({
         svg: $('#map'), legend: $('#legend'), meta: meta,
         onClearFocus: function () { focusRegion(null); },
-        onCellClick: function (cell) { selectCell(cell.id, true); },
+        /* 격자를 클릭하면 그 격자로 파고듭니다 — 확대 + 그 격자의 정류장·노선만
+           + 아래 카드에 노선 경유 순서. 전체 뷰에서 노선을 다 깔면 격자 색이
+           덮이므로, 자세히는 클릭했을 때만 보여 줍니다. */
+        onCellClick: function (cell) { enterCellFocus(cell.id); },
+        onExitCellFocus: function () { renderCellRoutes(null); },
         onCellHover: function (cell, ev) { C.showTip(cellTip(cell), ev); },
         /* 정류장 위에 있는 격자도 선택되게 합니다.
            예전에는 정류장이 클릭을 가로채 그 격자를 고를 방법이 없었습니다. */
@@ -70,7 +80,9 @@
       wireControls();
       return loadPeriod(S.period);
     }).then(function () {
-      /* 최우선 격자를 초기 선택 */
+      /* 최우선 격자를 초기 선택. 다만 확대·노선 표시까지 하지는 않습니다 —
+         첫 화면은 화성시 전체의 미스매칭 분포를 보는 자리입니다. */
+      renderCellRoutes(null);
       var first = S.priorities && S.priorities.items[0];
       if (first) selectCell(first.cellId, true);
       else selectStop(S.stops[0] && S.stops[0].id);
@@ -140,6 +152,8 @@
       clearFail();
       S.grid = r[0];
       S.priorities = r[1];
+      cellIdx = {};
+      S.grid.cells.forEach(function (c) { cellIdx[c.id] = c; });
       S.map.setData({ cells: S.grid.cells, scale: S.grid.scale });
       paintKpi();
       paintBrief();
@@ -196,7 +210,9 @@
     lines.push('<b>' + esc(periodLabel) + '</b> 기준, 전체 ' + fmt(k.totalCells) + '개 격자 중 ' +
       '<b>고수요·저공급이 ' + fmt(k.needCells) + '개</b>(' + k.needShare + '%)입니다.');
 
-    if (top && top.need >= 2) {
+    /* "몰려 있다" 임계는 셀 수에 비례 — 1km(786셀)면 예전처럼 2개, 500m(~3천 셀)면 8개 */
+    var clusterMin = Math.max(2, Math.round(S.grid.cells.length * 0.0025));
+    if (top && top.need >= clusterMin) {
       lines.push('<b>' + esc(top.name) + '</b> 권역에 ' + top.need + '개가 몰려 있습니다.');
     }
     if (items[0]) {
@@ -367,9 +383,11 @@
     h += '<text class="axlab" transform="rotate(-90 14 ' + ((SC.t + SC.h - SC.b) / 2) + ')" x="14" y="' +
       ((SC.t + SC.h - SC.b) / 2) + '" text-anchor="middle">수요지수 D (z)</text>';
 
+    /* 점 크기는 셀 수에 맞춰 줄입니다 — 격자 세분화(500m, ~3천 셀) 시 과밀 대응 */
+    var dotR = cells.length > 1500 ? 2.2 : 3.8;
     cells.forEach(function (c) {
       h += '<circle class="dot c m' + c.bins.mi + '" data-cell="' + esc(c.id) + '" cx="' +
-        sx(c.zSupply).toFixed(1) + '" cy="' + sy(c.zDemand).toFixed(1) + '" r="3.8"/>';
+        sx(c.zSupply).toFixed(1) + '" cy="' + sy(c.zDemand).toFixed(1) + '" r="' + dotR + '"/>';
     });
     h += '<circle class="scatring" data-scatring r="7" cx="-99" cy="-99" visibility="hidden"/>';
     $('#scatter').innerHTML = h;
@@ -386,10 +404,11 @@
     ring.setAttribute('visibility', 'visible');
   }
 
+  /* 산점도 호버가 mousemove 마다 부르므로 선형 탐색 대신 색인을 씁니다.
+     격자를 세분화하면(500m, ~3천 셀) 선형 탐색이 이벤트마다 수천 번 비교가 됩니다. */
+  var cellIdx = {};
   function cellById(id) {
-    if (!S.grid) return null;
-    for (var i = 0; i < S.grid.cells.length; i++) if (S.grid.cells[i].id === id) return S.grid.cells[i];
-    return null;
+    return cellIdx[id] || null;
   }
 
   /* =====================================================================
@@ -573,6 +592,104 @@
     }
   }
 
+  /* =====================================================================
+   * 8-1. 선택한 격자의 노선 경유 순서
+   *
+   * 지도만으로는 "몇 번 버스가 이 동네를 어떤 순서로 지나는가"를 못 읽습니다.
+   * 선이 겹치고, 방향도 안 보이기 때문입니다. 네이버 지도 노선 화면처럼
+   * 노선마다 세로선 하나에 정류장을 순서대로 꿰어 옆으로 늘어놓습니다.
+   * =================================================================== */
+  var BUS_SVG =
+    '<svg class="bus" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">' +
+    '<rect x="2.5" y="1.5" width="11" height="11" rx="2.2" fill="none" stroke="var(--sel)" stroke-width="1.4"/>' +
+    '<rect x="4.4" y="3.6" width="7.2" height="3.6" rx="0.8" fill="var(--sel)" opacity=".35"/>' +
+    '<circle cx="5.4" cy="10" r="1" fill="var(--sel)"/><circle cx="10.6" cy="10" r="1" fill="var(--sel)"/>' +
+    '<path d="M4.6 12.5v1M11.4 12.5v1" stroke="var(--sel)" stroke-width="1.3" stroke-linecap="round"/>' +
+    '</svg>';
+
+  /** cellId 가 null 이면 안내 문구로 되돌립니다 */
+  function renderCellRoutes(cellId) {
+    var box = $('#routeStrip'), sub = $('#routeStripSub');
+    if (!box) return;
+    if (!cellId) {
+      box.innerHTML = '<div class="empty">지도에서 격자를 클릭하면 그 격자를 지나는 ' +
+        '버스와 정류장 순서가 여기에 나옵니다.</div>';
+      if (sub) sub.textContent = '지도에서 격자를 클릭하면 그 격자를 지나는 버스와 정류장 순서가 나옵니다';
+      return;
+    }
+
+    var cell = cellById(cellId);
+    var inCell = S.map.stopsInCell(cellId);
+    var idSet = {};
+    inCell.forEach(function (s) { idSet[s.id] = s; });
+
+    /* 승차량 상위 몇 곳은 점을 채워 강조 — 그 격자에서 실제로 사람이 타는 곳 */
+    var busyCut = 0;
+    var boards = inCell.map(function (s) { return +s.boardingsPerDay || 0; })
+      .sort(function (a, b) { return b - a; });
+    if (boards.length) busyCut = Math.max(1, boards[Math.floor(boards.length * 0.3)]);
+
+    /* 노선별로 이 격자 안 정류장을 경유 순서대로 추립니다 */
+    var lines = [];
+    (S.routes || []).forEach(function (rt) {
+      var ids = rt.stopIds || [];
+      var seq = [], firstIdx = -1, lastIdx = -1;
+      ids.forEach(function (id, i) {
+        if (!idSet[id]) return;
+        if (firstIdx < 0) firstIdx = i;
+        lastIdx = i;
+        seq.push(idSet[id]);
+      });
+      if (!seq.length) return;
+      lines.push({
+        name: rt.name || rt.id, n: seq.length, stops: seq,
+        before: firstIdx > 0, after: lastIdx >= 0 && lastIdx < ids.length - 1
+      });
+    });
+    /* 이 격자를 많이 지나는 노선이 먼저 — 동네 주력 노선이 왼쪽에 옵니다 */
+    lines.sort(function (a, b) {
+      return b.n - a.n || String(a.name).localeCompare(String(b.name), 'ko');
+    });
+
+    if (sub) {
+      sub.textContent = (cell ? cell.name + ' · ' : '') +
+        '정류장 ' + inCell.length + '개 · 경유 노선 ' + lines.length + '개';
+    }
+    if (!lines.length) {
+      box.innerHTML = '<div class="empty"><b>' + esc(cell ? cell.name : cellId) + '</b><br>' +
+        (inCell.length
+          ? '정류장은 ' + inCell.length + '개 있지만 경유 노선 정보가 없습니다.'
+          : '이 격자 안에 정류장이 없습니다.') +
+        '<br><span class="mono" style="font-size:10.5px">' +
+        '사각지대 후보 — 도보권 밖이거나 노선이 닿지 않는 구역입니다.</span></div>';
+      return;
+    }
+
+    box.innerHTML = lines.map(function (L) {
+      var items = L.stops.map(function (s) {
+        var busy = (+s.boardingsPerDay || 0) >= busyCut && busyCut > 0;
+        return '<li' + (busy ? ' class="busy"' : '') + ' title="' + esc(s.name) +
+          ' · 일 승차 ' + fmt(Math.round(+s.boardingsPerDay || 0)) + '명">' +
+          '<span class="snm">' + esc(s.name) + '</span></li>';
+      }).join('');
+      var tail = L.after ? '<div class="rtail">↓ 격자 밖으로 계속</div>' : '';
+      var head = L.before ? '<div class="rtail" style="padding-bottom:2px">↑ 격자 밖에서 진입</div>' : '';
+      return '<div class="rline">' +
+        '<div class="rhead">' + BUS_SVG + '<span class="rno">' + esc(L.name) + '</span>' +
+        '<span class="rkind">' + L.n + '개 정차</span></div>' +
+        head + '<ul class="rstops">' + items + '</ul>' + tail +
+        '</div>';
+    }).join('');
+  }
+
+  /** 격자 하나로 파고듭니다 — 확대 + 그 격자의 정류장·노선만 + 경유 순서 카드 */
+  function enterCellFocus(cellId) {
+    selectCell(cellId, true);
+    S.map.setCellFocus(cellId);
+    S.map.focusCell(cellId);
+    renderCellRoutes(cellId);
+  }
+
   function cellTip(c) {
     var adj = c.adjusted ? '<br><span class="mono" style="color:var(--sel)">배치 효과 반영됨</span>' : '';
     var qc = c.quadrant === 'need' ? 'new' : c.quadrant === 'drt' ? 'drt' : c.quadrant === 'over' ? 'eff' : 'ok';
@@ -617,9 +734,10 @@
       if (tr) focusRegion(tr.getAttribute('data-region'));
     });
 
+    /* 우선순위 행도 지도 클릭과 같게 — 그 격자로 확대해 노선까지 보여 줍니다 */
     $('#t10').addEventListener('click', function (e) {
       var r = e.target.closest('[data-cell]');
-      if (r) selectCell(r.getAttribute('data-cell'), true, true);
+      if (r) enterCellFocus(r.getAttribute('data-cell'));
     });
     $('#scatter').addEventListener('mousemove', function (e) {
       var d = e.target.closest('.dot');

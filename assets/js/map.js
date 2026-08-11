@@ -47,6 +47,21 @@
 
     if (meta.grid && meta.grid.bbox) C.setProjection(meta.grid.bbox, W, H);
 
+    /* 격자 크기 비례 계수 — 1km 격자면 1. 확대 한도·시맨틱 줌·스냅 거리처럼
+       "셀이 화면에서 얼마나 크게 보이는가"에 걸린 상수들이 이 값으로 조정된다.
+       주의: 배치 마커(r=8.5)·겹침 오프셋·선택링 패딩은 시각 판단이 필요해
+       비례 적용하지 않았다 — 격자 세분화 후 실화면 보고 조정 (GRID-500M.md). */
+    var Z_SCALE = 1000 / ((meta.grid && meta.grid.sizeMeters) || 1000);
+    /* 아래 셋은 drawBase→applyZoom 이 처음 실행되기 전에 초기화돼 있어야 한다.
+       MIN_W 의 기본 배율(120)은 1km 실측 근거다 — 정류장 절반이 서로 30m
+       이내(왕복 반대편 등)인데, 점·선 굵기를 --zk 로 역스케일해 화면 크기를
+       유지하는 한 실제로 더 확대하는 수밖에 없다. 24배에서는 10m 간격이
+       화면상 4px 로 뭉쳐 안 갈라지고, 120배는 20px 로 벌려 웬만한 쌍이
+       갈라져 보인다. */
+    var MIN_W = W / (120 * Z_SCALE);    // 확대 한도 — 1km: 120배 · 500m: 240배
+    var ZDETAIL_K = 10 * Z_SCALE;       // 정류장 이름이 드러나는 배율
+    var zoomAnim = null;
+
     var state = {
       cells: [], stops: [], routes: [], scale: null,
       byId: {},
@@ -56,8 +71,17 @@
       placements: [],
       eligible: null,          // Set 또는 null(해제)
       eligibleNote: '',        // 강조 중임을 알리는 범례 문구
-      showRoutes: true,
+      /* 대시보드 첫 화면은 격자와 지명만 보여 줍니다. 노선 200개와 정류장
+         2,866개를 한꺼번에 깔면 SVG 요소가 1만 개를 넘고, 무엇보다 격자의
+         미스매칭 색을 고르게 덮어 "어디가 빨간가"라는 이 지도의 본론이
+         안 읽힙니다. 노선·정류장은 격자를 클릭했을 때 그 격자 것만
+         드러납니다(cellFocus).
+         시뮬레이션 화면은 예외입니다 — 어디에 정류장이 이미 있는지가 배치
+         판단의 근거라서, 그쪽은 showRoutes:true 로 켜 둡니다. */
+      showRoutes: opt.showRoutes === true,
       showLabels: true,
+      cellFocus: null,         // 이 격자에 걸린 정류장·노선만 그린다 (null = 필터 없음)
+      zdetail: false,       // 10배 이상 확대 — 이때만 정류장 이름을 DOM 에 만듭니다
       stopsInteractive: true,
       armed: false
     };
@@ -143,7 +167,50 @@
       return Math.max(20, p1.x - p0.x);
     }
 
+    /* ------------------------------------------------------- 카카오맵 배경(선택)
+       실제 지도는 배경일 뿐 — 격자·정류장·노선은 지금처럼 이 SVG 가 그립니다.
+       SVG 의 확대·이동 상태(zoom)를 카카오 지도에 그대로 넘겨 따라오게만
+       합니다. 그래서 키가 없거나 SDK 로드가 실패해도(오프라인 등) 지도
+       기능은 그대로 동작하고, 배경 한 겹만 없이 지금 모습으로 남습니다. */
+    var kkMap = null;
+    function initKakao() {
+      var cfg = (HW.CONFIG && HW.CONFIG.KAKAO) || {};
+      if (!cfg.enabled || !cfg.jsKey || !svg.parentNode || !global.document) return;
+      var div = global.document.createElement('div');
+      div.className = 'kakaomap';
+      svg.parentNode.insertBefore(div, svg);
+
+      var s = global.document.createElement('script');
+      s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + encodeURIComponent(cfg.jsKey) + '&autoload=false';
+      s.onload = function () {
+        global.kakao.maps.load(function () {
+          kkMap = new global.kakao.maps.Map(div, {
+            center: new global.kakao.maps.LatLng(37.2, 126.83), level: 9
+          });
+          kkMap.setDraggable(false);   // 이동·확대는 지금처럼 SVG 쪽에서만 받습니다
+          kkMap.setZoomable(false);    // (두 지도가 서로 다른 입력에 반응하면 어긋납니다)
+          svg.classList.add('kkmode');
+          syncKakao();
+        });
+      };
+      global.document.head.appendChild(s);   // 실패해도 조용히 넘어갑니다(빈 배경으로 남음)
+      global.addEventListener('resize', function () {
+        if (kkMap) { kkMap.relayout(); syncKakao(); }
+      });
+    }
+    /** 현재 SVG viewBox 창(zoom)에 꼭 맞도록 카카오 지도의 중심·배율을 맞춥니다 */
+    function syncKakao() {
+      if (!kkMap) return;
+      var sw = C.unproject(zoom.x, zoom.y + zoom.h);
+      var ne = C.unproject(zoom.x + zoom.w, zoom.y);
+      kkMap.setBounds(new global.kakao.maps.LatLngBounds(
+        new global.kakao.maps.LatLng(sw.lat, sw.lon),
+        new global.kakao.maps.LatLng(ne.lat, ne.lon)
+      ));
+    }
+
     drawBase();
+    initKakao();
     var gCells = svg.querySelector('[data-cells]');
     var gRoutes = svg.querySelector('[data-groutes]');
     var gLabels = svg.querySelector('[data-glabels]');
@@ -198,8 +265,39 @@
       gCells.innerHTML = h;
     }
 
+    /** cellFocus 가 걸려 있으면 그 격자 안의 정류장 id 집합, 없으면 null */
+    function focusStopIds() {
+      if (!state.cellFocus) return null;
+      var c = state.byId[state.cellFocus];
+      if (!c) return null;
+      var r = cellRect(c), set = {};
+      state.stops.forEach(function (s) {
+        var p = C.xy(s);
+        if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) set[s.id] = 1;
+      });
+      return set;
+    }
+
     function renderRoutes() {
       var h = '';
+      /* 격자를 클릭했으면 그 격자에 걸린 것만 그립니다. 전체를 깔면 격자 색이
+         덮여 미스매칭이 안 읽히고, 확대해도 어느 노선이 이 동네 것인지 모릅니다. */
+      var only = focusStopIds();
+      /* 안 보일 때는 아예 만들지 않습니다. 첫 화면(격자만)에서 노선 200개와
+         정류장 2,866개를 display:none 인 채로 세워 두면 SVG 노드 9천 개를
+         쓸데없이 만들게 됩니다. 켜질 때 다시 그립니다. */
+      if (!state.showRoutes && !only) {
+        gRoutes.innerHTML = '';
+        gRoutes.style.display = 'none';
+        return;
+      }
+      var stops = only ? state.stops.filter(function (s) { return only[s.id]; }) : state.stops;
+      var routes = only
+        ? state.routes.filter(function (rt) {
+            return (rt.stopIds || []).some(function (id) { return only[id]; });
+          })
+        : state.routes;
+
       /* 1단계: 케이싱(바탕색 굵은 선) → 2단계: 노선 본선. 격자 위에서도 선이 끊겨 보이지 않습니다. */
       function routePts(rt) {
         var src = rt.pathXY;
@@ -209,29 +307,51 @@
           return q.x.toFixed(1) + ',' + q.y.toFixed(1);
         });
       }
-      state.routes.forEach(function (rt) {
+      routes.forEach(function (rt) {
         h += '<polyline class="rt-casing" points="' + routePts(rt).join(' ') + '"/>';
       });
-      state.routes.forEach(function (rt) {
+      routes.forEach(function (rt) {
         h += '<polyline class="rt" data-route="' + esc(rt.id) + '" points="' + routePts(rt).join(' ') + '"/>';
       });
-      state.stops.forEach(function (s) {
+      /* 점 크기를 일 승하차량에 비례시킵니다. 전부 같은 크기로 그리면
+         병점역(일 1만)과 시골 정류장(일 몇 명)이 똑같이 보여서, 2,866개가
+         격자 색을 고르게 덮어 미스매칭이 안 읽힙니다.
+         제곱근을 쓰는 이유 — 면적이 승하차량에 비례해야 눈이 크기를 제대로 읽습니다.
+         반지름에 그냥 비례시키면 큰 정류장이 과장돼 보입니다. */
+      /* 크기 기준(maxB)은 전체 정류장에서 뽑습니다. 격자를 옮겨 다닐 때마다
+         같은 정류장의 점 크기가 달라지면 비교가 안 됩니다. */
+      var maxB = 1;
+      state.stops.forEach(function (s) { maxB = Math.max(maxB, +s.boardingsPerDay || 0); });
+      function stopR(s) {
+        if (s.kind === 'hub') return 4.6;
+        var k = Math.sqrt((+s.boardingsPerDay || 0) / maxB);   /* 0~1 */
+        return 1.6 + 3.0 * k;                                   /* 1.6 ~ 4.6px */
+      }
+      stops.forEach(function (s) {
         var p = C.xy(s);
         h += '<circle class="st' + (s.kind === 'hub' ? ' hub' : '') + '" data-stop="' + esc(s.id) +
-          '" cx="' + p.x + '" cy="' + p.y + '" r="' + (s.kind === 'hub' ? 4.6 : 3.4) + '"/>';
+          '" style="--sr:' + stopR(s).toFixed(2) + 'px"' +
+          ' cx="' + p.x + '" cy="' + p.y + '"/>';
       });
-      state.stops.forEach(function (s) {
-        var p = C.xy(s);
-        h += '<text class="stlab" x="' + p.x + '" y="' + p.y + '" dy="-1.1em" text-anchor="middle">' +
-          esc(s.name) + '</text>';
-      });
-      state.stops.forEach(function (s) {
+      /* 정류장 이름은 확대해야 보이는데(.stlab{display:none}) 예전에는 2,866개를
+         항상 만들어 두고 CSS 로만 감췄습니다. SVG 요소 12,636개 중 2,866개가
+         한 번도 안 보이는 텍스트였습니다. 확대 상태에서만 만듭니다.
+         격자를 클릭한 상태(only)면 몇 개 안 되므로 배율과 무관하게 바로 붙입니다. */
+      if (state.zdetail || only) {
+        stops.forEach(function (s) {
+          var p = C.xy(s);
+          h += '<text class="stlab' + (only ? ' always' : '') + '" x="' + p.x + '" y="' + p.y +
+            '" dy="-1.1em" text-anchor="middle">' + esc(s.name) + '</text>';
+        });
+      }
+      stops.forEach(function (s) {
         var p = C.xy(s);
         h += '<circle class="sthit" data-stophit="' + esc(s.id) + '" cx="' + p.x + '" cy="' + p.y + '" r="11"><title>' +
           esc(s.name) + '</title></circle>';
       });
       gRoutes.innerHTML = h;
-      gRoutes.style.display = state.showRoutes ? '' : 'none';
+      /* 격자를 찍어 놓은 동안에는 전체 토글이 꺼져 있어도 그 격자 것은 보여야 합니다 */
+      gRoutes.style.display = (state.showRoutes || only) ? '' : 'none';
       applyStopsInteractive();
     }
 
@@ -310,8 +430,10 @@
 
     /** 지도 기호 범례. 실제 지도와 같은 SVG 로 그려 모양이 정확히 일치합니다. */
     function renderSymbolLegend() {
-      var cellKm = 1.5;
-      if (meta.grid && meta.grid.displaySizeMeters) cellKm = meta.grid.displaySizeMeters / 1000;
+      /* 격자 실제 렌더 크기(cellRect)와 같은 sizeMeters 를 쓴다.
+         예전엔 displaySizeMeters(1.5km)를 써서 범례와 실물이 어긋났다. */
+      var cellKm = 1;
+      if (meta.grid && meta.grid.sizeMeters) cellKm = meta.grid.sizeMeters / 1000;
 
       function item(svgInner, label, w) {
         return '<span class="lg-sym"><svg viewBox="0 0 ' + (w || 22) + ' 14" width="' + (w || 22) + '" height="14" aria-hidden="true">' +
@@ -320,7 +442,7 @@
       var items = [];
       items.push(item('<rect x="2" y="2" width="10" height="10" rx="2" class="c m3"/>' +
         '<rect x="2" y="2" width="10" height="10" rx="2" fill="none" stroke="var(--line)"/>',
-        '격자 1칸 ≈ ' + cellKm + 'km'));
+        '격자 1칸 ' + cellKm + 'km'));
       items.push(item('<circle cx="11" cy="7" r="3.4" class="st"/>', '정류장'));
       items.push(item('<circle cx="11" cy="7" r="4.6" class="st hub"/>', '환승 거점'));
       items.push(item('<polyline class="rt-casing" points="2,10 8,4 14,9 20,4"/>' +
@@ -374,14 +496,16 @@
         var c = state.cells[i], r = cellRect(c);
         if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return c;
       }
-      /* 격자 사이 틈에 걸렸으면 가장 가까운 격자 */
+      /* 격자 사이 틈에 걸렸으면 가장 가까운 격자.
+         스냅 허용거리는 셀 크기에 비례 — 1km 격자면 예전 값(30px) 그대로,
+         셀이 작아지면 줄여서 이웃 셀로 잘못 스냅되지 않게 한다. */
       var best = null, bd = 1e9;
       state.cells.forEach(function (c) {
         var r = cellRect(c);
         var d = Math.hypot(x - (r.x + r.w / 2), y - (r.y + r.h / 2));
         if (d < bd) { bd = d; best = c; }
       });
-      return bd < 30 ? best : null;
+      return bd < 30 / Z_SCALE ? best : null;
     }
 
     /* ------------------------------------------------------ 배치 마커 */
@@ -485,9 +609,8 @@
     /* ------------------------------------------------------ 확대·이동
        SVG viewBox 를 조작합니다. 동탄처럼 면적이 작은 동은 전체 뷰에서
        배치 기호가 겹쳐 안 보입니다. 축척바는 지도 좌표계에 있어서
-       확대해도 표시 거리(0─5km)가 그대로 맞습니다. */
-    var MIN_W = W / 24;                // 최대 24배
-    var zoomAnim = null;
+       확대해도 표시 거리(0─5km)가 그대로 맞습니다.
+       MIN_W·ZDETAIL_K·zoomAnim 은 파일 상단(Z_SCALE 옆)에서 초기화된다. */
 
     function isZoomed() { return zoom.w < W - 0.5; }
 
@@ -496,11 +619,22 @@
         zoom.w.toFixed(1) + ' ' + zoom.h.toFixed(1));
       /* --zk(배율)는 CSS 가 점·선·글자를 역스케일해 화면 크기를 유지하는 데 씁니다.
          정류장 이름은 이름끼리 겹쳐 범벅이 되지 않도록 충분히 확대했을 때만
-         (.zdetail, 최대 24배의 약 70% 수준인 10배부터) 드러냅니다. */
+         (.zdetail — 격자 크기에 비례한 ZDETAIL_K 배부터, 1km 는 10배 = 1px ≈ 6m
+         로 건물·골목이 분간되기 시작하는 수준) 드러냅니다. */
       var k = W / zoom.w;
       svg.style.setProperty('--zk', k.toFixed(3));
-      svg.classList.toggle('zdetail', k >= 10);
+      var detail = k >= ZDETAIL_K;
+      svg.classList.toggle('zdetail', detail);
+      /* 라벨을 확대 상태에서만 DOM 에 만들므로, 경계를 넘을 때 한 번 다시 그립니다.
+         매 프레임이 아니라 상태가 바뀌는 순간에만 도는 조건입니다. */
+      if (detail !== state.zdetail) {
+        state.zdetail = detail;
+        if (state.stops && state.stops.length) renderRoutes();
+      }
       if (zctl) zctl.classList.toggle('zoomed', isZoomed());
+      /* 1,200% 넘어가면 소수점이 의미가 없어 정수로 끊습니다 */
+      if (zpctEl) zpctEl.textContent = Math.round(k * 100).toLocaleString('ko-KR') + '%';
+      syncKakao();
     }
 
     function clampBox(x, y, w) {
@@ -517,7 +651,13 @@
       if (zoomAnim) cancelAnimationFrame(zoomAnim);
       var reduce = global.matchMedia &&
         global.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (reduce || !global.requestAnimationFrame) { zoom = t; applyZoom(); return; }
+      /* 백그라운드 탭에서는 requestAnimationFrame 이 멈춥니다. 애니메이션으로
+         가면 화면이 중간 배율에 멈춘 채 남으므로 목표 상태로 바로 넘깁니다.
+         (격자를 클릭한 뒤 탭을 옮기면 실제로 이 상태가 됩니다) */
+      if (reduce || !global.requestAnimationFrame ||
+          (global.document && global.document.hidden)) {
+        zoom = t; applyZoom(); return;
+      }
       var from = { x: zoom.x, y: zoom.y, w: zoom.w, h: zoom.h }, t0 = null;
       function step(ts) {
         if (t0 == null) t0 = ts;
@@ -533,7 +673,16 @@
       zoomAnim = requestAnimationFrame(step);
     }
 
-    function zoomReset() { animateTo({ x: 0, y: 0, w: W, h: H }); }
+    /* 전체 보기로 돌아가면 격자 초점도 함께 풉니다. 화성시 전체를 보면서
+       한 격자의 정류장만 떠 있으면 그게 왜 거기 있는지 알 수 없습니다. */
+    function zoomReset() {
+      if (state.cellFocus) {
+        state.cellFocus = null;
+        renderRoutes();
+        if (opt.onExitCellFocus) opt.onExitCellFocus();
+      }
+      animateTo({ x: 0, y: 0, w: W, h: H });
+    }
 
     /** (x,y)가 화면 중심에 오도록 이동합니다. 전체 뷰 상태면 4배로 당겨서 보여줍니다 */
     function focusPoint(x, y) {
@@ -572,7 +721,13 @@
 
     /** factor 배 확대(>1)/축소(<1). (sx,sy)는 고정점(SVG 좌표) */
     function zoomAt(factor, sx, sy) {
-      zoom = clampBox(sx - (sx - zoom.x) / factor, sy - (sy - zoom.y) / factor, zoom.w / factor);
+      /* 폭을 먼저 한계 안으로 clamp 한 뒤, 실제로 적용된 배율로 위치를 옮깁니다.
+         요청한 factor 를 그대로 쓰면 최대 배율에 도달한 뒤 휠을 더 굴렸을 때
+         폭은 그대로인데 좌상단만 커서 쪽으로 당겨져, 확대는 안 되고 시점만
+         오른쪽 아래로 계속 밀려납니다. 한계에 걸리면 f=1 이라 안 움직입니다. */
+      var w = Math.max(MIN_W, Math.min(W, zoom.w / factor));
+      var f = zoom.w / w;
+      zoom = clampBox(sx - (sx - zoom.x) / f, sy - (sy - zoom.y) / f, w);
       applyZoom();
     }
 
@@ -619,15 +774,19 @@
     }, true);
 
     /* 확대 버튼 — 우상단에는 나침반이 있어 좌상단에 둡니다 */
-    var zctl = null;
+    var zctl = null, zpctEl = null;
     if (svg.parentNode && global.document) {
       zctl = global.document.createElement('div');
       zctl.className = 'zctl';
       zctl.innerHTML =
         '<button type="button" data-z="in" aria-label="지도 확대">+</button>' +
         '<button type="button" data-z="out" aria-label="지도 축소">−</button>' +
-        '<button type="button" data-z="reset" aria-label="전체 보기">전체</button>';
+        '<button type="button" data-z="reset" aria-label="전체 보기">전체</button>' +
+        /* 현재 배율. 화성시 전체가 보이는 상태가 100% 입니다. */
+        '<div class="zpct" data-zpct aria-live="polite" title="현재 확대 비율 (화성시 전체 = 100%)">100%</div>';
       svg.parentNode.appendChild(zctl);
+      zpctEl = zctl.querySelector('[data-zpct]');
+      applyZoom();          /* 컨트롤이 생기기 전 확대 상태를 표시에 반영 */
       zctl.addEventListener('click', function (e) {
         var b = e.target.closest('[data-z]');
         if (!b) return;
@@ -665,11 +824,29 @@
       },
       /** false 로 두면 정류장이 격자 클릭을 가로채지 않습니다 */
       setStopsInteractive: function (v) { state.stopsInteractive = !!v; applyStopsInteractive(); },
+      /* 꺼진 동안에는 DOM 을 비워 두므로(renderRoutes 참고) 켤 때 다시 그립니다 */
       setShowRoutes: function (v) {
         state.showRoutes = !!v;
-        gRoutes.style.display = v ? '' : 'none';
+        renderRoutes();
       },
       setShowLabels: function (v) { state.showLabels = !!v; gLabels.style.display = v ? '' : 'none'; },
+      /** 이 격자에 걸린 정류장·노선만 그립니다. null 이면 해제(전체 토글 상태로 복귀). */
+      setCellFocus: function (cellId) {
+        state.cellFocus = cellId || null;
+        renderRoutes();
+      },
+      getCellFocus: function () { return state.cellFocus; },
+      /** 격자 안에 들어오는 정류장 목록 — 노선 경유 순서 다이어그램이 씁니다 */
+      stopsInCell: function (cellId) {
+        var c = state.byId[cellId];
+        if (!c) return [];
+        var r = cellRect(c);
+        return state.stops.filter(function (s) {
+          var p = C.xy(s);
+          return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+        });
+      },
+      routes: function () { return state.routes; },
       /** 읍면동 경계선 표시 여부 */
       setShowBoundary: function (v) { gDongLine.style.display = v ? '' : 'none'; },
       setArmed: function (v) {

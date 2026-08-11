@@ -43,7 +43,7 @@
     recRegion: null         // 추천 범위 읍면동 (null = 화성시 전체)
   };
 
-  /* 보고서·저장용 요약본. cellsByPeriod(786셀×4시간대, 약 1.7MB)를 떼어냅니다.
+  /* 보고서·저장용 요약본. cellsByPeriod(전 셀×4시간대, 수 MB)를 떼어냅니다.
      통째로 넘기면 AI 프롬프트가 모델 한도를 넘고 localStorage 도 금방 찹니다. */
   function slimSimulation(res) {
     if (!res) return null;
@@ -96,6 +96,10 @@
       S.map = HW.createMap({
         svg: $('#map'), legend: $('#legend'), meta: meta,
         placementLegend: true,   /* 범례에 배치 기호(●◆▲) 설명도 함께 */
+        /* 배치 화면에서는 기존 정류장·노선이 계속 보여야 합니다 — "여기 이미
+           정류장이 있나"가 배치 판단의 근거입니다. 대시보드는 반대로 기본
+           꺼짐입니다(격자 색을 덮지 않으려고). */
+        showRoutes: true,
         onClearFocus: function () { S.map.setEligible(null); },
         onCellClick: onCellClick,
         onCellHover: function (cell, ev) { C.showTip(cellTip(cell), ev); },

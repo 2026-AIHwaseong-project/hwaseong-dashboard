@@ -159,8 +159,13 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;min-width:0}
 .span4{grid-column:span 4}.span5{grid-column:span 5}.span6{grid-column:span 6}
 .span7{grid-column:span 7}.span8{grid-column:span 8}.span12{grid-column:span 12}
-.mapcard{grid-column:span 8}
-.sidecard{grid-column:span 4}
+/* 지도(8칸)는 우선순위 목록(4칸)보다 짧아 아래에 180px 쯤 빈 자리가 남았습니다.
+   노선 경유 순서 카드를 그 자리에 넣습니다 — 지도에서 격자를 클릭하면 바로
+   아래에서 그 격자의 버스 노선을 읽는 흐름이 됩니다.
+   우선순위는 두 행에 걸치게 해서 오른쪽 열이 통째로 이어지게 둡니다. */
+.mapcard{grid-column:span 8;grid-row:1}
+.routecard{grid-column:span 8;grid-row:2;display:flex;flex-direction:column;min-height:0}
+.sidecard{grid-column:span 4;grid-row:1 / span 2}
 .sc-card{grid-column:span 5}
 .st-card{grid-column:span 7}
 .chead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px 14px 8px;flex-wrap:wrap}
@@ -193,8 +198,25 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 .tbtn.on{border-style:solid;color:var(--ink2);background:var(--selbg);border-color:var(--sel)}
 
 .mapbox{position:relative;flex:1;min-height:0}
-.mapsvg{width:100%;height:auto;display:block;border-radius:0 0 9px 9px}
+/* --zk 기본값을 여기서 선언해 둡니다. stroke-dasharray 처럼 값이 리스트인
+   속성에서는 var(--zk,1) 의 폴백 쉼표가 리스트 구분자로 잘못 읽혀 선언이
+   통째로 무효가 됩니다 — 그런 곳은 폴백 없이 var(--zk) 만 씁니다. */
+.mapsvg{--zk:1;width:100%;height:auto;display:block;border-radius:0 0 9px 9px;position:relative;z-index:1}
 .mapbox.arm .cells rect{cursor:crosshair}
+/* 카카오맵 배경(선택, map.js 가 키가 있을 때만 만듭니다) — SVG 뒤에 깔리고
+   클릭·드래그는 전부 위의 SVG 가 받습니다(지도 자체 조작은 꺼 둠).
+   기본 배율에서는 .land/.wtr 가 그대로 덮어 지금처럼 미스매칭 색이 먼저
+   읽히고, 충분히 확대(.zdetail, ≈10배 이상)했을 때만 걷혀 실제 지도가
+   드러납니다. */
+.kakaomap{position:absolute;inset:0;z-index:0;border-radius:0 0 9px 9px;overflow:hidden;pointer-events:none}
+/* fill 만 지우면 해안선 stroke 가 남아 실제 지도 위에 굵은 회색 띠로 뜹니다 */
+.kkmode.zdetail .wtr,.kkmode.zdetail .land{fill-opacity:0;stroke-opacity:0}
+.kkmode.zdetail .c{fill-opacity:.55}
+/* 카카오 배경에는 카카오가 그린 버스정류장·상호 아이콘이 이미 타일에 찍혀
+   있습니다. 그대로 두면 우리가 찍은 정류장 점과 나란히 보여 무엇이 분석
+   대상인지 헷갈립니다. 배경을 탈색해 뒤로 물리고, 데이터 레이어(우리 점·
+   노선)만 색을 갖게 합니다. 배경 지도는 맥락이지 주인공이 아닙니다. */
+.kkmode.zdetail .kakaomap{filter:saturate(.35) brightness(1.04) contrast(.92)}
 /* 범례 — 예전에는 지도 위에 떠 있어 좌하단(우정·매향·궁평) 격자를 가렸습니다.
    지도 아래 띠로 내려 어떤 화면 폭에서도 데이터를 가리지 않습니다. */
 .legendbar{border-top:1px solid var(--line);padding:9px 14px 11px;display:flex;
@@ -218,14 +240,19 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
   border:1.2px solid var(--sel);background:var(--selbg)}
 
 .wtr{fill:var(--water)}
-.land{fill:var(--land);stroke:var(--coast);stroke-width:1.2;stroke-linejoin:round}
+.land{fill:var(--land);stroke:var(--coast);stroke-width:calc(1.2px/var(--zk,1));stroke-linejoin:round}
 .cells rect{transition:fill .25s,opacity .18s;cursor:pointer}
 @media (prefers-reduced-motion:reduce){.cells rect{transition:none}}
-/* 마우스를 올린 격자를 즉시 알 수 있게 (툴팁만으로는 어느 칸인지 헷갈립니다) */
-.cells rect:hover{stroke:var(--ink);stroke-width:1.6;stroke-opacity:.9}
+/* 마우스를 올린 격자를 즉시 알 수 있게 (툴팁만으로는 어느 칸인지 헷갈립니다).
+   stroke-width 는 SVG 사용자 단위라 확대하면 같이 굵어집니다 — --zk 로 나누지
+   않으면 120배에서 1.6px 가 192px 짜리 검은 띠가 되어 격자 안의 건물·정류장을
+   통째로 덮습니다. 지도 위의 선 굵기는 전부 이렇게 역스케일해야 합니다. */
+.cells rect:hover{stroke:var(--ink);stroke-width:calc(1.6px/var(--zk,1));stroke-opacity:.9}
+/* 확대해 실제 지도를 보는 중에는 테두리를 더 얇고 옅게 — 건물·정류장을 가리지 않게 */
+.kkmode.zdetail .cells rect:hover{stroke-width:calc(1.1px/var(--zk,1));stroke-opacity:.55}
 /* 배치 도구를 든 상태에서 적용 가능한 격자만 또렷하게 */
 .cells rect.inelig{opacity:.22}
-.cells rect.elig{stroke:var(--sel);stroke-width:1.3;stroke-opacity:.9}
+.cells rect.elig{stroke:var(--sel);stroke-width:calc(1.3px/var(--zk,1));stroke-opacity:.9}
 .c.m0{fill:var(--mi0)}.c.m1{fill:var(--mi1)}.c.m2{fill:var(--mi2)}.c.m3{fill:var(--mi3)}
 .c.m4{fill:var(--mi4)}.c.m5{fill:var(--mi5)}.c.m6{fill:var(--mi6)}
 .c.sb0{fill:var(--sb0)}.c.sb1{fill:var(--sb1)}.c.sb2{fill:var(--sb2)}.c.sb3{fill:var(--sb3)}.c.sb4{fill:var(--sb4)}
@@ -237,13 +264,25 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 .rlab.sm{font-size:calc(10px/var(--zk,1));font-weight:600;fill:var(--ink2);stroke-width:calc(3px/var(--zk,1))}
 .nlab{fill:var(--ink3);font-size:10.5px;opacity:.62;pointer-events:none}
 .wlab{fill:var(--coast);font-size:10px;letter-spacing:.2em;pointer-events:none}
-.rt-casing{fill:none;stroke:var(--card);stroke-width:calc(5px/var(--zk,1));stroke-linecap:round;stroke-linejoin:round;
-  opacity:.85;pointer-events:none}
-.rt{fill:none;stroke:var(--ink2);stroke-width:calc(2px/var(--zk,1));stroke-linecap:round;stroke-linejoin:round;
-  opacity:.8;pointer-events:none}
+/* 노선은 맥락이지 주인공이 아닙니다. 진하게 깔면 격자의 미스매칭 색을 덮어
+   "어디가 빨간가"가 안 읽힙니다. 흐리게 두고, 선택된 노선만 또렷하게 합니다. */
+.rt-casing{fill:none;stroke:var(--card);stroke-width:calc(4px/var(--zk,1));stroke-linecap:round;stroke-linejoin:round;
+  opacity:.45;pointer-events:none}
+.rt{fill:none;stroke:var(--ink2);stroke-width:calc(1.4px/var(--zk,1));stroke-linecap:round;stroke-linejoin:round;
+  opacity:.38;pointer-events:none}
 .rt.on{stroke:var(--sel);stroke-width:calc(3px/var(--zk,1));opacity:1}
-.st{fill:var(--card);stroke:var(--ink);stroke-width:calc(1.8px/var(--zk,1));r:calc(3.4px/var(--zk,1));pointer-events:none}
-.st.hub{fill:#ffd400;stroke-width:calc(2.4px/var(--zk,1));r:calc(4.6px/var(--zk,1))}
+/* 노선 선은 정류장을 순서대로 이은 모식도(schematic)지 실제 도로 형상이 아닙니다.
+   TAGO/경기도 API 가 경유정류소 목록만 주고 폴리라인을 주지 않아서입니다.
+   전체 뷰에서는 티가 안 나지만, 확대해 실제 도로가 보이는 상태에서 실선으로
+   두면 "버스가 이 길로 간다"는 틀린 주장이 됩니다. 점선으로 바꿔 근사임을
+   드러냅니다. (실제 형상이 필요하면 노선 shapefile 을 따로 받아야 합니다) */
+.kkmode.zdetail .rt{stroke-dasharray:calc(5px/var(--zk)) calc(4px/var(--zk));opacity:.3}
+.kkmode.zdetail .rt-casing{opacity:.25}
+/* --sr 은 map.js 가 정류장별로 실어 보내는 기본 반지름(일 승하차량 비례, 1.6~4.6px).
+   확대 역스케일(--zk)은 여기서 그대로 걸어야 확대해도 점 크기가 유지됩니다. */
+.st{fill:var(--card);stroke:var(--ink);stroke-width:calc(1.8px/var(--zk,1));
+  r:calc(var(--sr,3.4px)/var(--zk,1));pointer-events:none}
+.st.hub{fill:#ffd400;stroke-width:calc(2.4px/var(--zk,1));r:calc(var(--sr,4.6px)/var(--zk,1))}
 .st.on{fill:var(--sel);stroke:var(--card);stroke-width:calc(2.4px/var(--zk,1))}
 .sthit{fill:transparent;cursor:pointer;r:calc(11px/var(--zk,1))}
 /* 정류장 이름 — 충분히 확대(약 10배)했을 때만 드러납니다 (map.js 가 .zdetail 토글) */
@@ -251,20 +290,26 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
   paint-order:stroke;stroke:var(--card);stroke-width:calc(2.5px/var(--zk,1));
   stroke-linejoin:round;pointer-events:none}
 .zdetail .stlab{display:block}
+/* 격자를 클릭해 그 격자 것만 보는 중에는 몇 개 안 되므로 배율과 무관하게 보입니다 */
+.stlab.always{display:block}
 /* 배치 모드: 정류장이 격자 클릭을 가로채지 않도록 통과시킵니다 */
 [data-groutes].nohit .sthit{pointer-events:none;cursor:inherit}
 .indmark{fill:var(--ink3);opacity:.8;pointer-events:none}
 [data-selring]{pointer-events:none}
-.selring-out{fill:none;stroke:var(--card);stroke-width:5}
-.selring-in{fill:none;stroke:var(--sel);stroke-width:2.6}
+.selring-out{fill:none;stroke:var(--card);stroke-width:calc(5px/var(--zk,1))}
+.selring-in{fill:none;stroke:var(--sel);stroke-width:calc(2.6px/var(--zk,1))}
 .placed{pointer-events:none}
-.placed .pmk-bg{fill:var(--card);stroke:var(--sel);stroke-width:1.6;opacity:.96}
-.placed .pmk{fill:var(--sel);font-size:12px;font-weight:700}
-.placed .pmk-badge-bg{fill:var(--sel);stroke:var(--card);stroke-width:1.4}
-.placed .pmk-badge{fill:#fff;font-size:8.5px;font-weight:700;
+/* r 도 SVG 단위입니다 — map.js 가 r="8.5" 로 찍어 두면 확대 시 그대로 부풀어
+   화면을 덮습니다. 굵기와 같이 역스케일해 화면 크기를 고정합니다. */
+.placed .pmk-bg{fill:var(--card);stroke:var(--sel);stroke-width:calc(1.6px/var(--zk,1));opacity:.96;
+  r:calc(8.5px/var(--zk,1))}
+.placed .pmk{fill:var(--sel);font-size:calc(12px/var(--zk,1));font-weight:700}
+.placed .pmk-badge-bg{fill:var(--sel);stroke:var(--card);stroke-width:calc(1.4px/var(--zk,1));
+  r:calc(6px/var(--zk,1))}
+.placed .pmk-badge{fill:#fff;font-size:calc(8.5px/var(--zk,1));font-weight:700;
   font-family:Consolas,ui-monospace,monospace}
-.placed .pmk-more{fill:var(--sel);font-size:9px;font-weight:700;paint-order:stroke;
-  stroke:var(--card);stroke-width:2.5px}
+.placed .pmk-more{fill:var(--sel);font-size:calc(9px/var(--zk,1));font-weight:700;paint-order:stroke;
+  stroke:var(--card);stroke-width:calc(2.5px/var(--zk,1))}
 .compass{fill:none;stroke:var(--ink3);stroke-width:1.2}
 .compass-t{fill:var(--ink3);font-size:9px;font-family:Consolas,ui-monospace,monospace}
 .scalebar{stroke:var(--ink3);stroke-width:1.4}
@@ -481,9 +526,45 @@ footer.pg .srcs{margin:7px 0 5px;display:flex;gap:6px;flex-wrap:wrap;align-items
 footer.pg .srcs i{font-style:normal;border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:10.5px}
 footer.pg .dis{margin-top:6px;line-height:1.7}
 
+/* ------------------------------ 11-2. 노선 경유 순서 (선택한 격자)
+   네이버 지도 노선 화면처럼, 노선마다 세로선 하나에 정류장을 순서대로 꿴다.
+   가로로 여러 노선을 늘어놓아 "이 동네에 몇 번이 어떤 순서로 지나가는가"를
+   한눈에 대조할 수 있게 한다. */
+/* 정차가 많은 노선(30개 이상)이 섞이면 카드가 페이지를 삼키므로 높이를 묶고
+   안에서 스크롤합니다. 노선이 여럿이면 가로로도 스크롤됩니다. */
+.rstrip{flex:1;min-height:0;max-height:420px;overflow:auto;padding:10px 14px 14px;
+  display:flex;gap:14px;align-items:flex-start}
+.rstrip .empty{color:var(--ink3);font-size:12px;padding:26px 4px;line-height:1.8}
+.rline{flex:0 0 auto;min-width:132px;max-width:190px}
+/* 노선 머리 — 버스 아이콘 + 번호. 유형별 색은 실제 버스 도색 관례를 따른다. */
+.rline .rhead{display:flex;align-items:center;gap:6px;margin-bottom:8px;position:sticky;top:0;
+  background:var(--card);padding-bottom:4px;z-index:1}
+.rline .rno{font-weight:700;font-size:12.5px;color:var(--ink);letter-spacing:-.01em}
+.rline .rkind{font-size:9.5px;color:var(--ink3);border:1px solid var(--line);
+  border-radius:999px;padding:1px 6px;white-space:nowrap}
+.rline svg.bus{flex:0 0 auto}
+/* 정류장 목록 — 왼쪽 세로선에 점을 꿴 형태 */
+.rstops{list-style:none;margin:0;padding:0;position:relative}
+.rstops li{position:relative;padding:0 0 0 16px;min-height:26px;display:flex;align-items:center}
+/* 세로선: 첫 점부터 마지막 점까지만 (위아래로 삐져나오지 않게) */
+.rstops li::before{content:'';position:absolute;left:4.5px;top:0;bottom:0;width:2px;background:var(--line)}
+.rstops li:first-child::before{top:13px}
+.rstops li:last-child::before{bottom:calc(100% - 13px)}
+.rstops li::after{content:'';position:absolute;left:0;top:9px;width:11px;height:11px;border-radius:50%;
+  background:var(--card);border:2.5px solid var(--sel);box-sizing:border-box}
+.rstops .snm{font-size:11.5px;color:var(--ink2);line-height:1.35;
+  overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+/* 승차량이 많은 정류장은 점을 채워 구분 */
+.rstops li.busy::after{background:var(--sel)}
+.rstops li.busy .snm{color:var(--ink);font-weight:600}
+/* 격자 밖으로 이어지는 구간임을 알리는 꼬리표 */
+.rline .rtail{font-size:10px;color:var(--ink3);padding:4px 0 0 16px}
+
 /* ------------------------------------------------------- 12. 반응형 */
 @media (max-width:1020px){
-  .mapcard,.sidecard,.sc-card,.st-card,.span4,.span5,.span6,.span7,.span8{grid-column:span 12}
+  .mapcard,.routecard,.sidecard,.sc-card,.st-card,.span4,.span5,.span6,.span7,.span8{grid-column:span 12}
+  /* 한 줄로 쌓이는 폭에서는 명시적 행 배치를 풀어야 순서대로 흐릅니다 */
+  .mapcard,.routecard,.sidecard{grid-row:auto}
   .kpis{grid-template-columns:1fr 1fr}
   .t10{max-height:380px}
 }
@@ -753,4 +834,9 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .zctl button:hover{border-color:var(--sel);color:var(--ink)}
 .zctl [data-z="reset"]{display:none;width:auto;height:22px;padding:0 7px;font-size:10.5px}
 .zctl.zoomed [data-z="reset"]{display:flex}
+/* 현재 확대 비율 — 화성시 전체가 보이는 상태가 100%, 최대 12,000% */
+.zpct{min-width:26px;padding:2px 4px;border:1px solid var(--line);border-radius:6px;
+  background:color-mix(in srgb,var(--card) 92%,transparent);color:var(--ink3);
+  font-size:9.5px;line-height:1.5;text-align:center;font-variant-numeric:tabular-nums;
+  font-family:Consolas,ui-monospace,monospace;pointer-events:none;white-space:nowrap}
 .mapsvg.panning{cursor:grabbing}

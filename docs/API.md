@@ -95,7 +95,7 @@ HTTP 상태 코드 + 아래 형태 중 아무거나. 프론트엔드는 `message
   "grid": {
     "sizeMeters": 1000,            // 분석 격자. SGIS 공공데이터포털 배포판이 1km 만 제공
     "analysisCellCount": 850,      // 화성시 1km 격자 수
-    "displaySizeMeters": 1500,     // 화면 표시 격자 (분석 격자를 묶어 그림)
+    "displaySizeMeters": 1000,     // 표시 격자 = 분석 격자 (sizeMeters 와 동일)
     "cellCount": 353,              // ★ /grid 의 cells 길이와 반드시 같아야 함
     "crs": "EPSG:4326",
     "bbox": [126.52923, 37.00909, 127.1613, 37.30279]

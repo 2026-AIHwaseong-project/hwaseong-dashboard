@@ -104,6 +104,24 @@
     if (o && typeof o.lon === 'number' && typeof o.lat === 'number') return project(o.lon, o.lat);
     return { x: 0, y: 0 };
   }
+  /** project() 의 역함수 — SVG 좌표 → 경위도. 카카오 배경 지도(map.js)를
+      SVG 의 확대·이동 상태에 맞춰 따라오게 할 때만 씁니다. */
+  function unproject(x, y) {
+    var b = PROJ.bbox;
+    if (!b) return { lon: 0, lat: 0 };
+    var lon0 = b[0], lat0 = b[1], lon1 = b[2], lat1 = b[3];
+    var midLat = (lat0 + lat1) / 2;
+    var kx = Math.cos(midLat * Math.PI / 180);
+    var dx = (lon1 - lon0) * kx, dy = (lat1 - lat0);
+    var innerW = PROJ.w - PROJ.pad * 2, innerH = PROJ.h - PROJ.pad * 2;
+    var scale = Math.min(innerW / dx, innerH / dy);
+    var offX = PROJ.pad + (innerW - dx * scale) / 2;
+    var offY = PROJ.pad + (innerH - dy * scale) / 2;
+    return {
+      lon: lon0 + (x - offX) / (kx * scale),
+      lat: lat1 - (y - offY) / scale
+    };
+  }
 
   /* ------------------------------------------------------------- 툴팁 */
   var _tt = null;
@@ -377,7 +395,7 @@
     HELP: HELP, wireHelp: wireHelp,
     clamp: clamp, fmt: fmt, fmt1: fmt1, pct: pct, won: won, delta: delta,
     todayISO: todayISO, nowStamp: nowStamp, korDate: korDate,
-    setProjection: setProjection, fitHeight: fitHeight, project: project, xy: xy,
+    setProjection: setProjection, fitHeight: fitHeight, project: project, xy: xy, unproject: unproject,
     showTip: showTip, hideTip: hideTip, toast: toast,
     initTheme: initTheme, applyTheme: applyTheme,
     downloadBlob: downloadBlob,

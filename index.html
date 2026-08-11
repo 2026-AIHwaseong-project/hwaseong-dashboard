@@ -64,7 +64,7 @@
       <div class="chead">
         <h2>격자 미스매칭 지도
           <button class="help" data-help="mi" type="button">?</button></h2>
-        <span class="hsub">붉을수록 수요 대비 버스가 부족한 격자 · 표시 격자 1.5km (분석 격자 1km) · 실제 읍면동 경계</span>
+        <span class="hsub" id="mapSub">붉을수록 수요 대비 버스가 부족한 격자 · 실제 읍면동 경계</span>
       </div>
       <div class="mtools">
         <div class="lset" id="layers" role="tablist" aria-label="지도 레이어">
@@ -74,7 +74,9 @@
           <button class="lbtn" data-layer="flow" type="button">유동인구</button>
         </div>
         <div class="tset">
-          <button class="tbtn on" id="tgRoute" type="button" aria-pressed="true">노선·정류장</button>
+          <!-- 노선·정류장은 기본 꺼짐 — 격자를 클릭하면 그 격자 것만 켜집니다.
+               전부 켜면 격자 색이 덮여 미스매칭이 안 읽힙니다. -->
+          <button class="tbtn" id="tgRoute" type="button" aria-pressed="false">노선·정류장 전체</button>
           <button class="tbtn on" id="tgLabel" type="button" aria-pressed="true">지명</button>
         </div>
       </div>
@@ -83,6 +85,15 @@
              aria-label="화성시 격자 미스매칭 지도. 붉을수록 수요 대비 공급이 부족한 격자입니다."></svg>
       </div>
       <div class="legendbar" id="legend"></div>
+    </section>
+
+    <!-- ─────────── 선택한 격자의 노선 경유 순서 ─────────── -->
+    <section class="card routecard">
+      <div class="chead">
+        <h2>이 격자를 지나는 노선</h2>
+        <span class="hsub" id="routeStripSub">지도에서 격자를 클릭하면 그 격자를 지나는 버스와 정류장 순서가 나옵니다</span>
+      </div>
+      <div class="rstrip" id="routeStrip"></div>
     </section>
 
     <!-- ───────────────────── 우선순위 ───────────────────── -->
