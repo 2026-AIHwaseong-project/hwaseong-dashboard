@@ -464,7 +464,15 @@
       sel.value = stopId;
     }
     S.map.highlightStop(stopId);
-    if (focus && S.map.focusStop) S.map.focusStop(stopId);
+    /* 사용자가 고른 정류장이면 그 정류장이 속한 격자로 파고듭니다 —
+       격자 클릭과 같은 배율로 확대되고, 그 격자의 노선·정류장만 남으며,
+       검색한 정류장은 선택 표시가 붙은 채로 보입니다.
+       격자를 못 찾으면(경계 밖 등) 예전처럼 정류장 중심 이동만 합니다. */
+    if (focus) {
+      var cid = S.map.cellOfStop && S.map.cellOfStop(stopId);
+      if (cid) enterCellFocus(cid, true);
+      else if (S.map.focusStop) S.map.focusStop(stopId);
+    }
     api.stopProfile(stopId, S.period).then(function (p) {
       /* 느린 이전 응답이 최신 선택을 덮지 않게 합니다 */
       if (S.selectedStopId !== stopId) return;
@@ -682,12 +690,20 @@
     }).join('');
   }
 
-  /** 격자 하나로 파고듭니다 — 확대 + 그 격자의 정류장·노선만 + 경유 순서 카드 */
-  function enterCellFocus(cellId) {
-    selectCell(cellId, true);
+  /** 격자 하나로 파고듭니다 — 확대 + 그 격자의 정류장·노선만 + 경유 순서 카드
+   *
+   *  keepStop 이 참이면 지금 선택된 정류장을 그대로 둡니다. 정류장을 검색해서
+   *  그 격자로 들어가는 흐름에서 필요합니다 — 기본값(거짓)이면 selectCell 이
+   *  격자의 최근접 정류장으로 선택을 바꿔 버려서, 방금 검색한 정류장이 아니라
+   *  엉뚱한 정류장이 선택된 채로 화면이 뜹니다. */
+  function enterCellFocus(cellId, keepStop) {
+    selectCell(cellId, !keepStop);
     S.map.setCellFocus(cellId);
     S.map.focusCell(cellId);
     renderCellRoutes(cellId);
+    /* setCellFocus 가 노선·정류장 DOM 을 새로 그리므로 선택 표시를 다시 얹습니다
+       (map.renderRoutes 도 복원하지만, 순서에 기대지 않고 여기서도 확실히 합니다) */
+    if (keepStop && S.selectedStopId) S.map.highlightStop(S.selectedStopId);
   }
 
   function cellTip(c) {
@@ -698,6 +714,78 @@
       (c.mi >= 0 ? '+' : '') + c.mi.toFixed(2) + '</b><br>' +
       '잠재수요 ' + fmt(c.flowTripsPerDay) + '통행/일 · 고령비 <b>' + Math.round(c.elderlyRatio * 100) + '%</b><br>' +
       '<span class="tag ' + qc + '">' + esc(c.quadrantLabel) + '</span>' + adj;
+  }
+
+  /* =====================================================================
+   * 8-2. 지도 검색 — 읍면동 이름 또는 격자 ID
+   *
+   * 우선순위 표에는 "다사6707" 같은 격자 ID 가 나오는데, 지금까지는 그게
+   * 지도 어디인지 찾으려면 표를 클릭하는 수밖에 없었습니다. 반대로 "봉담읍이
+   * 어디지"를 지도에서 바로 찾을 방법도 없었습니다. 둘 다 여기서 받습니다.
+   * =================================================================== */
+  function wireMapSearch() {
+    var inp = $('#regionSearch');
+    if (!inp) return;
+
+    /* 읍면동 목록은 격자가 로드된 뒤에야 알 수 있습니다. wireControls 는
+       loadPeriod 보다 먼저 도므로 여기서 미리 읽으면 빈 배열이 잡힙니다 —
+       쓸 때마다 지도에서 다시 가져옵니다. */
+    function regionList() {
+      return (S.map.regions && S.map.regions()) || [];
+    }
+    /* 자동완성 목록은 처음 검색창에 들어올 때 한 번만 채웁니다 */
+    var listFilled = false;
+    function fillRegionList() {
+      var dl = $('#regionList');
+      if (!dl || listFilled) return;
+      var rs = regionList();
+      if (!rs.length) return;         /* 아직 격자 로드 전 — 다음 기회에 */
+      dl.innerHTML = rs.map(function (r) {
+        return '<option value="' + esc(r) + '"></option>';
+      }).join('');
+      listFilled = true;
+    }
+    inp.addEventListener('focus', fillRegionList);
+
+    function go() {
+      fillRegionList();
+      var regions = regionList();
+      var q = (inp.value || '').trim();
+      if (!q) {                       /* 비우면 강조 해제 + 전체 보기 */
+        if (S.focusRegion) focusRegion(null);
+        S.map.zoomReset();
+        return;
+      }
+
+      /* 1순위: 격자 ID 정확 일치 — 그 칸으로 바로 파고듭니다 */
+      var cell = cellById(q);
+      if (cell) { enterCellFocus(cell.id); return; }
+
+      /* 2순위: 읍면동 — 정확 → 접두 → 부분 일치 순 */
+      var hit = regions.filter(function (r) { return r === q; })[0] ||
+                regions.filter(function (r) { return r.indexOf(q) === 0; })[0] ||
+                regions.filter(function (r) { return r.indexOf(q) >= 0; })[0];
+      if (hit) {
+        inp.value = hit;
+        /* focusRegion 은 같은 이름을 다시 주면 해제되는 토글입니다.
+           검색은 언제 눌러도 "그 권역을 본다"가 되어야 하므로 먼저 풀어 둡니다. */
+        if (S.focusRegion === hit) S.focusRegion = null;
+        focusRegion(hit);
+        S.map.setCellFocus(null);     /* 한 격자만 보던 상태면 권역 보기로 넓힙니다 */
+        renderCellRoutes(null);
+        S.map.zoomToRegion(hit);      /* focusRegion 은 강조만 하므로 확대는 따로 */
+        return;
+      }
+
+      C.toast('“' + esc(q) + '” 에 해당하는 읍면동·격자를 찾지 못했습니다.');
+    }
+
+    inp.addEventListener('change', go);        /* 자동완성에서 고른 경우 */
+    inp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); go(); }
+    });
+    var btn = $('#regionGo');
+    if (btn) btn.addEventListener('click', go);
   }
 
   /* =====================================================================
@@ -720,6 +808,7 @@
       e.currentTarget.setAttribute('aria-pressed', String(on));
       S.map.setShowLabels(on);
     });
+    wireMapSearch();
 
     $('#regionTbl').addEventListener('click', function (e) {
       var th = e.target.closest('th[data-sort]');

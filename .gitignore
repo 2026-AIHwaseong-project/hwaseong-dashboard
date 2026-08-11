@@ -7,6 +7,10 @@
 # 의존성 (현재 프로젝트는 외부 라이브러리를 쓰지 않습니다)
 node_modules/
 
+# 에디터·도구
+.omc/
+.vscode/
+
 # OS
 .DS_Store
 Thumbs.db

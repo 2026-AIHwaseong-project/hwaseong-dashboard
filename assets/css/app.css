@@ -197,6 +197,15 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 .tbtn{font-size:11.5px;padding:4px 10px;border:1px dashed var(--line);border-radius:999px;color:var(--ink3)}
 .tbtn.on{border-style:solid;color:var(--ink2);background:var(--selbg);border-color:var(--sel)}
 
+/* 지도 검색 — 읍면동 이름 또는 격자 ID */
+.msearch{display:flex;gap:4px;align-items:center}
+.msi{font-size:11.5px;padding:4px 11px;width:150px;color:var(--ink2);
+     border:1px solid var(--line);border-radius:999px;background:var(--card)}
+.msi::placeholder{color:var(--ink3)}
+.msi:focus{outline:none;border-color:var(--sel);background:var(--selbg)}
+/* 검색창 안의 기본 X 버튼이 테마에 따라 안 보이는 경우가 있어 크기만 맞춥니다 */
+.msi::-webkit-search-cancel-button{cursor:pointer}
+
 .mapbox{position:relative;flex:1;min-height:0}
 /* --zk 기본값을 여기서 선언해 둡니다. stroke-dasharray 처럼 값이 리스트인
    속성에서는 var(--zk,1) 의 폴백 쉼표가 리스트 구분자로 잘못 읽혀 선언이

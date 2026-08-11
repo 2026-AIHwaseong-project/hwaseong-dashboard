@@ -62,6 +62,13 @@
     var ZDETAIL_K = 10 * Z_SCALE;       // 정류장 이름이 드러나는 배율
     var zoomAnim = null;
 
+    /* 격자를 클릭했을 때 화면 가로에 담을 격자 수. 클릭한 칸이 화면을 채우고
+       이웃 칸은 가장자리에 살짝 걸치는 정도가 2.06 이다 — 1km 격자(15.8px)에서
+       약 2,950%. 셀 실크기(cellRect)에서 역산하므로 500m 로 세분화해도
+       화면에 보이는 그림은 같다(그때는 배율이 약 5,900% 가 된다).
+       예전에는 W/4(400%) 고정이라 카카오 배경의 건물·골목이 안 보였다. */
+    var CELL_ZOOM_SPAN = 2.06;
+
     var state = {
       cells: [], stops: [], routes: [], scale: null,
       byId: {},
@@ -265,16 +272,30 @@
       gCells.innerHTML = h;
     }
 
+    /* 판정용 사각형 — cellRect 는 칸 사이가 붙어 보이지 않게 사방 0.4px 를 깎습니다.
+       그 0.4px 간격에 정류장이 떨어지면 "어느 격자에도 안 속한" 것이 되어,
+       격자를 찍었을 때 그 정류장만 사라집니다. 실측 400개 중 43개(약 11%)가
+       이 띠에 걸렸습니다. 판정에는 깎기 전 경계를 씁니다. */
+    function cellHitRect(c) {
+      var r = cellRect(c);
+      return { x: r.x - 0.4, y: r.y - 0.4, w: r.w + 0.8, h: r.h + 0.8 };
+    }
+    function inCell(c, s) {
+      var r = cellHitRect(c), p = C.xy(s);
+      return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+    }
+
     /** cellFocus 가 걸려 있으면 그 격자 안의 정류장 id 집합, 없으면 null */
     function focusStopIds() {
       if (!state.cellFocus) return null;
       var c = state.byId[state.cellFocus];
       if (!c) return null;
-      var r = cellRect(c), set = {};
-      state.stops.forEach(function (s) {
-        var p = C.xy(s);
-        if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) set[s.id] = 1;
-      });
+      var set = {};
+      state.stops.forEach(function (s) { if (inCell(c, s)) set[s.id] = 1; });
+      /* 선택된 정류장은 무조건 그립니다. 정류장을 검색해 그 격자로 들어왔는데
+         경계에 걸려 안 그려지면 "검색한 정류장이 선택된 채로 보인다"가 깨집니다.
+         격자 밖 정류장(시 경계 부근)을 검색한 경우에도 이 한 줄이 보장해 줍니다. */
+      if (state.selectedStopId) set[state.selectedStopId] = 1;
       return set;
     }
 
@@ -353,6 +374,10 @@
       /* 격자를 찍어 놓은 동안에는 전체 토글이 꺼져 있어도 그 격자 것은 보여야 합니다 */
       gRoutes.style.display = (state.showRoutes || only) ? '' : 'none';
       applyStopsInteractive();
+      /* 위에서 DOM 을 통째로 새로 만들었으므로 선택 표시(.on)가 날아갑니다.
+         정류장을 검색해 그 격자로 파고드는 흐름이 setCellFocus → renderRoutes
+         순서라, 여기서 복원하지 않으면 "검색한 정류장이 선택돼 보인다"가 깨집니다. */
+      if (state.selectedStopId) highlightStop(state.selectedStopId);
     }
 
     /* 배치 모드에서는 정류장이 격자 클릭을 가로채지 않도록 통과시킵니다.
@@ -697,11 +722,16 @@
       focusPoint(p.x, p.y);
     }
 
+    /** 격자 하나가 화면을 채우도록 확대합니다 (CELL_ZOOM_SPAN 참고).
+        focusPoint 를 쓰던 예전 구현은 전체 뷰에서 4배까지만 당겨서, 격자를
+        찍어도 카카오 배경이 여전히 시 전체 축척이라 골목이 안 보였습니다. */
     function focusCell(cellId) {
       var c = state.byId[cellId];
       if (!c) return;
       var r = cellRect(c);
-      focusPoint(r.x + r.w / 2, r.y + r.h / 2);
+      var w = Math.max(MIN_W, Math.min(W, r.w * CELL_ZOOM_SPAN));
+      animateTo(clampBox(r.x + r.w / 2 - w / 2,
+                         r.y + r.h / 2 - (w * H / W) / 2, w));
     }
 
     /** 해당 읍면동의 격자들이 화면을 채우도록 확대합니다 */
@@ -836,17 +866,29 @@
         renderRoutes();
       },
       getCellFocus: function () { return state.cellFocus; },
-      /** 격자 안에 들어오는 정류장 목록 — 노선 경유 순서 다이어그램이 씁니다 */
+      /** 격자 안에 들어오는 정류장 목록 — 노선 경유 순서 다이어그램이 씁니다.
+          지도에 그리는 집합(focusStopIds)과 같은 판정을 써야 카드와 지도가 어긋나지 않습니다. */
       stopsInCell: function (cellId) {
         var c = state.byId[cellId];
         if (!c) return [];
-        var r = cellRect(c);
-        return state.stops.filter(function (s) {
-          var p = C.xy(s);
-          return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
-        });
+        return state.stops.filter(function (s) { return inCell(c, s); });
       },
       routes: function () { return state.routes; },
+      /** 이 정류장이 들어 있는 격자 id — 정류장을 검색해 그 격자로 파고들 때 씁니다.
+          격자 사이 틈에 떨어지면 cellAt 이 최근접 격자로 스냅해 줍니다. */
+      cellOfStop: function (stopId) {
+        var s = findStop(stopId);
+        if (!s) return null;
+        var p = C.xy(s);
+        var c = cellAt(p.x, p.y);
+        return c ? c.id : null;
+      },
+      /** 격자에 실제로 존재하는 읍면동 이름 목록 (가나다순) — 지역 검색용 */
+      regions: function () {
+        var seen = {};
+        state.cells.forEach(function (c) { if (c.region) seen[c.region] = 1; });
+        return Object.keys(seen).sort(function (a, b) { return a.localeCompare(b, 'ko'); });
+      },
       /** 읍면동 경계선 표시 여부 */
       setShowBoundary: function (v) { gDongLine.style.display = v ? '' : 'none'; },
       setArmed: function (v) {

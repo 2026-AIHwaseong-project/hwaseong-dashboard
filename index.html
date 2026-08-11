@@ -79,6 +79,14 @@
           <button class="tbtn" id="tgRoute" type="button" aria-pressed="false">노선·정류장 전체</button>
           <button class="tbtn on" id="tgLabel" type="button" aria-pressed="true">지명</button>
         </div>
+        <!-- 읍면동 이름으로 그 권역을 확대·강조하거나, 우선순위 표에서 본
+             격자 ID(예: 다사6707)를 그대로 넣어 그 칸으로 바로 파고듭니다. -->
+        <div class="msearch">
+          <input id="regionSearch" class="msi" type="search" list="regionList" autocomplete="off"
+                 placeholder="지역·격자 검색" aria-label="읍면동 이름 또는 격자 ID로 지도에서 찾기">
+          <datalist id="regionList"></datalist>
+          <button class="tbtn" id="regionGo" type="button">찾기</button>
+        </div>
       </div>
       <div class="mapbox">
         <svg id="map" class="mapsvg" viewBox="0 0 960 580" role="img"
