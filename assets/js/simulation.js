@@ -40,17 +40,78 @@
     recommendation: null,   // 추천 결과 원본
     recEdited: false,       // 추천안을 사용자가 손봤는지
     recStrategy: 'efficiency',  // 어떤 목적으로 고를지 (효율/약자/균형/즉시)
-    recRegion: null         // 추천 범위 읍면동 (null = 화성시 전체)
+    recRegion: null,        // 추천 범위 읍면동 (null = 화성시 전체)
+    area: null,             // 분석 영역 안 격자 ID Set (null = 화성시 전체)
+    baseCells: {}           // 시간대별 기준선 격자 — 영역 KPI 를 다시 세는 데 씁니다
   };
+
+  /* =====================================================================
+   * 분석 영역
+   *   지도에서 사각형을 끌어 정한 범위입니다. 서버 KPI 는 화성시 전체 기준이라
+   *   영역을 정하면 그 안의 격자만으로 다시 세야 합니다(섞으면 안 됩니다).
+   * =================================================================== */
+  function kpiOfCells(cells) {
+    var need = 0, drt = 0, total = 0, trips = 0, eld = 0;
+    (cells || []).forEach(function (c) {
+      if (S.area && !S.area.has(c.id)) return;
+      total++;
+      if (c.quadrant === 'drt') drt++;
+      if (c.quadrant !== 'need') return;
+      need++;
+      trips += c.flowTripsPerDay || 0;
+      eld += (c.flowTripsPerDay || 0) * (c.elderlyRatio || 0);
+    });
+    return {
+      needCells: need, drtCells: drt, totalCells: total,
+      needShare: total ? +(100 * need / total).toFixed(1) : 0,
+      potentialTripsPerDay: Math.round(trips),
+      elderlyTripsPerDay: Math.round(eld)
+    };
+  }
+
+  /** 화면이 쓸 시간대별 블록. 영역이 없으면 서버 값 그대로입니다. */
+  function viewPeriods() {
+    if (!S.result) return [];
+    if (!S.area || !S.result.cellsByPeriod) return S.result.periods;
+    return S.result.periods.map(function (p) {
+      var sc = S.result.cellsByPeriod[p.period], bs = S.baseCells[p.period];
+      if (!sc || !bs) return p;                     /* 기준선이 아직이면 전체 값 */
+      var kpi = kpiOfCells(sc), base = kpiOfCells(bs);
+      return {
+        period: p.period, periodName: p.periodName, kpi: kpi, baseline: base,
+        delta: {
+          needCells: kpi.needCells - base.needCells,
+          drtCells: kpi.drtCells - base.drtCells,
+          needShare: +(kpi.needShare - base.needShare).toFixed(1),
+          potentialTripsPerDay: kpi.potentialTripsPerDay - base.potentialTripsPerDay,
+          elderlyTripsPerDay: kpi.elderlyTripsPerDay - base.elderlyTripsPerDay
+        }
+      };
+    });
+  }
+
+  /** 영역 KPI 에 필요한 4개 시간대 기준선 격자를 받아 둡니다(api 가 캐시). */
+  function ensureBaseCells() {
+    var ids = (S.meta.periods || []).map(function (p) { return p.id; });
+    return Promise.all(ids.map(function (id) {
+      if (S.baseCells[id]) return null;
+      return api.grid(id).then(function (g) { S.baseCells[id] = g.cells; });
+    }));
+  }
 
   /* 보고서·저장용 요약본. cellsByPeriod(전 셀×4시간대, 수 MB)를 떼어냅니다.
      통째로 넘기면 AI 프롬프트가 모델 한도를 넘고 localStorage 도 금방 찹니다. */
   function slimSimulation(res) {
     if (!res) return null;
+    /* periods 는 화면과 **같은 기준**으로 넘겨야 합니다. 영역이 켜져 있을 때
+       context.kpi 는 영역 기준(currentPeriodBlock→viewPeriods)인데 여기만 서버
+       원본(화성시 전체)을 넘기면, AI 보고서 프롬프트 한 장 안에 같은 이름의
+       needCells 가 서로 다른 스코프로 두 번 들어갑니다. */
     return {
       id: res.id, name: res.name, createdAt: res.createdAt,
       placements: res.placements, cost: res.cost, budgetKrw: res.budgetKrw,
-      periods: res.periods, effectiveness: res.effectiveness
+      periods: viewPeriods(), effectiveness: res.effectiveness,
+      scope: S.area ? { kind: 'area', cellCount: S.area.size } : { kind: 'city' }
     };
   }
 
@@ -101,6 +162,7 @@
            꺼짐입니다(격자 색을 덮지 않으려고). */
         showRoutes: true,
         onClearFocus: function () { S.map.setEligible(null); },
+        onAreaChange: onAreaChange,
         onCellClick: onCellClick,
         onCellHover: function (cell, ev) { C.showTip(cellTip(cell), ev); },
         /* 정류장을 눌러도 그 정류장이 놓인 격자에 배치됩니다.
@@ -200,6 +262,57 @@
     $('#scenName').addEventListener('input', function () { S.name = this.value || '이름 없는 시나리오'; });
   }
 
+  /** 지도에서 영역이 정해지거나 풀렸을 때 */
+  function onAreaChange(ids, box) {
+    S.area = ids;
+    setAreaMode(false);
+    $('#btnAreaClear').hidden = !ids;
+    /* 영역 밖에 이미 놓인 배치는 결과와 어긋나므로 뺍니다 */
+    if (ids) {
+      var before = S.placements.length;
+      S.placements = S.placements.filter(function (p) { return ids.has(p.cellId); });
+      var dropped = before - S.placements.length;
+      /* 추천안에서 배치를 덜어냈으면 '사용자 수정됨' 으로 표시해야 합니다.
+         안 그러면 추천 박스는 서버 요약(10건·3,000억)을 그대로 띄우는데 실제
+         배치는 4건인 상태가 되고, [추천 다시 받기] 때 교체 확인도 안 뜹니다.
+         removePlacement·되돌리기는 이미 같은 처리를 합니다. */
+      if (dropped && S.recommendation) S.recEdited = true;
+      C.toast('분석 영역 <b>' + ids.size + '칸</b>을 지정했습니다. KPI·전후 비교가 이 영역 기준으로 다시 계산됩니다.' +
+        (dropped ? ' 영역 밖 배치 ' + dropped + '건은 제외했습니다.' : ''));
+    } else {
+      C.toast('분석 영역을 해제했습니다. 화성시 전체 기준으로 돌아갑니다.');
+    }
+    paintAreaChip();
+    refreshEligible();
+    /* 영역 KPI 는 4개 시간대 기준선 격자가 있어야 셀 수 있습니다 */
+    ensureBaseCells().then(function () { return runSim(); }).catch(fail);
+  }
+
+  function setAreaMode(on) {
+    var b = $('#btnArea');
+    if (!b) return;
+    b.classList.toggle('on', !!on);
+    b.setAttribute('aria-pressed', String(!!on));
+    b.textContent = on ? '영역 지정 중…' : '영역 지정';
+    S.map.setAreaMode(!!on);
+    $('#simhint').textContent = on
+      ? '지도에서 사각형을 끌어 분석할 범위를 정하세요. 그 안에서만 배치하고, 그 안의 결과만 집계합니다.'
+      : '수단을 고른 뒤 지도를 클릭하면 배치되고, KPI가 기준선 대비 즉시 재계산됩니다.';
+  }
+
+  /** 지금 어느 범위를 보고 있는지 추천 칩 옆에 함께 알립니다 */
+  function paintAreaChip() {
+    var host = $('#recScope');
+    if (!host) return;
+    var old = host.querySelector('.rs-area');
+    if (old) old.remove();
+    if (!S.area) return;
+    var el = document.createElement('span');
+    el.className = 'rs-area';
+    el.innerHTML = '분석 영역 <b>' + S.area.size + '칸</b>';
+    host.appendChild(el);
+  }
+
   /* =====================================================================
    * 3. 배치
    * =================================================================== */
@@ -232,6 +345,10 @@
 
   /** 수단별 적용 제약. 위반이면 안내 문구를, 아니면 null 을 돌려줍니다. */
   function guardFor(type, cell) {
+    if (S.area && !S.area.has(cell.id)) {
+      return '지정한 분석 영역 밖입니다. 영역 안에서만 배치할 수 있습니다. ' +
+        '(영역을 바꾸려면 [영역 지정]으로 다시 끌거나 [영역 해제]를 누르세요)';
+    }
     if (type === 'freq' && cell.coverage < coverageMin('freq')) {
       return '배차 증편은 기존 정류장이 도보권(약 300m) 안에 있는 격자에만 적용할 수 있습니다. ' +
         '이 격자는 정류장 도보권 밖입니다.';
@@ -248,7 +365,10 @@
      예전에는 찍어 봐야 알 수 있었는데, 이제 도구를 들면 지도에서 바로 구분됩니다. */
   function refreshEligible() {
     if (!S.map) return;
-    if (!S.tool || S.tool === 'drt') { S.map.setEligible(null); return; }
+    if (!S.tool) { S.map.setEligible(null); return; }
+    /* 똑버스는 커버리지 제약이 없어 평소엔 강조하지 않지만,
+       영역을 정했으면 그 안만 배치 가능하므로 함께 표시합니다. */
+    if (S.tool === 'drt' && !S.area) { S.map.setEligible(null); return; }
     var set = new Set();
     S.map.cells().forEach(function (c) { if (!guardFor(S.tool, c)) set.add(c.id); });
     var label = (S.effects[S.tool] || {}).label || S.tool;
@@ -286,7 +406,10 @@
       budgetKrw: S.budget,
       maxPlacements: 10,
       strategy: S.recStrategy,
-      region: S.recRegion || undefined,   // 추천 범위 (없으면 화성시 전체)
+      /* 지도에서 끈 영역이 있으면 그 안에서만 고릅니다(읍면동 범위보다 우선).
+         영역 밖 지점을 추천하면 화면의 영역 KPI 와 어긋납니다. */
+      cellIds: S.area ? Array.from(S.area) : undefined,
+      region: (!S.area && S.recRegion) || undefined,   // 추천 범위 (없으면 화성시 전체)
       includeAlternatives: true    // 다른 목적으로 짜면 어떻게 되는지 함께
     }).then(function (rec) {
       if (!rec.placements.length) {
@@ -301,8 +424,19 @@
       }
       S.recommendation = rec;
       S.recEdited = false;
-      /* 기존 배치는 교체합니다 */
-      S.placements = rec.placements.map(function (p) {
+      /* 기존 배치는 교체합니다.
+         영역이 켜져 있으면 응답을 한 번 더 거릅니다. cellIds 를 실어 보내지만
+         그걸 모르는 백엔드는 pydantic 이 그 키를 조용히 버리므로, 그대로 받으면
+         영역 밖 흐린 칸에 마커가 찍히고 예산은 전액 잡히는데 KPI 변화는 0 인
+         화면이 됩니다 — 손으로 찍을 때는 "영역 밖입니다"로 막으면서 앱이 스스로
+         그 규칙을 깨는 셈입니다. 서버 버전과 무관하게 불변식을 지킵니다. */
+      var got = rec.placements;
+      var kept = S.area ? got.filter(function (p) { return S.area.has(p.cellId); }) : got;
+      if (kept.length < got.length) {
+        C.toast('영역 밖 추천 ' + (got.length - kept.length) + '건을 제외했습니다 — ' +
+          '서버가 영역 제한을 지원하지 않는 버전입니다.', 'err', 6000);
+      }
+      S.placements = kept.map(function (p) {
         return {
           type: p.type, cellId: p.cellId, cellName: p.cellName,
           count: p.count, fromAI: true, rank: p.rank, rationale: p.rationale
@@ -332,6 +466,14 @@
     var selCell = (S.selectedCellId && S.map) ? S.map.cellById(S.selectedCellId) : null;
     var selRegion = selCell ? selCell.region : null;
     var h = '<span class="rs-lb">추천 범위</span>';
+    /* 영역이 켜져 있으면 읍면동 범위는 무시됩니다(requestRecommendation 이
+       region 을 undefined 로 눌러 보냅니다). 그런데도 '추천 범위 ○○동' 을
+       계속 그리면 사용자는 동 범위로 나간다고 믿게 됩니다 — 실제 범위만 적습니다. */
+    if (S.area) {
+      host.innerHTML = h + '<b>분석 영역 ' + S.area.size + '칸</b>' +
+        '<button class="rs-btn" data-scope="area-clear" type="button">영역 해제</button>';
+      return;
+    }
     if (S.recRegion) {
       h += '<b>' + esc(S.recRegion) + '</b>' +
         '<button class="rs-btn" data-scope="all" type="button">화성시 전체로</button>';
@@ -345,6 +487,11 @@
           : '');
     }
     host.innerHTML = h;
+    /* innerHTML 로 통째 교체했으니 영역 칩을 다시 붙입니다. 예전에는 이 호출이
+       없어서, 영역을 지정한 뒤 아무 격자나 클릭하면(onCellClick 이 무조건
+       paintRecScope 를 부릅니다) 칩이 사라진 채 돌아오지 않았습니다.
+       위 S.area 분기를 타면 이미 영역을 적었으므로 여기는 안 옵니다. */
+    paintAreaChip();
   }
 
   function paintRecBox() {
@@ -523,10 +670,11 @@
 
   function currentPeriodBlock() {
     if (!S.result) return null;
-    for (var i = 0; i < S.result.periods.length; i++) {
-      if (S.result.periods[i].period === S.period) return S.result.periods[i];
+    var ps = viewPeriods();
+    for (var i = 0; i < ps.length; i++) {
+      if (ps[i].period === S.period) return ps[i];
     }
-    return S.result.periods[0];
+    return ps[0];
   }
 
   /* =====================================================================
@@ -572,8 +720,12 @@
       : '<span style="color:var(--ink3)">–</span>';
     $('#k4d').className = 'dl';
     $('#k4d').textContent = has ? ('총 사업비 ' + won(S.result.cost.totalKrw)) : '기준선';
+    /* effectiveness 는 서버가 화성시 전체로 계산한 값입니다. 바로 옆 k1~k3 은
+       영역이 켜져 있으면 영역 기준이라, 표기가 없으면 서로 다른 모수의 숫자를
+       나란히 읽게 됩니다("영역에 3,000억 써서 통행당 880원"). 기준을 적습니다. */
     $('#k4s').textContent = eff.resolvedTripsPerDay > 0
-      ? ('전 시간대 합계 ' + fmt(eff.resolvedTripsPerDay) + '통행 해소 기준')
+      ? ('전 시간대 합계 ' + fmt(eff.resolvedTripsPerDay) + '통행 해소 기준' +
+         (S.area ? ' · 화성시 전체' : ''))
       : '배치를 추가하면 산출됩니다';
   }
 
@@ -649,7 +801,7 @@
   var CM = { l: 42, r: 14, t: 20, b: 40, w: 640, h: 260 };
   function drawCompareChart() {
     if (!S.result) return;
-    var P = S.result.periods;
+    var P = viewPeriods();
     var maxV = 1;
     P.forEach(function (p) { maxV = Math.max(maxV, p.kpi.needCells, p.baseline.needCells); });
     var nice = Math.ceil(maxV / 10) * 10 || 10;
@@ -806,7 +958,7 @@
          대신 실제로 의미가 있는 고령 통행 증감을 보여줍니다. */
       '<tr><th>시간대</th><th>사각지대(전)</th><th>사각지대(후)</th><th>증감</th>' +
       '<th>잠재수요(전)</th><th>잠재수요(후)</th><th>증감</th><th>고령 통행 증감</th></tr>' +
-      S.result.periods.map(function (p) {
+      viewPeriods().map(function (p) {
         var d = p.delta || {};
         return '<tr><td>' + esc(p.periodName) + '</td>' +
           '<td>' + fmt(p.baseline.needCells) + '</td><td>' + fmt(p.kpi.needCells) + '</td>' +
@@ -913,7 +1065,16 @@
     S.name = s.name;
     S.period = s.period || S.period;
     S.budget = s.budgetKrw || S.budget;
-    S.placements = (s.placements || []).map(function (p) { return { type: p.type, cellId: p.cellId, count: p.count }; });
+    /* 영역이 켜져 있으면 영역 밖 배치는 복원하지 않습니다. guardFor 의 영역
+       제약은 지도 클릭 경로에만 걸려서, 그대로 되살리면 예산은 쓰였는데 영역
+       기준 KPI 변화는 0 인 상태가 됩니다. */
+    S.placements = (s.placements || [])
+      .filter(function (p) { return !S.area || S.area.has(p.cellId); })
+      .map(function (p) { return { type: p.type, cellId: p.cellId, count: p.count }; });
+    if (S.area && (s.placements || []).length !== S.placements.length) {
+      C.toast('영역 밖 배치 ' + ((s.placements || []).length - S.placements.length) +
+        '건은 불러오지 않았습니다.', 'err', 5000);
+    }
     $('#scenName').value = S.name;
     $('#budgetInput').value = Math.round(S.budget / 100000000);
     $$('#periods [data-period]').forEach(function (x) {
@@ -979,6 +1140,10 @@
       if (S.recommendation) S.recEdited = true;
       runSim();
     });
+    $('#btnArea').addEventListener('click', function () {
+      setAreaMode(!$('#btnArea').classList.contains('on'));
+    });
+    $('#btnAreaClear').addEventListener('click', function () { S.map.clearArea(); });
     $('#btnReset').addEventListener('click', resetAll);
     /* 직접 바인딩하면 MouseEvent 가 strategy 인자로 들어가 전략이 초기화됩니다 */
     $('#btnRecommend').addEventListener('click', function () { requestRecommendation(); });
@@ -986,6 +1151,7 @@
     $('#recScope').addEventListener('click', function (e) {
       var b = e.target.closest('[data-scope]');
       if (!b) return;
+      if (b.getAttribute('data-scope') === 'area-clear') { S.map.clearArea(); return; }
       if (b.getAttribute('data-scope') === 'all') {
         S.recRegion = null;
       } else {
@@ -1010,7 +1176,7 @@
     $('#cmpChart').addEventListener('mousemove', function (e) {
       var col = e.target.closest('[data-cmp]');
       if (!col || !S.result) return C.hideTip();
-      var p = S.result.periods[+col.getAttribute('data-cmp')];
+      var p = viewPeriods()[+col.getAttribute('data-cmp')];
       C.showTip('<b>' + esc(p.periodName) + '</b><br>기준선 ' + p.baseline.needCells + '개 → 시나리오 ' +
         p.kpi.needCells + '개<br>잠재수요 ' + fmt(p.baseline.potentialTripsPerDay) + ' → ' +
         fmt(p.kpi.potentialTripsPerDay) + '통행/일', e);

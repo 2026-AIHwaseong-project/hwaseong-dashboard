@@ -264,12 +264,15 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 .cells rect{transition:fill .25s,opacity .18s;cursor:pointer}
 @media (prefers-reduced-motion:reduce){.cells rect{transition:none}}
 /* 마우스를 올린 격자를 즉시 알 수 있게 (툴팁만으로는 어느 칸인지 헷갈립니다).
-   stroke-width 는 SVG 사용자 단위라 확대하면 같이 굵어집니다 — --zk 로 나누지
-   않으면 120배에서 1.6px 가 192px 짜리 검은 띠가 되어 격자 안의 건물·정류장을
-   통째로 덮습니다. 지도 위의 선 굵기는 전부 이렇게 역스케일해야 합니다. */
-.cells rect:hover{stroke:var(--ink);stroke-width:calc(1.6px/var(--zk,1));stroke-opacity:.9}
-/* 확대해 실제 지도를 보는 중에는 테두리를 더 얇고 옅게 — 건물·정류장을 가리지 않게 */
-.kkmode.zdetail .cells rect:hover{stroke-width:calc(1.1px/var(--zk,1));stroke-opacity:.55}
+   호버 = 하이라이터. 칸의 색을 살짝 띄워 '집힌' 느낌을 주되 색상(hue)은
+   그대로 둡니다 — 색을 바꾸면 지표를 잘못 읽게 됩니다.
+   테두리는 셀에 직접 stroke 를 주지 않고 칸 안쪽에 따로 그립니다(map.js 의
+   hov-line). stroke 는 선 중심 기준이라 절반이 밖으로 나가 이웃 칸을 덮는데,
+   500m 격자(약 8px)에서는 그게 이웃을 통째로 가립니다. */
+.cells rect:hover{filter:saturate(1.5) brightness(1.07)}
+/* 카카오 배경 위에서는 덜 올립니다 — 배경을 탈색해 뒤로 물려 둔 의도를
+   호버가 되돌리지 않도록. */
+.kkmode.zdetail .cells rect:hover{filter:saturate(1.25) brightness(1.04)}
 /* 배치 도구를 든 상태에서 적용 가능한 격자만 또렷하게 */
 .cells rect.inelig{opacity:.22}
 .cells rect.elig{stroke:var(--sel);stroke-width:calc(1.3px/var(--zk,1));stroke-opacity:.9}
@@ -315,19 +318,25 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 /* 배치 모드: 정류장이 격자 클릭을 가로채지 않도록 통과시킵니다 */
 [data-groutes].nohit .sthit{pointer-events:none;cursor:inherit}
 .indmark{fill:var(--ink3);opacity:.8;pointer-events:none}
-[data-selring]{pointer-events:none}
-.selring-out{fill:none;stroke:var(--card);stroke-width:calc(5px/var(--zk,1))}
-.selring-in{fill:none;stroke:var(--sel);stroke-width:calc(2.6px/var(--zk,1))}
+[data-selring],[data-hovring]{pointer-events:none}
+/* 호버 테두리 — 굵기·위치는 map.js 가 칸 크기에 맞춰 계산합니다 */
+.hov-line{fill:none;stroke:var(--ink);stroke-opacity:.5;stroke-linejoin:round}
+/* 굵기는 map.js 가 칸 크기에 맞춰 attribute 로 지정합니다(여기서 정하면 덮어씀).
+   불투명하게 두면 링이 주변 격자와 글씨를 가려 읽을 수 없습니다. */
+.selring-out{fill:none;stroke:var(--card);stroke-opacity:.5}
+.selring-in{fill:none;stroke:var(--sel);stroke-opacity:.8}
 .placed{pointer-events:none}
-/* r 도 SVG 단위입니다 — map.js 가 r="8.5" 로 찍어 두면 확대 시 그대로 부풀어
-   화면을 덮습니다. 굵기와 같이 역스케일해 화면 크기를 고정합니다. */
-.placed .pmk-bg{fill:var(--card);stroke:var(--sel);stroke-width:calc(1.6px/var(--zk,1));opacity:.96;
-  r:calc(8.5px/var(--zk,1))}
-.placed .pmk{fill:var(--sel);font-size:calc(12px/var(--zk,1));font-weight:700}
-.placed .pmk-badge-bg{fill:var(--sel);stroke:var(--card);stroke-width:calc(1.4px/var(--zk,1));
-  r:calc(6px/var(--zk,1))}
-.placed .pmk-badge{fill:#fff;font-size:calc(8.5px/var(--zk,1));font-weight:700;
-  font-family:Consolas,ui-monospace,monospace}
+/* 배치 기호 — 수단마다 색이 다르고, 모양은 색각 이상·흑백 대비입니다.
+   테두리(--card)를 채움 뒤에 깔아 어떤 격자 색 위에서도 뜹니다.
+   크기·굵기는 map.js 가 칸 크기에 맞춰 계산합니다. */
+.placed .pmk{stroke:var(--card);paint-order:stroke;stroke-linejoin:round}
+.placed .pmk-stop{fill:var(--good)}
+.placed .pmk-drt{fill:var(--sel)}
+.placed .pmk-freq{fill:var(--warn)}
+.placed .pmk-n{fill:var(--card);stroke:none;font-weight:700}
+/* 이 하나만 map.js 가 계산하지 않고 CSS 가 정합니다 — SVG 사용자 단위라
+   --zk 로 나누지 않으면 확대할수록 같이 부풀어 칸을 덮습니다(120배면 9px 가
+   1,080px). 나머지 pmk-* 는 map.js 가 칸 크기 비례로 attribute 를 찍습니다. */
 .placed .pmk-more{fill:var(--sel);font-size:calc(9px/var(--zk,1));font-weight:700;paint-order:stroke;
   stroke:var(--card);stroke-width:calc(2.5px/var(--zk,1))}
 .compass{fill:none;stroke:var(--ink3);stroke-width:1.2}
@@ -819,11 +828,8 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
   padding:0 14px 6px;font-size:11.5px;color:var(--ink2)}
 .plist-head b{font-variant-numeric:tabular-nums}
 
-/* 다크에서 배치 마커 수량 배지 — [22]는 color 만 덮어 SVG fill 이 빠졌습니다 */
-:root[data-theme="dark"] .placed .pmk-badge{fill:var(--bg)}
-@media (prefers-color-scheme:dark){
-  :root:where(:not([data-theme="light"])) .placed .pmk-badge{fill:var(--bg)}
-}
+/* 배치 마커 수량 표기는 이제 기호 안의 .pmk-n 이고 fill 이 var(--card) 라
+   라이트·다크 모두 대비가 확보됩니다 — 별도 다크 보정이 필요 없습니다. */
 
 /* ===========================================================================
  * [25] 추천 범위 칩
@@ -860,3 +866,22 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
   font-size:9.5px;line-height:1.5;text-align:center;font-variant-numeric:tabular-nums;
   font-family:Consolas,ui-monospace,monospace;pointer-events:none;white-space:nowrap}
 .mapsvg.panning{cursor:grabbing}
+
+
+/* ===========================================================================
+ * [27] 분석 영역 (드래그 선택)
+ *   바탕화면에서 파일을 끌어 고르듯 지도에 사각형을 그려, 그 안에서만
+ *   배치하고 그 안의 결과만 집계합니다. 영역 밖 격자는 뒤로 물립니다.
+ * ======================================================================== */
+.mapsvg.areamode{cursor:crosshair}
+.mapsvg.areamode .cells rect{cursor:crosshair}
+[data-arearect]{pointer-events:none}
+.area-box{fill:var(--sel);fill-opacity:.07;stroke:var(--sel);stroke-width:1.5;
+  vector-effect:non-scaling-stroke;rx:2}
+.area-box.dragging{stroke-dasharray:5 3}
+.cells rect.outarea{opacity:.3}
+/* 영역 지정 중인 버튼 · 현재 영역 표시 */
+.minib.on{background:var(--sel);border-color:var(--sel);color:var(--bg);font-weight:600}
+.rec-scope .rs-area{font-size:10.5px;color:var(--ink2);border:1px solid var(--sel);
+  border-radius:999px;padding:1px 8px}
+.rec-scope .rs-area b{color:var(--ink)}

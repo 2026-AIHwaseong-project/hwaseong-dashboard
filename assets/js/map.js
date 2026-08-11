@@ -88,7 +88,10 @@
       showRoutes: opt.showRoutes === true,
       showLabels: true,
       cellFocus: null,         // 이 격자에 걸린 정류장·노선만 그린다 (null = 필터 없음)
-      zdetail: false,       // 10배 이상 확대 — 이때만 정류장 이름을 DOM 에 만듭니다
+      zdetail: false,          // 10배 이상 확대 — 이때만 정류장 이름을 DOM 에 만듭니다
+      areaMode: false,         // 드래그로 분석 영역을 지정하는 중인지
+      area: null,              // 영역 안 격자 ID Set (null = 화성시 전체)
+      areaBox: null,           // 영역 사각형 {x,y,w,h} (SVG 좌표)
       stopsInteractive: true,
       armed: false
     };
@@ -131,11 +134,19 @@
       });
       h += '</g>';
 
+      /* 분석 영역 — 드래그로 지정한 사각형. 격자 위, 기호 아래에 놓습니다. */
+      h += '<g data-arearect visibility="hidden"><rect class="area-box"/></g>';
+
       h += '<g class="placed" data-placed></g>';
       h += '<g data-selring visibility="hidden">' +
         '<rect class="selring-out" x="-99" y="-99" width="20" height="20" rx="3"/>' +
         '<rect class="selring-in" x="-99" y="-99" width="20" height="20" rx="3"/>' +
         '</g>';
+
+      /* 호버 테두리. 셀에 직접 stroke 를 주면 선의 절반이 칸 밖으로 나가
+         이웃을 덮으므로, 맨 위 레이어에 칸 안쪽으로 그립니다. */
+      h += '<g data-hovring visibility="hidden">' +
+        '<rect class="hov-line" x="-99" y="-99" width="10" height="10"/></g>';
 
       h += '<g transform="translate(' + (W - 38) + ',72)"><circle class="compass" r="11"/>' +
         '<path d="M0,-7 L3,4 L0,2 L-3,4 Z" fill="var(--ink3)"/>' +
@@ -257,6 +268,31 @@
     var gDongLine = svg.querySelector('[data-dongline]');
     var gPlaced = svg.querySelector('[data-placed]');
     var gSelRing = svg.querySelector('[data-selring]');
+    var gHovRing = svg.querySelector('[data-hovring]');
+
+    /** 호버 테두리를 가리킨 칸 '안쪽'에 맞춰 놓습니다(밖으로 삐져나오지 않게). */
+    function placeHoverRing(c) {
+      if (!gHovRing) return;
+      var r = cellRect(c);
+      /* renderCells 가 소수 1자리로 그리므로 같은 기준으로 맞춥니다 —
+         원본 정밀도로 계산하면 반올림 차이만큼 테두리가 밖으로 밀립니다. */
+      var rx = +r.x.toFixed(1), ry = +r.y.toFixed(1);
+      var w = +r.w.toFixed(1) - CELL_OV, h = +r.h.toFixed(1) - CELL_OV;  /* 겹침 제외 */
+      /* stroke 는 선 중심 기준이라 절반이 밖으로 나갑니다 — 그만큼 안으로 들입니다.
+         굵기는 칸의 13%. 500m 격자(약 8px)에서 20% 로 두면 테두리가 칸 면적의
+         60% 를 덮어 검은 네모처럼 보입니다. */
+      var sw = Math.max(0.6, Math.min(1.8, w * 0.13));
+      var el = gHovRing.firstChild;
+      el.setAttribute('x', (rx + sw / 2).toFixed(2));
+      el.setAttribute('y', (ry + sw / 2).toFixed(2));
+      el.setAttribute('width', Math.max(0.5, w - sw).toFixed(2));
+      el.setAttribute('height', Math.max(0.5, h - sw).toFixed(2));
+      el.setAttribute('stroke-width', sw.toFixed(2));
+      gHovRing.setAttribute('visibility', 'visible');
+    }
+    function hideHoverRing() {
+      if (gHovRing) gHovRing.setAttribute('visibility', 'hidden');
+    }
 
     /* -------------------------------------------------------- 데이터 */
     function setData(d) {
@@ -280,38 +316,61 @@
       renderPlacements();
     }
 
+    /* 셀을 이웃과 겹치게 그리는 폭. 호버 테두리를 칸 안쪽에 맞출 때도 씁니다. */
+    var CELL_OV = 0.35;
+
     /* 셀의 px 사각형. 셀이 x/y/w/h(px)를 직접 들고 오면 그대로 쓰고,
        서버 셀처럼 중심 경위도만 오면 격자 실크기(m)로 계산합니다. */
-    function cellRect(c) {
+    function cellBox(c) {
       if (typeof c.x === 'number' && typeof c.w === 'number') {
-        return { x: c.x, y: c.y, w: c.w, h: c.h };
+        var b = { x: c.x, y: c.y, w: c.w, h: c.h };
+        return { draw: b, hit: b };
       }
       var km = ((meta.grid && meta.grid.sizeMeters) || 1000) / 1000;
       var dLat = km / 110.574;
       var dLon = km / (111.320 * Math.cos(((c.lat || 37)) * Math.PI / 180));
       var p0 = C.project(c.lon - dLon / 2, c.lat + dLat / 2);   /* 좌상단 */
       var p1 = C.project(c.lon + dLon / 2, c.lat - dLat / 2);   /* 우하단 */
-      return { x: p0.x + 0.4, y: p0.y + 0.4,
-               w: Math.max(2, p1.x - p0.x - 0.8), h: Math.max(2, p1.y - p0.y - 0.8) };
+      /* hit = 격자의 실제 경계. 소속 판정은 이걸로 합니다.
+         draw = 그릴 사각형. 격자는 빈틈없이 맞물린 면인데 사이를 벌리면 배경이
+         비쳐 색이 옅어 보이고(500m 에서 지도 면적의 약 20%) 방충망 질감이
+         생깁니다. 좌표가 5자리(≈1m)로 반올림돼 있어 경계의 26% 에 0.1px 틈이
+         남고 앤티에일리어싱으로 실틈이 비칩니다. 그래서 CELL_OV 만큼만 키워
+         이웃과 겹치게 그립니다 — 셀의 2~4% 라 눈에 띄지 않습니다. */
+      var hit = { x: p0.x, y: p0.y,
+                  w: Math.max(2, p1.x - p0.x), h: Math.max(2, p1.y - p0.y) };
+      return {
+        draw: { x: hit.x, y: hit.y, w: hit.w + CELL_OV, h: hit.h + CELL_OV },
+        hit: hit
+      };
     }
+    function cellRect(c) { return cellBox(c).draw; }
 
     function renderCells() {
       var h = '';
       state.cells.forEach(function (c) {
         var r = cellRect(c);
+        /* 모서리를 둥글리면 네 셀이 만나는 꼭짓점마다 배경색이 뚫립니다 */
         h += '<rect x="' + r.x.toFixed(1) + '" y="' + r.y.toFixed(1) + '" width="' + r.w.toFixed(1) + '" height="' + r.h.toFixed(1) +
-          '" rx="1.5" class="c m3" data-id="' + esc(c.id) + '"/>';
+          '" class="c m3" data-id="' + esc(c.id) + '"/>';
       });
       gCells.innerHTML = h;
     }
 
-    /* 판정용 사각형 — cellRect 는 칸 사이가 붙어 보이지 않게 사방 0.4px 를 깎습니다.
-       그 0.4px 간격에 정류장이 떨어지면 "어느 격자에도 안 속한" 것이 되어,
-       격자를 찍었을 때 그 정류장만 사라집니다. 실측 400개 중 43개(약 11%)가
-       이 띠에 걸렸습니다. 판정에는 깎기 전 경계를 씁니다. */
+    /* 판정용 사각형 = 격자의 실제 경계. 렌더용(cellRect)과 한 곳(cellBox)에서
+       만듭니다.
+
+       예전에는 둘이 따로 있었고, 그 조합이 두 번 어긋났습니다.
+         · cellRect 가 사방 0.4px 를 '깎던' 시절: 그 틈에 떨어진 정류장이 어느
+           격자에도 안 속해 격자를 찍으면 사라졌습니다(실측 400개 중 43개).
+           그래서 cellHitRect 가 +0.8px 로 깎기를 되돌렸습니다.
+         · 이번에 cellRect 가 '깎기'에서 'CELL_OV 만큼 키우기'로 바뀌었는데
+           cellHitRect 의 되돌림은 그대로 남았습니다. 그러면 판정 사각형이 실제
+           경계보다 좌 0.4px·우 0.75px 넓어져 이웃 판정이 약 1.15px 겹치고,
+           한 정류장이 두 격자에 모두 들어가 '정류장 N개'가 이중 계수됩니다.
+       보정을 서로 맞추는 대신 경계를 한 번만 계산해 둘로 나눠 씁니다. */
     function cellHitRect(c) {
-      var r = cellRect(c);
-      return { x: r.x - 0.4, y: r.y - 0.4, w: r.w + 0.8, h: r.h + 0.8 };
+      return cellBox(c).hit;
     }
     function inCell(c, s) {
       var r = cellHitRect(c), p = C.xy(s);
@@ -446,6 +505,8 @@
         if (!c) return;
         var cls = 'c ' + L.prefix + binOf(c, L.key);
         if (elig) cls += elig.has(id) ? ' elig' : ' inelig';
+        /* 분석 영역을 정했으면 밖의 칸은 뒤로 물립니다 */
+        if (state.area && !state.area.has(id)) cls += ' outarea';
         rect.setAttribute('class', cls);
       });
       renderLegend();
@@ -516,14 +577,19 @@
       items.push(item('<polyline class="rt-casing" points="2,10 8,4 14,9 20,4"/>' +
         '<polyline class="rt" points="2,10 8,4 14,9 20,4"/>', '버스 노선'));
       items.push(item('<path class="dongline" d="M2,11 L8,4 L14,9 L20,3"/>', '읍면동 경계'));
-      items.push(item('<rect x="3" y="3" width="8" height="8" rx="2" class="selring-out"/>' +
-        '<rect x="3" y="3" width="8" height="8" rx="2" class="selring-in"/>', '선택한 격자'));
+      /* 선택링 굵기는 지도에서 map.js 가 칸 크기에 맞춰 attribute 로 찍습니다.
+         범례에는 칸이 없으니 여기서 직접 줘야 합니다 — 안 주면 CSS 기본 1px 로
+         가늘어져 실제 지도의 링과 달라 보입니다. */
+      items.push(item('<rect x="3" y="3" width="8" height="8" rx="2" class="selring-out" stroke-width="3"/>' +
+        '<rect x="3" y="3" width="8" height="8" rx="2" class="selring-in" stroke-width="1.6"/>', '선택한 격자'));
 
       if (opt.placementLegend) {
+        /* 지도와 **같은 함수**로 그립니다. 예전에는 범례만 옛 글자기호(●◆▲)를
+           그리고 지도는 수단별 색+도형을 그려, 이 함수 설명("실제 지도와 같은
+           SVG 로 그려 모양이 정확히 일치합니다")이 사실이 아니었습니다.
+           색이 수단을 구분하는 지금은 범례에 색 키가 없으면 지도를 못 읽습니다. */
         (meta.effects || []).forEach(function (e) {
-          items.push(item('<circle cx="11" cy="7" r="6" class="pmk-bg"/>' +
-            '<text class="pmk" x="11" y="10.5" text-anchor="middle" style="font-size:8px">' +
-            esc(e.icon) + '</text>', e.label, 24));
+          items.push(item(markerShape(e.type, 12, 7, 4, 1), e.label, 24));
         });
       }
       return '<div class="lg-syms">' + items.join('') + '</div>';
@@ -534,13 +600,20 @@
       if (!state.selectedCellId) { gSelRing.setAttribute('visibility', 'hidden'); return; }
       var c = state.byId[state.selectedCellId];
       if (!c) { gSelRing.setAttribute('visibility', 'hidden'); return; }
-      var r = cellRect(c), p = { x: r.x, y: r.y }, cw = r.w, ch = r.h;
-      Array.prototype.forEach.call(gSelRing.children, function (r, i) {
-        var pad = i === 0 ? 3 : 1.5;   // 바깥 링이 더 크게
-        r.setAttribute('x', p.x - pad);
-        r.setAttribute('y', p.y - pad);
-        r.setAttribute('width', cw + pad * 2);
-        r.setAttribute('height', ch + pad * 2);
+      var r = cellRect(c);
+      var cw = r.w - CELL_OV, ch = r.h - CELL_OV;
+      /* 굵기·여백이 고정값(5px/3px)이던 때는 500m 격자(약 8px)에서 링이 칸보다
+         커져 이웃과 주변 글씨를 덮었습니다. 칸 크기에 비례시킵니다. */
+      var base = Math.min(cw, ch);
+      var sw = [base * 0.26, base * 0.15];
+      var pad = base * 0.08;
+      Array.prototype.forEach.call(gSelRing.children, function (el, i) {
+        el.setAttribute('x', (r.x - pad).toFixed(2));
+        el.setAttribute('y', (r.y - pad).toFixed(2));
+        el.setAttribute('width', (cw + pad * 2).toFixed(2));
+        el.setAttribute('height', (ch + pad * 2).toFixed(2));
+        el.setAttribute('stroke-width', sw[i].toFixed(2));
+        el.setAttribute('rx', (base * 0.1).toFixed(2));
       });
       gSelRing.setAttribute('visibility', 'visible');
     }
@@ -598,37 +671,66 @@
         var c = state.byId[cellId];
         if (!c) return;
         var r = cellRect(c);
-        var cx = r.x + r.w / 2, cy = r.y + r.h / 2;
-        var offs = OFFSETS[Math.min(list.length, 3)] || OFFSETS[3];
+        /* 기호 크기를 칸에 맞춥니다. 예전엔 반지름이 8.5px 고정이라
+           500m 격자(약 8px)에서는 기호가 칸보다 두 배 컸습니다. */
+        var base = Math.min(r.w, r.h) - CELL_OV;
+        var cx = r.x + (r.w - CELL_OV) / 2, cy = r.y + (r.h - CELL_OV) / 2;
+        var n = Math.min(list.length, 3);
+        var d = base * 0.25;
+        var offs = n === 1 ? [[0, 0]]
+          : n === 2 ? [[-d, 0], [d, 0]]
+            : [[0, -d], [-d, d * 0.85], [d, d * 0.85]];
+        var rad = base * (n === 1 ? 0.38 : 0.25);
         list.slice(0, 3).forEach(function (p, i) {
-          var o = offs[i] || [0, 0];
-          var x = cx + o[0], y = cy + o[1];
-          var icon = (effects[p.type] && effects[p.type].icon) || '●';
-          /* 어떤 격자 색 위에서도 읽히도록 바탕 원을 깔아 줍니다 */
-          h += '<circle class="pmk-bg" cx="' + x + '" cy="' + y + '" r="8.5"/>';
-          h += '<text class="pmk" x="' + x + '" y="' + (y + 4.5) + '" text-anchor="middle">' + esc(icon) + '</text>';
-          if (p.count > 1) {
-            h += '<circle class="pmk-badge-bg" cx="' + (x + 7) + '" cy="' + (y - 6.5) + '" r="6"/>';
-            h += '<text class="pmk-badge" x="' + (x + 7) + '" y="' + (y - 4) + '" text-anchor="middle">' + p.count + '</text>';
-          }
+          h += markerShape(p.type, cx + offs[i][0], cy + offs[i][1], rad, p.count);
         });
         if (list.length > 3) {
-          h += '<text class="pmk-more" x="' + cx + '" y="' + (cy + 17) + '" text-anchor="middle">+' + (list.length - 3) + '</text>';
+          h += '<text class="pmk-more" font-size="' + (base * 0.34).toFixed(2) + '" x="' + cx.toFixed(1) +
+            '" y="' + (cy + base * 0.78).toFixed(1) + '" text-anchor="middle">+' + (list.length - 3) + '</text>';
         }
       });
       gPlaced.innerHTML = h;
     }
 
+    /** 수단별 배치 기호.
+        색으로 먼저 구분되고, 모양(원·마름모·삼각)은 색각 이상·흑백 출력 대비입니다.
+        예전에는 셋 다 같은 보라색 글자 기호(●◆▲)라 구분이 안 됐습니다. */
+    function markerShape(type, x, y, r, count) {
+      var g = '<g class="pmk pmk-' + esc(type) + '" stroke-width="' + (r * 0.4).toFixed(2) +
+        '" transform="translate(' + x.toFixed(1) + ',' + y.toFixed(1) + ')">';
+      if (type === 'drt') {
+        g += '<path d="M0,' + (-r).toFixed(2) + 'L' + r.toFixed(2) + ',0L0,' + r.toFixed(2) +
+          'L' + (-r).toFixed(2) + ',0Z"/>';
+      } else if (type === 'freq') {
+        var a = r * 1.12;
+        g += '<path d="M0,' + (-a).toFixed(2) + 'L' + (a * 0.87).toFixed(2) + ',' + (a * 0.56).toFixed(2) +
+          'L' + (-a * 0.87).toFixed(2) + ',' + (a * 0.56).toFixed(2) + 'Z"/>';
+      } else {
+        g += '<circle r="' + r.toFixed(2) + '"/>';
+      }
+      /* 같은 칸에 같은 수단을 여러 번 놓으면 개수를 기호 안에 씁니다 */
+      if (count > 1) {
+        g += '<text class="pmk-n" font-size="' + (r * 1.1).toFixed(2) +
+          '" y="' + (r * 0.38).toFixed(2) + '" text-anchor="middle">' + count + '</text>';
+      }
+      return g + '</g>';
+    }
+
     /* -------------------------------------------------------- 이벤트 */
+    var hoverId = null;
     gCells.addEventListener('mousemove', function (e) {
       var r = e.target.closest('rect');
-      if (!r) return C.hideTip();
-      var c = state.byId[r.getAttribute('data-id')];
+      if (!r) { hoverId = null; hideHoverRing(); return C.hideTip(); }
+      var id = r.getAttribute('data-id');
+      var c = state.byId[id];
       if (!c) return;
+      if (id !== hoverId) { hoverId = id; placeHoverRing(c); }
       if (opt.onCellHover) opt.onCellHover(c, e);
       else C.showTip(defaultCellTip(c), e);
     });
-    gCells.addEventListener('mouseleave', C.hideTip);
+    gCells.addEventListener('mouseleave', function () {
+      hoverId = null; hideHoverRing(); C.hideTip();
+    });
     gCells.addEventListener('click', function (e) {
       var r = e.target.closest('rect');
       if (!r) return;
@@ -825,14 +927,69 @@
       zoomAt(e.deltaY < 0 ? 1.25 : 0.8, p.x, p.y);
     }, { passive: false });
 
+    /* ------------------------------------------------------- 분석 영역
+       바탕화면에서 파일을 끌어 고르듯 지도에 사각형을 그려, 그 안에서만
+       배치하고 그 안의 결과만 봅니다. 영역 지정 모드일 때는 드래그가
+       화면 이동 대신 영역 선택으로 동작합니다. */
+    var gArea = svg.querySelector('[data-arearect]');
+    var band = null;
+
+    function normBand(b) {
+      return { x: Math.min(b.x0, b.x1), y: Math.min(b.y0, b.y1),
+               w: Math.abs(b.x1 - b.x0), h: Math.abs(b.y1 - b.y0) };
+    }
+    function drawArea(box, dragging) {
+      var el = gArea.firstChild;
+      el.setAttribute('x', box.x.toFixed(1));
+      el.setAttribute('y', box.y.toFixed(1));
+      el.setAttribute('width', box.w.toFixed(1));
+      el.setAttribute('height', box.h.toFixed(1));
+      el.setAttribute('class', dragging ? 'area-box dragging' : 'area-box');
+      gArea.setAttribute('visibility', 'visible');
+    }
+    /** 사각형 안(중심점 기준)에 든 격자를 영역으로 잡습니다 */
+    function commitArea(box) {
+      var ids = new Set();
+      state.cells.forEach(function (c) {
+        var r = cellRect(c);
+        var mx = r.x + (r.w - CELL_OV) / 2, my = r.y + (r.h - CELL_OV) / 2;
+        if (mx >= box.x && mx <= box.x + box.w && my >= box.y && my <= box.y + box.h) ids.add(c.id);
+      });
+      if (!ids.size) { clearArea(); return; }
+      state.area = ids; state.areaBox = box;
+      drawArea(box, false);
+      paint();
+      if (opt.onAreaChange) opt.onAreaChange(ids, box);
+    }
+    function clearArea() {
+      state.area = null; state.areaBox = null;
+      gArea.setAttribute('visibility', 'hidden');
+      paint();
+      if (opt.onAreaChange) opt.onAreaChange(null, null);
+    }
+
     /* 드래그 = 이동. 4px 미만 움직임은 클릭으로 취급해 배치·선택을 방해하지 않습니다 */
     var pan = null, panMoved = false;
     svg.addEventListener('pointerdown', function (e) {
       if (e.button !== 0) return;
+      if (state.areaMode) {
+        var p = toSvgXY(e);
+        band = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+        drawArea(normBand(band), true);
+        try { svg.setPointerCapture(e.pointerId); } catch (err) { /* 미지원 환경 */ }
+        e.preventDefault();
+        return;
+      }
       pan = { cx: e.clientX, cy: e.clientY, x: zoom.x, y: zoom.y };
       panMoved = false;
     });
     svg.addEventListener('pointermove', function (e) {
+      if (band) {
+        var p = toSvgXY(e);
+        band.x1 = p.x; band.y1 = p.y;
+        drawArea(normBand(band), true);
+        return;
+      }
       if (!pan) return;
       var dx = e.clientX - pan.cx, dy = e.clientY - pan.cy;
       if (!panMoved && dx * dx + dy * dy < 16) return;
@@ -846,8 +1003,26 @@
       zoom = clampBox(pan.x - dx / r.width * zoom.w, pan.y - dy / r.height * zoom.h, zoom.w);
       applyZoom();
     });
-    svg.addEventListener('pointerup', function () { pan = null; svg.classList.remove('panning'); });
-    svg.addEventListener('pointercancel', function () { pan = null; svg.classList.remove('panning'); });
+    function endBand() {
+      if (!band) return false;
+      var box = normBand(band);
+      band = null;
+      /* 살짝 눌린 정도면 취소 — 실수로 영역이 통째로 바뀌지 않게 */
+      if (box.w < zoom.w * 0.01 || box.h < zoom.h * 0.01) {
+        if (state.areaBox) drawArea(state.areaBox, false);
+        else gArea.setAttribute('visibility', 'hidden');
+        return true;
+      }
+      commitArea(box);
+      return true;
+    }
+    svg.addEventListener('pointerup', function () {
+      if (endBand()) return;
+      pan = null; svg.classList.remove('panning');
+    });
+    svg.addEventListener('pointercancel', function () {
+      band = null; pan = null; svg.classList.remove('panning');
+    });
     /* 드래그 직후의 click 이 배치·선택으로 이어지지 않게 캡처 단계에서 삼킵니다 */
     svg.addEventListener('click', function (e) {
       if (panMoved) { e.stopPropagation(); panMoved = false; }
@@ -949,6 +1124,14 @@
       cellById: function (id) { return state.byId[id] || null; },
       cells: function () { return state.cells; },
       repaint: paint,
+      /** 분석 영역 — 드래그로 사각형을 그려 그 안에서만 배치·집계합니다 */
+      setAreaMode: function (v) {
+        state.areaMode = !!v;
+        svg.classList.toggle('areamode', !!v);
+      },
+      clearArea: clearArea,
+      area: function () { return state.area; },
+      areaBox: function () { return state.areaBox; },
       defaultCellTip: defaultCellTip,
       /** 읍면동으로 확대 / 정류장·격자 중심 이동 / 전체 복귀 / 확대 여부 */
       zoomToRegion: zoomToRegion,
