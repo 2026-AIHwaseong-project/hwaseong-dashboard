@@ -72,7 +72,8 @@ index.html?server=                              # 기억된 주소 초기화
 │   └── dev-server.py         캐시 없는 개발 서버
 └── docs/
     ├── API.md                ⬅ 백엔드 API 규격서
-    └── AI-REPORT.md          ⬅ AI 보고서 생성 규격 (서버 측 Claude API 호출)
+    ├── AI-REPORT.md          ⬅ AI 보고서 생성 규격 (서버 측 Claude API 호출)
+    └── KAKAO-SYNC.md         ⬅ 격자·카카오 배경 어긋남 계측/수정 가이드 (미해결 과제)
 ```
 
 ### 의존성
