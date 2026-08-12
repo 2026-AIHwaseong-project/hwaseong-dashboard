@@ -259,10 +259,15 @@
     S.grid.cells.forEach(function (c) {
       var r = by[c.region] || (by[c.region] = {
         name: c.region, cells: 0, need: 0, drt: 0, over: 0,
-        trips: 0, elderly: 0, eldSum: 0, actions: {}, topCell: null, topMi: -99
+        tripsAll: 0, trips: 0, elderly: 0, eldSum: 0, actions: {}, topCell: null, topMi: -99
       });
       r.cells++;
       r.eldSum += c.elderlyRatio;
+      /* 권역 전체 잠재수요. 아래 trips/elderly 는 사각지대 격자만 더하므로,
+         사각지대가 없는 권역은 0 이 됩니다 — 29개 중 13~14개가 그렇습니다.
+         그 0 을 '수요가 없다' 로 읽지 않도록 전체값을 옆에 함께 놓습니다
+         (격자 90개에 DRT 후보 9개인 우정읍이 실제로는 5,063통행/일 입니다). */
+      r.tripsAll += c.flowTripsPerDay;
       if (c.quadrant === 'need') {
         r.need++;
         r.trips += c.flowTripsPerDay;
@@ -296,10 +301,14 @@
   function paintRegions() {
     var list = aggregateRegions();
     var maxNeed = Math.max.apply(null, list.map(function (r) { return r.need; }).concat([1]));
+    /* 열 이름에 범위를 밝힙니다. 예전에는 '잠재수요(통행/일)' 이라고만 적었는데
+       실제로는 사각지대 격자만 더한 값이라, 사각지대가 없는 권역의 0 이
+       '수요가 없다' 로 읽혔습니다. KPI 카드도 '사각지대 잠재수요' 라고 씁니다. */
     var head = [
       ['name', '권역', 'left'], ['cells', '격자', ''], ['need', '사각지대', ''],
-      ['drt', 'DRT 후보', ''], ['trips', '잠재수요(통행/일)', ''],
-      ['elderly', '고령 통행', ''], ['elderlyRatio', '고령비', '']
+      ['drt', 'DRT 후보', ''], ['tripsAll', '권역 잠재수요', ''],
+      ['trips', '사각지대 잠재수요', ''],
+      ['elderly', '사각지대 고령통행', ''], ['elderlyRatio', '고령비', '']
     ];
     var html = '<table class="rgtbl"><thead><tr>' +
       head.map(function (h) {
@@ -324,10 +333,10 @@
             ? '<span class="rg-bar"><i style="width:' + pctBar.toFixed(0) + '%"></i></span><b>' + r.need + '</b>'
             : '<span class="rg-zero">0</span>') + '</td>' +
           '<td>' + (r.drt || '<span class="rg-zero">0</span>') + '</td>' +
-          /* 여기서 값이 없다는 것은 '사각지대 격자가 없어 합계가 0' 이라는 뜻입니다.
-             예전에는 '–' 로 찍어 같은 행의 다른 0 과 표기가 갈렸고, 격자 90개에
-             DRT 후보 8개인 우정읍이 잠재수요 '–' 로 나와 자료가 빠진 것처럼
-             보였습니다. 실제로 0 이므로 0 으로 적습니다. */
+          '<td>' + fmt(r.tripsAll) + '</td>' +
+          /* 아래 두 값이 0 이라는 것은 '사각지대 격자가 없어 합계가 0' 이라는
+             뜻입니다 — 자료가 빠진 것이 아닙니다. 왼쪽의 권역 잠재수요와
+             나란히 두어 그 차이가 바로 읽히게 했습니다. */
           '<td>' + (r.trips ? fmt(r.trips) : '<span class="rg-zero">0</span>') + '</td>' +
           '<td>' + (r.elderly ? fmt(r.elderly) : '<span class="rg-zero">0</span>') + '</td>' +
           '<td>' + Math.round(r.elderlyRatio * 100) + '%</td>' +
