@@ -187,20 +187,53 @@
       div.className = 'kakaomap';
       svg.parentNode.insertBefore(div, svg);
 
+      /* 배경을 포기하고 지금까지의 SVG 단독 지도로 되돌립니다.
+         .kkmode 를 붙이기 전에만 불리므로 화면은 원래 상태 그대로입니다. */
+      function giveUp() {
+        kkMap = null;
+        if (div.parentNode) div.parentNode.removeChild(div);
+      }
+
       var s = global.document.createElement('script');
       s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + encodeURIComponent(cfg.jsKey) + '&autoload=false';
+      s.onerror = giveUp;
       s.onload = function () {
-        global.kakao.maps.load(function () {
-          kkMap = new global.kakao.maps.Map(div, {
-            center: new global.kakao.maps.LatLng(37.2, 126.83), level: 9
+        try {
+          global.kakao.maps.load(function () {
+            kkMap = new global.kakao.maps.Map(div, {
+              center: new global.kakao.maps.LatLng(37.2, 126.83), level: 9
+            });
+            kkMap.setDraggable(false);   // 이동·확대는 지금처럼 SVG 쪽에서만 받습니다
+            kkMap.setZoomable(false);    // (두 지도가 서로 다른 입력에 반응하면 어긋납니다)
+            syncKakao();
+
+            /* ★ 타일이 실제로 그려진 것을 확인한 뒤에만 .kkmode 를 붙입니다.
+               예전에는 SDK 스크립트만 받아지면 무조건 붙였는데, 카카오 키는
+               허용 도메인이 등록된 곳에서만 타일을 내려줍니다. 시연을 등록되지
+               않은 주소(ngrok·devtunnels·심사용 서버)에서 열면 배경은 비어
+               있는데 .kkmode 만 걸려, app.css 의
+               `.kkmode.zdetail .wtr,.land{fill-opacity:0}` 때문에 육지·바다·
+               해안선이 통째로 사라진 회색 화면이 나왔습니다. 격자를 클릭하면
+               CELL_ZOOM_SPAN 배율로 확대돼 .zdetail 이 반드시 걸리므로
+               시연에서 그냥 터지는 조합이었습니다.
+               타일이 안 오면 배경을 걷어내고 원래 SVG 지도로 남습니다. */
+            var settled = false;
+            var timer = global.setTimeout(function () {
+              if (settled) { return; }
+              settled = true;
+              giveUp();
+            }, 5000);
+            global.kakao.maps.event.addListener(kkMap, 'tilesloaded', function () {
+              if (settled) { return; }
+              settled = true;
+              global.clearTimeout(timer);
+              svg.classList.add('kkmode');
+              applyZoom();          // .kkmode 반영(배경 탈색 클래스 포함)
+            });
           });
-          kkMap.setDraggable(false);   // 이동·확대는 지금처럼 SVG 쪽에서만 받습니다
-          kkMap.setZoomable(false);    // (두 지도가 서로 다른 입력에 반응하면 어긋납니다)
-          svg.classList.add('kkmode');
-          syncKakao();
-        });
+        } catch (e) { giveUp(); }
       };
-      global.document.head.appendChild(s);   // 실패해도 조용히 넘어갑니다(빈 배경으로 남음)
+      global.document.head.appendChild(s);   // 실패해도 조용히 넘어갑니다(SVG 단독으로)
       global.addEventListener('resize', function () {
         if (kkMap) { kkMap.relayout(); syncKakao(); }
       });
@@ -341,10 +374,20 @@
          반지름에 그냥 비례시키면 큰 정류장이 과장돼 보입니다. */
       /* 크기 기준(maxB)은 전체 정류장에서 뽑습니다. 격자를 옮겨 다닐 때마다
          같은 정류장의 점 크기가 달라지면 비교가 안 됩니다. */
-      var maxB = 1;
-      state.stops.forEach(function (s) { maxB = Math.max(maxB, +s.boardingsPerDay || 0); });
+      /* boardingsPerDay 가 아예 안 오는 백엔드(구버전)에서는 maxB 가 1 로 굳어
+         모든 점이 최소 크기(1.6px)로 쪼그라듭니다 — 예전 고정값 3.4px 의 절반이라
+         "작아진 것"이 데이터로 보입니다. 값이 하나도 없으면 크기 구분을 포기하고
+         예전 고정 반지름으로 돌아갑니다. */
+      var maxB = 0;
+      state.stops.forEach(function (s) {
+        if (typeof s.boardingsPerDay === 'number' && isFinite(s.boardingsPerDay)) {
+          maxB = Math.max(maxB, s.boardingsPerDay);
+        }
+      });
+      var hasB = maxB > 0;
       function stopR(s) {
         if (s.kind === 'hub') return 4.6;
+        if (!hasB) return 3.4;                                  /* 자료 없음 — 균일 */
         var k = Math.sqrt((+s.boardingsPerDay || 0) / maxB);   /* 0~1 */
         return 1.6 + 3.0 * k;                                   /* 1.6 ~ 4.6px */
       }
@@ -650,6 +693,13 @@
       svg.style.setProperty('--zk', k.toFixed(3));
       var detail = k >= ZDETAIL_K;
       svg.classList.toggle('zdetail', detail);
+      /* 카카오 배경 탈색은 .kakaomap 에 걸어야 하는데, 그건 svg 의 자식이 아니라
+         형제(.mapbox 안 svg 앞)입니다. `.kkmode.zdetail .kakaomap` 은 자손
+         결합자라 어떤 상태에서도 매치되지 않아, 배경만 원색으로 남고 우리
+         레이어만 흐려지는 어긋난 조합이 됐습니다. 부모에 클래스를 직접 겁니다. */
+      if (svg.parentNode && svg.parentNode.classList) {
+        svg.parentNode.classList.toggle('kkdetail', !!kkMap && detail);
+      }
       /* 라벨을 확대 상태에서만 DOM 에 만들므로, 경계를 넘을 때 한 번 다시 그립니다.
          매 프레임이 아니라 상태가 바뀌는 순간에만 도는 조건입니다. */
       if (detail !== state.zdetail) {

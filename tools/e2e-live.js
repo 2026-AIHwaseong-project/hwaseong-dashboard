@@ -38,6 +38,22 @@ function assert(cond, msg) {
   assert(grid.cells.length === nCells, 'grid.cells(' + grid.cells.length + ') == meta.cellCount(' + nCells + ')');
   assert(grid.kpi.totalCells === nCells, 'kpi.totalCells == cellCount');
 
+  // 0-2) /stops·/routes 계약 — 지도가 하드 의존하는 필드만 확인한다.
+  //      예전에는 이 둘을 아예 안 쳐서, 목록 항목의 boardingsPerDay 가 빠지면
+  //      전 정류장 툴팁이 "일 승차 0명" 이 되는 회귀를 못 잡았다.
+  const stops = (await api.stops()).stops;
+  assert(Array.isArray(stops) && stops.length > 0, '/stops 목록 = ' + ((stops || []).length) + '개');
+  const s0 = stops[0];
+  assert(s0 && s0.id && typeof s0.lon === 'number' && typeof s0.lat === 'number',
+    '/stops 항목에 id·lon·lat');
+  const withB = stops.filter(s => typeof s.boardingsPerDay === 'number').length;
+  assert(withB === stops.length,
+    '/stops 전 항목에 boardingsPerDay (' + withB + '/' + stops.length + ')');
+  const routes = (await api.routes()).routes;
+  assert(Array.isArray(routes) && routes.length > 0, '/routes 목록 = ' + ((routes || []).length) + '개');
+  assert(routes[0] && Array.isArray(routes[0].stopIds) && routes[0].stopIds.length > 0,
+    '/routes 항목에 stopIds (경유 순서 카드가 이걸로 그린다)');
+
   // 1) 빈 배치 시뮬레이션: KPI 가 대시보드(/grid)와 일치해야 함
   const budget = (meta.cost && meta.cost.defaultBudget) || 3000000000;
   const empty = await api.runSimulation({ name: 'e2e', period: 'am', budgetKrw: budget, placements: [] });

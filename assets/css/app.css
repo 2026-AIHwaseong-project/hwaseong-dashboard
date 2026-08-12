@@ -163,9 +163,16 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
    노선 경유 순서 카드를 그 자리에 넣습니다 — 지도에서 격자를 클릭하면 바로
    아래에서 그 격자의 버스 노선을 읽는 흐름이 됩니다.
    우선순위는 두 행에 걸치게 해서 오른쪽 열이 통째로 이어지게 둡니다. */
-.mapcard{grid-column:span 8;grid-row:1}
-.routecard{grid-column:span 8;grid-row:2;display:flex;flex-direction:column;min-height:0}
-.sidecard{grid-column:span 4;grid-row:1 / span 2}
+   ⚠️ 행 배치는 .dashgrid(= index.html 의 .grid)에만 겁니다. simulation.html 은
+   같은 app.css 를 쓰지만 .routecard 가 없어서, 규칙이 전역이면 사이드카드가
+   두 행을 차지한 채 2행 9~12열이 비고 '배치 수단별 사업비' 카드가 한 행
+   아래로 밀려 데스크톱 폭에서 구멍이 남습니다. */
+.mapcard{grid-column:span 8}
+.routecard{grid-column:span 8;display:flex;flex-direction:column;min-height:0}
+.sidecard{grid-column:span 4}
+.dashgrid .mapcard{grid-row:1}
+.dashgrid .routecard{grid-row:2}
+.dashgrid .sidecard{grid-row:1 / span 2}
 .sc-card{grid-column:span 5}
 .st-card{grid-column:span 7}
 .chead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px 14px 8px;flex-wrap:wrap}
@@ -225,7 +232,11 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
    있습니다. 그대로 두면 우리가 찍은 정류장 점과 나란히 보여 무엇이 분석
    대상인지 헷갈립니다. 배경을 탈색해 뒤로 물리고, 데이터 레이어(우리 점·
    노선)만 색을 갖게 합니다. 배경 지도는 맥락이지 주인공이 아닙니다. */
-.kkmode.zdetail .kakaomap{filter:saturate(.35) brightness(1.04) contrast(.92)}
+/* .kakaomap 은 svg 의 자식이 아니라 형제입니다(.mapbox 안, svg 앞에 삽입).
+   그래서 `.kkmode.zdetail .kakaomap` 은 영원히 매치되지 않았습니다 — 배경만
+   원색으로 남고 우리 레이어만 흐려지는 정반대 결과였습니다. map.js 의
+   applyZoom 이 부모(.mapbox)에 .kkdetail 을 직접 겁니다. */
+.kkdetail .kakaomap{filter:saturate(.35) brightness(1.04) contrast(.92)}
 /* 범례 — 예전에는 지도 위에 떠 있어 좌하단(우정·매향·궁평) 격자를 가렸습니다.
    지도 아래 띠로 내려 어떤 화면 폭에서도 데이터를 가리지 않습니다. */
 .legendbar{border-top:1px solid var(--line);padding:9px 14px 11px;display:flex;
@@ -573,7 +584,7 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 @media (max-width:1020px){
   .mapcard,.routecard,.sidecard,.sc-card,.st-card,.span4,.span5,.span6,.span7,.span8{grid-column:span 12}
   /* 한 줄로 쌓이는 폭에서는 명시적 행 배치를 풀어야 순서대로 흐릅니다 */
-  .mapcard,.routecard,.sidecard{grid-row:auto}
+  .dashgrid .mapcard,.dashgrid .routecard,.dashgrid .sidecard{grid-row:auto}
   .kpis{grid-template-columns:1fr 1fr}
   .t10{max-height:380px}
 }

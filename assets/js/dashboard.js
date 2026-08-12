@@ -675,9 +675,14 @@
 
     box.innerHTML = lines.map(function (L) {
       var items = L.stops.map(function (s) {
-        var busy = (+s.boardingsPerDay || 0) >= busyCut && busyCut > 0;
+        /* 값이 없을 때 "일 승차 0명" 이라고 적으면 실측 0 과 구분이 안 됩니다.
+           숫자로 온 것만 수치로 적고, 없으면 자료 없음으로 둡니다 — 화면에
+           나가는 수치는 전부 실측이어야 한다는 방침이 여기에도 걸립니다. */
+        var b = (typeof s.boardingsPerDay === 'number' && isFinite(s.boardingsPerDay))
+          ? s.boardingsPerDay : null;
+        var busy = b !== null && busyCut > 0 && b >= busyCut;
         return '<li' + (busy ? ' class="busy"' : '') + ' title="' + esc(s.name) +
-          ' · 일 승차 ' + fmt(Math.round(+s.boardingsPerDay || 0)) + '명">' +
+          ' · 일 승차 ' + (b === null ? '자료 없음' : fmt(Math.round(b)) + '명') + '">' +
           '<span class="snm">' + esc(s.name) + '</span></li>';
       }).join('');
       var tail = L.after ? '<div class="rtail">↓ 격자 밖으로 계속</div>' : '';
