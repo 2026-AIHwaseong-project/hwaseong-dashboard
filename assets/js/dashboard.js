@@ -82,10 +82,18 @@
     }).then(function () {
       /* 최우선 격자를 초기 선택. 다만 확대·노선 표시까지 하지는 않습니다 —
          첫 화면은 화성시 전체의 미스매칭 분포를 보는 자리입니다. */
-      renderCellRoutes(null);
       var first = S.priorities && S.priorities.items[0];
-      if (first) selectCell(first.cellId, true);
-      else selectStop(S.stops[0] && S.stops[0].id);
+      if (first) {
+        selectCell(first.cellId, true);
+        /* 경유 노선 카드도 같이 채웁니다. 예전에는 renderCellRoutes(null) 이라
+           지도·Top10·산점도·프로파일은 전부 '선택됨' 인데 이 카드만 "격자를
+           클릭하세요" 라고 말해, 한 화면이 서로 모순된 상태를 주장했습니다.
+           확대(focusCell)는 하지 않으므로 '첫 화면은 전체 분포' 원칙은 유지됩니다. */
+        renderCellRoutes(first.cellId);
+      } else {
+        renderCellRoutes(null);
+        selectStop(S.stops[0] && S.stops[0].id);
+      }
     }).catch(fail);
   }
 
@@ -290,25 +298,36 @@
     var html = '<table class="rgtbl"><thead><tr>' +
       head.map(function (h) {
         var on = regionSort.key === h[0];
-        return '<th data-sort="' + h[0] + '" class="' + (on ? 'on' : '') + '" scope="col">' +
+        /* click 만 위임받아 키보드로는 정렬도 권역 강조도 못 했습니다 —
+           같은 화면의 Top10 은 <button> 이라 정상인데 이 표만 예외였습니다.
+           WCAG 2.1.1 Keyboard(Level A). tabindex + role + aria-sort 를 얹고
+           아래에서 Enter/Space 를 click 으로 넘깁니다. */
+        return '<th data-sort="' + h[0] + '" class="' + (on ? 'on' : '') + '" scope="col"' +
+          ' tabindex="0" role="button"' +
+          ' aria-sort="' + (on ? (regionSort.desc ? 'descending' : 'ascending') : 'none') + '">' +
           esc(h[1]) + (on ? (regionSort.desc ? ' ▾' : ' ▴') : '') + '</th>';
       }).join('') + '<th scope="col">주 조치</th></tr></thead><tbody>' +
       list.map(function (r) {
         var pctBar = r.need > 0 ? (100 * r.need / maxNeed) : 0;
-        return '<tr data-region="' + esc(r.name) + '"' +
-          (S.focusRegion === r.name ? ' class="on"' : '') + '>' +
+        return '<tr data-region="' + esc(r.name) + '" tabindex="0" role="button"' +
+          ' aria-label="' + esc(r.name) + ' 권역을 지도에서 강조"' +
+          (S.focusRegion === r.name ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + '>' +
           '<td class="rg-name">' + esc(r.name) + '</td>' +
           '<td>' + fmt(r.cells) + '</td>' +
           '<td class="rg-need">' + (r.need > 0
             ? '<span class="rg-bar"><i style="width:' + pctBar.toFixed(0) + '%"></i></span><b>' + r.need + '</b>'
             : '<span class="rg-zero">0</span>') + '</td>' +
           '<td>' + (r.drt || '<span class="rg-zero">0</span>') + '</td>' +
-          '<td>' + (r.trips ? fmt(r.trips) : '<span class="rg-zero">–</span>') + '</td>' +
-          '<td>' + (r.elderly ? fmt(r.elderly) : '<span class="rg-zero">–</span>') + '</td>' +
+          /* 여기서 값이 없다는 것은 '사각지대 격자가 없어 합계가 0' 이라는 뜻입니다.
+             예전에는 '–' 로 찍어 같은 행의 다른 0 과 표기가 갈렸고, 격자 90개에
+             DRT 후보 8개인 우정읍이 잠재수요 '–' 로 나와 자료가 빠진 것처럼
+             보였습니다. 실제로 0 이므로 0 으로 적습니다. */
+          '<td>' + (r.trips ? fmt(r.trips) : '<span class="rg-zero">0</span>') + '</td>' +
+          '<td>' + (r.elderly ? fmt(r.elderly) : '<span class="rg-zero">0</span>') + '</td>' +
           '<td>' + Math.round(r.elderlyRatio * 100) + '%</td>' +
           '<td>' + (r.need > 0 || r.drt > 0
             ? '<span class="tag ' + (r.action === 'DRT 검토' || r.action === 'DRT' ? 'drt' : r.action === '신설' ? 'new' : 'add') + '">' + esc(r.action) + '</span>'
-            : '<span class="rg-zero">—</span>') + '</td>' +
+            : '<span class="rg-zero">–</span>') + '</td>' +
           '</tr>';
       }).join('') + '</tbody></table>';
     $('#regionTbl').innerHTML = html;
@@ -358,7 +377,10 @@
         '<small>점</small></span>' +
         '<span class="sub2"><span>MI +' + r.mi.toFixed(2) + '</span>' +
         '<span>잠재 ' + fmt(r.flowTripsPerDay) + '통행/일</span>' +
-        '<em>고령 ' + Math.round(r.elderlyRatio * 100) + '%</em></span>' +
+        /* 고령비가 높을 때만 색을 씁니다 — 전부 빨강이면 색이 값을 안 나릅니다.
+           20% 는 화성시 전체 고령비(약 11%)의 두 배 수준입니다. */
+        '<em' + (r.elderlyRatio >= 0.2 ? ' class="hi"' : '') + '>고령 ' +
+        Math.round(r.elderlyRatio * 100) + '%</em></span>' +
         '<span class="bar"><i style="width:' + (100 * r.priorityScore / mx).toFixed(0) + '%"></i></span>' +
         '<span class="tag ' + tagClass + '">' + esc(r.actionLabel) + '</span>' +
         '</button>';
@@ -736,6 +758,14 @@
     /* setCellFocus 가 노선·정류장 DOM 을 새로 그리므로 선택 표시를 다시 얹습니다
        (map.renderRoutes 도 복원하지만, 순서에 기대지 않고 여기서도 확실히 합니다) */
     if (keepStop && S.selectedStopId) S.map.highlightStop(S.selectedStopId);
+    /* 클릭의 답(경유 노선 카드)은 지도 아래에 있어 1440x900 에서 261px,
+       1920x1080 에서도 81px 접힘 아래입니다 — 스크롤하지 않으면 방금 누른
+       결과를 볼 수 없었습니다. block:'nearest' 라 이미 보이면 안 움직입니다. */
+    var rc = document.querySelector('.routecard');
+    if (rc && rc.scrollIntoView) {
+      try { rc.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+      catch (e) { rc.scrollIntoView(false); }
+    }
   }
 
   function cellTip(c) {
@@ -853,6 +883,14 @@
       }
       var tr = e.target.closest('tr[data-region]');
       if (tr) focusRegion(tr.getAttribute('data-region'));
+    });
+    /* Enter·Space 를 click 으로 넘깁니다. 위임이라 표를 다시 그려도 유지됩니다. */
+    $('#regionTbl').addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+      var t = e.target.closest('th[data-sort],tr[data-region]');
+      if (!t) return;
+      e.preventDefault();
+      t.click();
     });
 
     /* 우선순위 행도 지도 클릭과 같게 — 그 격자로 확대해 노선까지 보여 줍니다 */
