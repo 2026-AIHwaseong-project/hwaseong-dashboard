@@ -125,31 +125,37 @@ svg text{font-family:inherit}
   clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
 /* ------------------------------------------------------ 3. 레이아웃 */
-.wrap{max-width:1340px;margin:0 auto;padding:14px 18px 30px}
+/* 1340px 은 산문 가독 폭 기준인데, 이 화면의 구성물은 지도·산점도·권역표처럼
+   정보 밀도가 높은 것들뿐입니다. 1920px 에서 가로 32%(616px)가 놀고 정작 주인공인
+   격자 지도는 1440px 일 때와 똑같은 863px 에 머물렀습니다. 산문 문단은 .sub 의
+   max-width:70ch 로 따로 묶여 있으므로 래퍼만 넓힙니다.
+   ※ 차트 max-width(#scatter 560 / 나머지 760)와 반드시 함께여야 합니다 —
+     안 그러면 산점도가 1.24배로 확대돼 축 글자가 카드 제목보다 커집니다. */
+.wrap{max-width:1680px;margin:0 auto;padding:14px 18px 30px}
 
 /* 상단 전역 내비게이션 */
 .topnav{position:sticky;top:0;z-index:30;background:var(--bg);background:color-mix(in srgb,var(--bg) 92%,transparent);
   backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-.topnav .tn-in{max-width:1340px;margin:0 auto;padding:8px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.topnav .tn-in{max-width:1680px;   /* .wrap 과 같은 값이어야 좌측 정렬이 맞습니다 */margin:0 auto;padding:8px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
 .brand i{display:block;width:9px;height:9px;border-radius:2px;background:var(--sel);font-style:normal}
-.brand span{font-family:Consolas,ui-monospace,monospace;font-size:9.5px;font-weight:500;letter-spacing:.1em;
+.brand span{font-family:Consolas,ui-monospace,monospace;font-size:10px;font-weight:500;letter-spacing:.1em;
   color:var(--ink3);border:1px solid var(--line);border-radius:999px;padding:2px 7px}
 .navlinks{display:flex;gap:3px}
-.navlinks a{font-size:12.5px;padding:5px 12px;border-radius:8px;color:var(--ink2);text-decoration:none}
+.navlinks a{font-size:12px;padding:5px 12px;border-radius:8px;color:var(--ink2);text-decoration:none}
 .navlinks a:hover{background:var(--selbg)}
 .navlinks a[aria-current="page"]{background:var(--ink);color:var(--card);font-weight:600}
 .tn-sp{flex:1}
 .tn-act{display:flex;gap:6px;align-items:center}
 
 header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin:8px 0 14px}
-.eyebrow{font-family:"Cascadia Code",Consolas,ui-monospace,monospace;font-size:10.5px;letter-spacing:.14em;color:var(--ink3);margin:0 0 6px}
+.eyebrow{font-family:"Cascadia Code",Consolas,ui-monospace,monospace;font-size:11px;letter-spacing:.14em;color:var(--ink3);margin:0 0 6px}
 h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balance}
 .sub{margin:5px 0 0;color:var(--ink2);font-size:13px;max-width:70ch}
 
 .periods{display:flex;gap:4px;border:1px solid var(--line);border-radius:10px;padding:4px;background:var(--card)}
 .pbtn{border-radius:7px;padding:5px 13px;text-align:center;color:var(--ink2)}
-.pbtn b{display:block;font-size:13.5px;font-weight:600;line-height:1.25;color:inherit}
+.pbtn b{display:block;font-size:13px;font-weight:600;line-height:1.25;color:inherit}
 .pbtn span{display:block;font-size:10px;letter-spacing:.05em;font-family:Consolas,ui-monospace,monospace;opacity:.75}
 .pbtn:hover{background:var(--selbg)}
 .pbtn.on{background:var(--ink);color:var(--card)}
@@ -187,24 +193,32 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .sc-card{grid-column:span 5}
 .st-card{grid-column:span 7}
 .chead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px 14px 8px;flex-wrap:wrap}
-.chead h2{font-size:14.5px;font-weight:650;margin:0}
-.chead .hsub{font-size:11.5px;color:var(--ink3)}
+.chead h2{font-size:15px;font-weight:700;margin:0}
+.chead .hsub{font-size:11px;color:var(--ink3)}
 /* 계산 중에만 글자가 들어가는데, 비어도 테두리 캡슐이 남아 로드 실패처럼 보입니다 */
 .pchip:empty{display:none}
-.pchip{font-size:10.5px;font-family:Consolas,ui-monospace,monospace;color:var(--ink3);
+.pchip{font-size:11px;font-family:Consolas,ui-monospace,monospace;color:var(--ink3);
   border:1px solid var(--line);border-radius:999px;padding:2px 8px;white-space:nowrap}
 .cbody{padding:0 14px 14px}
 
 /* --------------------------------------------------------- 4. KPI 타일 */
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
 .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px 11px;min-width:0}
-.kpi .lb{font-size:11.5px;color:var(--ink3);margin-bottom:3px}
-.kpi .vl{font-size:26px;font-weight:650;letter-spacing:-.01em;line-height:1.15}
+/* 부팅 직후 자리표시자('–')와 계산된 실제 값이 같은 모양이면 '로딩 중' 인지
+   '값이 0' 인지 구분이 안 됩니다. index.html 의 초기 '–' 에 .pending 을 주면
+   흐리게 떠서 갈립니다(값이 들어오면 innerHTML 교체로 자동 해제). */
+.kpi .vl.pending{opacity:.4}
+.kpi .lb{font-size:11px;color:var(--ink3);margin-bottom:3px}
+/* 8자리 파생값(18,788,767원/통행)이 들어오면 26px 로는 타일을 넘칩니다.
+   tabular-nums 는 배치할 때마다 자릿수가 흔들리지 않게 합니다. */
+.kpi .vl{font-size:clamp(19px,1.9vw,26px);font-weight:650;letter-spacing:-.01em;line-height:1.15;
+  font-variant-numeric:tabular-nums}
 .kpi .vl small{font-size:14px;font-weight:600;color:var(--ink2);margin-left:2px}
 .kpi .vl.txt{font-size:19px}
-.kpi .dl{font-size:11.5px;font-weight:600;margin-top:2px;min-height:17px;font-variant-numeric:tabular-nums;color:var(--ink3)}
+.kpi .dl{font-size:11px;font-weight:600;margin-top:2px;min-height:17px;font-variant-numeric:tabular-nums;color:var(--ink3)}
 .kpi .dl.good{color:var(--good)} .kpi .dl.bad{color:var(--bad)}
-.kpi .sb{font-size:11.5px;color:var(--ink3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 증감줄(.dl)과 같은 11.5px 이면 위계가 없어 둘이 대등하게 읽힙니다 */
+.kpi .sb{font-size:11px;color:var(--ink3);opacity:.9;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ------------------------------------------------------------- 5. 지도 */
 .mapcard{display:flex;flex-direction:column}
@@ -214,12 +228,12 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .lbtn:hover{background:var(--selbg)}
 .lbtn.on{background:var(--ink);border-color:var(--ink);color:var(--card)}
 .tset{display:flex;gap:4px}
-.tbtn{font-size:11.5px;padding:4px 10px;border:1px dashed var(--line);border-radius:999px;color:var(--ink3)}
+.tbtn{font-size:11px;padding:4px 10px;border:1px dashed var(--line);border-radius:999px;color:var(--ink3)}
 .tbtn.on{border-style:solid;color:var(--ink2);background:var(--selbg);border-color:var(--sel)}
 
 /* 지도 검색 — 읍면동 이름 또는 격자 ID */
 .msearch{display:flex;gap:4px;align-items:center}
-.msi{font-size:11.5px;padding:4px 11px;width:150px;color:var(--ink2);
+.msi{font-size:11px;padding:4px 11px;width:150px;color:var(--ink2);
      border:1px solid var(--line);border-radius:999px;background:var(--card)}
 .msi::placeholder{color:var(--ink3)}
 .msi:focus{border-color:var(--sel);background:var(--selbg)}
@@ -255,10 +269,10 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .legendbar{border-top:1px solid var(--line);padding:9px 14px 11px;display:flex;
   align-items:center;gap:12px;flex-wrap:wrap}
 .legendbar .lg-head{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
-.legendbar .lg-head b{font-size:11.5px;font-weight:650;color:var(--ink2)}
+.legendbar .lg-head b{font-size:11px;font-weight:650;color:var(--ink2)}
 .legendbar .lg-head span{font-size:10px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace}
 .legendbar .lg-body{display:flex;align-items:center;gap:8px;flex:1;min-width:230px}
-.legendbar .lg-end{font-size:10.5px;color:var(--ink3);white-space:nowrap}
+.legendbar .lg-end{font-size:11px;color:var(--ink3);white-space:nowrap}
 .legendbar .lg-scale{flex:1;min-width:120px}
 .legendbar .lg-sw{display:flex;gap:2px}
 .legendbar .lg-sw i{display:block;height:11px;flex:1;border-radius:2px}
@@ -270,8 +284,8 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 /* 마지막 '값' 눈금(빈 span 앞)까지 절반을 밀면 스케일 밖으로 나가 옆의
    '공급 부족' 글자와 겹칩니다 — 상한값이 못 읽히면 색의 기준이 사라집니다. */
 .legendbar .lg-tick span:nth-last-child(2){transform:translateX(0)}
-.legendbar .lg-tick5 span{flex:1;text-align:center;transform:none;font-size:8.5px}
-.legendbar .lg-note{width:100%;font-size:10.5px;color:var(--sel);display:flex;align-items:center;gap:5px}
+.legendbar .lg-tick5 span{flex:1;text-align:center;transform:none;font-size:9px}
+.legendbar .lg-note{width:100%;font-size:11px;color:var(--sel);display:flex;align-items:center;gap:5px}
 .legendbar .sw-elig{display:inline-block;width:10px;height:10px;border-radius:2px;
   border:1.2px solid var(--sel);background:var(--selbg)}
 
@@ -290,8 +304,13 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
    호버가 되돌리지 않도록. */
 .kkmode.zdetail .cells rect:hover{filter:saturate(1.25) brightness(1.04)}
 /* 배치 도구를 든 상태에서 적용 가능한 격자만 또렷하게 */
-.cells rect.inelig{opacity:.22}
-.cells rect.elig{stroke:var(--sel);stroke-width:calc(1.3px/var(--zk,1));stroke-opacity:.9}
+/* 강조를 '테두리 추가' 가 아니라 '나머지 물리기' 로 합니다.
+   예전에는 적격 격자마다 보라 테두리를 둘러 도구를 들면 지도 육지 픽셀의
+   19.2% 가 보라가 됐고, 그 색이 '선택한 격자' 링(--sel)과 같아서 선택한 칸을
+   굵기 차이로만 구분해야 했습니다. 읍면동 경계·노선에 이어 세 번째 선 체계가
+   격자 위에 얹히던 것도 사라집니다. 이제 보라는 선택링 하나뿐입니다. */
+.cells rect.inelig{opacity:.14}
+.cells rect.elig{stroke:none}
 .c.m0{fill:var(--mi0)}.c.m1{fill:var(--mi1)}.c.m2{fill:var(--mi2)}.c.m3{fill:var(--mi3)}
 .c.m4{fill:var(--mi4)}.c.m5{fill:var(--mi5)}.c.m6{fill:var(--mi6)}
 .c.sb0{fill:var(--sb0)}.c.sb1{fill:var(--sb1)}.c.sb2{fill:var(--sb2)}.c.sb3{fill:var(--sb3)}.c.sb4{fill:var(--sb4)}
@@ -301,7 +320,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .rlab{fill:var(--ink);font-size:calc(11.5px/var(--zk,1));font-weight:700;paint-order:stroke;stroke:var(--card);
   stroke-width:calc(3.5px/var(--zk,1));stroke-linejoin:round;pointer-events:none;letter-spacing:-.01em}
 .rlab.sm{font-size:calc(10px/var(--zk,1));font-weight:600;fill:var(--ink2);stroke-width:calc(3px/var(--zk,1))}
-.nlab{fill:var(--ink3);font-size:10.5px;opacity:.62;pointer-events:none}
+.nlab{fill:var(--ink3);font-size:11px;opacity:.62;pointer-events:none}
 .wlab{fill:var(--coast);font-size:10px;letter-spacing:.2em;pointer-events:none}
 /* 노선은 맥락이지 주인공이 아닙니다. 진하게 깔면 격자의 미스매칭 색을 덮어
    "어디가 빨간가"가 안 읽힙니다. 흐리게 두고, 선택된 노선만 또렷하게 합니다. */
@@ -358,6 +377,12 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .pmk-drt{fill:var(--sel)}
 .pmk-freq{fill:var(--warn)}
 .pmk-n{fill:var(--card);stroke:none;font-weight:700}
+/* 지도 위 마커만 — 배경 점(환승거점 지름 9px)과 크기가 비슷해 배치한 위치를
+   눈으로 못 찾았습니다. 흰 테두리를 두껍게 하고 그림자로 띄웁니다.
+   범례(.lg-sym)에는 배경이 없으므로 .placed 스코프를 씁니다. */
+.placed .pmk{stroke-width:calc(3.5px/var(--zk,1))}
+.placed .pmk-stop,.placed .pmk-drt,.placed .pmk-freq{
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
 /* 이 하나만 map.js 가 계산하지 않고 CSS 가 정합니다 — SVG 사용자 단위라
    --zk 로 나누지 않으면 확대할수록 같이 부풀어 칸을 덮습니다(120배면 9px 가
    1,080px). 나머지 pmk-* 는 map.js 가 칸 크기 비례로 attribute 를 찍습니다. */
@@ -376,17 +401,20 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .trow:hover{background:var(--selbg)}
 .trow.sel{background:var(--selbg);box-shadow:inset 0 0 0 1.5px var(--sel)}
 .trow .rk{font-family:Consolas,ui-monospace,monospace;font-size:12px;color:var(--ink3);text-align:right}
-.trow .nm{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.trow .nm span{font-family:Consolas,ui-monospace,monospace;font-weight:400;font-size:10.5px;color:var(--ink3);margin-left:6px}
+.trow .nm{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow .nm span{font-family:Consolas,ui-monospace,monospace;font-weight:400;font-size:11px;color:var(--ink3);margin-left:6px}
 /* 순위를 정한 값(1위=100 기준 상대 점수)이 주 숫자입니다. MI 는 sub2 로 내려
    보조가 됐습니다 — 어느 쪽이 정렬 근거인지 크기로 드러나야 합니다. */
 .trow .pscore{font-family:Consolas,ui-monospace,monospace;font-size:13px;font-weight:700;
   color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
-.trow .pscore small{font-size:9.5px;font-weight:400;color:var(--ink3);margin-left:1px}
-.trow .mi{font-family:Consolas,ui-monospace,monospace;font-size:11.5px;color:var(--ink2);text-align:right}
-.trow .sub2{grid-column:2;font-size:10.5px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace;
+.trow .pscore small{font-size:10px;font-weight:400;color:var(--ink3);margin-left:1px}
+.trow .mi{font-family:Consolas,ui-monospace,monospace;font-size:11px;color:var(--ink2);text-align:right}
+.trow .sub2{grid-column:2;font-size:11px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace;
   display:flex;gap:9px;flex-wrap:wrap;margin-top:-1px}
-.trow .sub2 em{font-style:normal;color:var(--tag-new-fg);font-weight:600}
+/* 고령 7% 와 22% 가 똑같이 진빨강이라 값과 무관한 위험 신호처럼 보였습니다.
+   기본은 눌러 두고, 임계를 넘을 때만 JS 가 .hi 를 붙여 색을 씁니다. */
+.trow .sub2 em{font-style:normal;color:var(--ink2);font-weight:600}
+.trow .sub2 em.hi{color:var(--tag-new-fg)}
 .trow .bar{grid-column:2;height:4px;border-radius:2px;background:var(--track);position:relative;overflow:hidden}
 /* 지도 범례가 --mi5 를 'MI +0.25~+0.7 구간' 이라고 못박아 둔 색인데, 여기서는
    값과 무관하게 상수로 채워 1위(+1.78)와 9위(+0.98)의 막대 색이 같았습니다.
@@ -399,7 +427,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .tag.drt{background:var(--tag-drt-bg);color:var(--tag-drt-fg)}
 .tag.eff{background:var(--tag-eff-bg);color:var(--tag-eff-fg)}
 .tag.ok{background:var(--tag-ok-bg);color:var(--tag-ok-fg)}
-.empty{padding:26px 14px;text-align:center;font-size:11.5px;color:var(--ink3);line-height:1.7}
+.empty{padding:26px 14px;text-align:center;font-size:11px;color:var(--ink3);line-height:1.7}
 
 /* ---------------------------------------------------------- 7. 차트 */
 /* viewBox 고정 + width:100% 라 카드가 넓어지면 SVG 안 글자가 통째로 확대됩니다.
@@ -416,18 +444,20 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .qlab{fill:var(--ink3);font-size:10px;paint-order:stroke;
   stroke:var(--card);stroke-width:3px;stroke-linejoin:round}
 .qlab.hot{fill:var(--ink2);font-weight:600}
-.axlab{fill:var(--ink3);font-size:10.5px}
-.tick{fill:var(--ink3);font-size:9.5px;font-family:Consolas,ui-monospace,monospace}
+.axlab{fill:var(--ink3);font-size:11px}
+.tick{fill:var(--ink3);font-size:10px;font-family:Consolas,ui-monospace,monospace}
 .gl{stroke:var(--grid);stroke-width:1}
-.zl{stroke:var(--axis);stroke-width:1.2}
+/* --axis(#c3c2b7)는 배경 대비 1.75:1 로 비텍스트 최소 3:1 에 못 미쳐
+   4분면 구획 자체가 흐릿했습니다. 격자선이 아니라 '의미를 나누는 선' 입니다. */
+.zl{stroke:var(--ink3);stroke-width:1.2;opacity:.75}
 .dot{stroke:var(--card);stroke-width:1.4;cursor:pointer}
 .scatring{fill:none;stroke:var(--sel);stroke-width:2.2;pointer-events:none}
 .stbar-b{fill:var(--c-board)}
 .stbar-a{fill:var(--c-alight)}
 .pband{fill:var(--ink);opacity:.05;pointer-events:none}
 .colhit{fill:transparent;cursor:pointer}
-.dl2{fill:var(--ink2);font-size:9.5px;font-family:Consolas,ui-monospace,monospace}
-.keys{display:flex;gap:12px;align-items:center;font-size:11.5px;color:var(--ink2);flex-wrap:wrap}
+.dl2{fill:var(--ink2);font-size:10px;font-family:Consolas,ui-monospace,monospace}
+.keys{display:flex;gap:12px;align-items:center;font-size:11px;color:var(--ink2);flex-wrap:wrap}
 .keys i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 .keys i.ghost{background:transparent;border:1.5px solid var(--ink3);border-radius:2px}
 .stsel{font:inherit;font-size:12px;color:var(--ink);background:var(--card);border:1px solid var(--line);
@@ -436,8 +466,10 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .stsearch{font:inherit;font-size:12px;color:var(--ink);background:var(--card);border:1px solid var(--line);
   border-radius:7px;padding:4px 8px;width:120px}
 .stsearch::placeholder{color:var(--ink3)}
-.ststats{display:flex;gap:18px;padding:2px 16px 12px;font-size:11.5px;color:var(--ink3);flex-wrap:wrap}
-.ststats b{display:block;font-size:15px;font-weight:650;color:var(--ink);margin-top:1px}
+.ststats{display:flex;gap:18px;padding:2px 16px 12px;font-size:11px;color:var(--ink3);flex-wrap:wrap}
+/* 보조 수치(208명/44명/20.7%)가 카드 제목보다 크면 무엇이 주인공인지
+   뒤집힙니다 — 제목 15px 아래로 내립니다. */
+.ststats b{font-size:13px;font-weight:650;margin-left:5px;color:var(--ink)}
 
 /* 비교 차트: 기준선 = 고스트(외곽선), 시나리오 = 채움 — 색이 아닌 스타일로 구분 */
 .cmp-base{fill:none;stroke:var(--ink3);stroke-width:1.5;stroke-dasharray:3 2}
@@ -445,6 +477,12 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .cmp-sim.worse{fill:var(--bad)}
 .cmp-lab{fill:var(--ink2);font-size:10px;font-family:Consolas,ui-monospace,monospace}
 .cmp-name{fill:var(--ink2);font-size:11px}
+/* 같은 클래스인데 실효 크기가 카드 폭에 따라 달라집니다 — .chart{width:100%} 인데
+   viewBox 폭은 고정이라, 7칸 카드의 #cmpChart 는 1.18배로 커지고 5칸 카드의
+   #costChart 는 0.84배로 줄어 선언 10px 이 화면에서 8.4px 가 됩니다. 카드의
+   존재 이유인 총 소요액이 카드 안에서 가장 작은 글자였습니다. 축소분을 되돌립니다. */
+#costChart .cmp-lab{font-size:12px}
+#costChart .cmp-name{font-size:13px}
 .cost-bar{fill:var(--sb3)}
 .cost-bar.dim{fill:var(--sb1)}
 
@@ -452,7 +490,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .simbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 14px 10px;padding:8px 10px;
   border:1px solid var(--line);border-radius:9px;background:var(--selbg);background:color-mix(in srgb,var(--selbg) 45%,transparent)}
 .simbar .sl{font-size:11px;color:var(--ink3);letter-spacing:.02em;margin-right:2px}
-.simtool{font-size:11.5px;padding:4px 11px;border:1px solid var(--line);border-radius:999px;color:var(--ink2);
+.simtool{font-size:11px;padding:4px 11px;border:1px solid var(--line);border-radius:999px;color:var(--ink2);
   background:var(--card);display:inline-flex;align-items:center;gap:5px}
 .simtool:hover{border-color:var(--sel)}
 .simtool.on{background:var(--sel);border-color:var(--sel);color:#fff;font-weight:600}
@@ -467,15 +505,28 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
 .plist .ic{font-size:12px;color:var(--sel);text-align:center}
 .plist .tx{min-width:0}
-.plist .tx b{display:block;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.plist .tx span{font-size:10.5px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace}
-.plist .cost{font-size:11.5px;font-family:Consolas,ui-monospace,monospace;color:var(--ink2);
+.plist .tx b{display:block;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.plist .tx span{font-size:11px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace}
+.plist .cost{font-size:11px;font-family:Consolas,ui-monospace,monospace;color:var(--ink2);
   font-variant-numeric:tabular-nums;white-space:nowrap}
+/* ── 최소 터치·클릭 면적 24x24 (WCAG 2.2 Target Size Minimum) ──────────────
+   보이는 크기는 그대로 두고 누를 수 있는 면적만 넓힙니다. 레이아웃을 밀지
+   않으려고 .help 와 같은 투명 ::after 확장 상자를 씁니다.
+   특히 배치 삭제 ×는 19x19 인데 되돌릴 수 없는 동작이고 바로 옆 금액과 6px
+   밖에 안 떨어져 있어, 시연 중 빗나가면 배치가 사라집니다. */
+.plist .del,.scen .sdel,.legendbar .lg-clear,.rec-scope .rs-btn,
+.rec-tab,.zctl [data-z="reset"]{position:relative}
+.plist .del::after,.scen .sdel::after,.legendbar .lg-clear::after,
+.rec-scope .rs-btn::after,.rec-tab::after,.zctl [data-z="reset"]::after{
+  content:"";position:absolute;left:50%;top:50%;
+  min-width:24px;min-height:24px;width:100%;height:100%;
+  transform:translate(-50%,-50%)}
+
 .plist .del{font-size:15px;line-height:1;color:var(--ink3);padding:2px 5px;border-radius:6px}
 .plist .del:hover{background:var(--tag-new-bg);color:var(--tag-new-fg)}
 
 .budget{padding:2px 14px 12px}
-.budget .brow{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;
+.budget .brow{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;
   color:var(--ink3);margin-bottom:5px}
 .budget .brow b{font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums}
 .budget .btrack{height:8px;border-radius:4px;background:var(--track);overflow:hidden;position:relative}
@@ -490,36 +541,37 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   width:100%;text-align:left;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--bg)}
 .scen:hover{border-color:var(--sel)}
 .scen.on{border-color:var(--sel);box-shadow:inset 0 0 0 1px var(--sel);background:var(--selbg)}
-.scen .snm{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.scen .smeta{grid-column:1/-1;font-size:10.5px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace;
+.scen .snm{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scen .smeta{grid-column:1/-1;font-size:11px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace;
   display:flex;gap:10px;flex-wrap:wrap}
 .scen .sdel{font-size:15px;line-height:1;color:var(--ink3);padding:2px 5px;border-radius:6px}
 .scen .sdel:hover{background:var(--tag-new-bg);color:var(--tag-new-fg)}
 
 .policy{padding:0 14px 14px;display:flex;flex-direction:column;gap:10px}
 .pcard{border:1px solid var(--line);border-radius:9px;padding:11px 13px;background:var(--bg)}
-.pcard h3{margin:0 0 5px;font-size:12.5px;font-weight:650;display:flex;align-items:center;gap:7px}
+/* 소제목 13 · 본문 12 는 1px 차이라 굵기 하나로만 버팁니다 */
+.pcard h3{font-size:14px;font-weight:650;margin:0 0 6px}
 .pcard p{margin:0;font-size:12px;color:var(--ink2);line-height:1.65}
 .pcard ul{margin:6px 0 0;padding-left:17px;font-size:12px;color:var(--ink2);line-height:1.7}
 .pcard .num{font-family:Consolas,ui-monospace,monospace;font-weight:600;color:var(--ink);
   font-variant-numeric:tabular-nums}
 
 /* ------------------------------------------------------- 9. 버튼 · 폼 */
-.btn{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;
+.btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
   padding:6px 13px;border-radius:8px;border:1px solid var(--line);color:var(--ink2);background:var(--card);
   white-space:nowrap}
 .btn:hover:not(:disabled){background:var(--selbg);border-color:var(--sel)}
 .btn:disabled{opacity:.42;cursor:not-allowed}
 .btn.primary{background:var(--sel);border-color:var(--sel);color:#fff}
 .btn.primary:hover:not(:disabled){filter:brightness(1.08);background:var(--sel)}
-.btn.sm{font-size:11.5px;padding:4px 10px;font-weight:500}
+.btn.sm{font-size:11px;padding:4px 10px;font-weight:500}
 .btn i{font-style:normal;font-size:11px}
-.minib{font-size:11.5px;padding:4px 10px;border:1px solid var(--line);border-radius:7px;color:var(--ink2);background:var(--card)}
+.minib{font-size:11px;padding:4px 10px;border:1px solid var(--line);border-radius:7px;color:var(--ink2);background:var(--card)}
 .minib:hover:not(:disabled){background:var(--selbg)}
 .minib:disabled{opacity:.4;cursor:not-allowed}
 .fld{display:flex;flex-direction:column;gap:4px}
 .fld label{font-size:11px;color:var(--ink3)}
-.fld input,.fld select,.fld textarea{font:inherit;font-size:12.5px;color:var(--ink);background:var(--bg);
+.fld input,.fld select,.fld textarea{font:inherit;font-size:12px;color:var(--ink);background:var(--bg);
   border:1px solid var(--line);border-radius:7px;padding:6px 9px;width:100%}
 .fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--sel)}
 .frow{display:flex;gap:10px;flex-wrap:wrap;padding:0 14px 12px}
@@ -533,7 +585,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   box-shadow:var(--shadow-lg);width:min(920px,100%);max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
 .sheet header{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .sheet header h2{margin:0;font-size:15px;font-weight:700}
-.sheet header .hs{font-size:11.5px;color:var(--ink3)}
+.sheet header .hs{font-size:11px;color:var(--ink3)}
 .sheet header .sp{flex:1}
 .sheet .body{overflow-y:auto;padding:16px 18px;min-height:120px}
 .sheet footer{display:flex;gap:8px;align-items:center;padding:12px 18px;border-top:1px solid var(--line);flex-wrap:wrap}
@@ -542,7 +594,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .xbtn:hover{background:var(--selbg);color:var(--ink)}
 
 .doc{font-size:13px;line-height:1.75;color:var(--ink2)}
-.doc h3{margin:18px 0 6px;font-size:13.5px;font-weight:700;color:var(--ink);
+.doc h3{margin:18px 0 6px;font-size:13px;font-weight:700;color:var(--ink);
   padding-bottom:4px;border-bottom:1px solid var(--line)}
 .doc h3:first-child{margin-top:0}
 .doc p{margin:0 0 8px;white-space:pre-wrap}
@@ -552,32 +604,32 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .doc .dmeta{text-align:center;font-size:11px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace;
   margin-bottom:16px}
 .doc .dnote{margin-top:16px;padding:9px 11px;border:1px dashed var(--line);border-radius:8px;
-  font-size:11.5px;color:var(--ink3);line-height:1.65}
+  font-size:11px;color:var(--ink3);line-height:1.65}
 .doc table{margin:2px 0 12px}
-.doc .dcap{font-size:11.5px;color:var(--ink3);margin:10px 0 3px;font-weight:600}
+.doc .dcap{font-size:11px;color:var(--ink3);margin:10px 0 3px;font-weight:600}
 
-.loading{display:flex;flex-direction:column;align-items:center;gap:12px;padding:44px 10px;color:var(--ink3);font-size:12.5px}
+.loading{display:flex;flex-direction:column;align-items:center;gap:12px;padding:44px 10px;color:var(--ink3);font-size:12px}
 .spin{width:26px;height:26px;border:2.5px solid var(--line);border-top-color:var(--sel);border-radius:50%;
   animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}}
-.errbox{border:1px solid var(--bad);border-radius:9px;padding:12px 14px;font-size:12.5px;color:var(--bad);
+.errbox{border:1px solid var(--bad);border-radius:9px;padding:12px 14px;font-size:12px;color:var(--bad);
   background:var(--card);background:color-mix(in srgb,var(--bad) 8%,transparent);line-height:1.6}
 
 /* 토스트 */
 .toasts{position:fixed;right:16px;bottom:16px;z-index:90;display:flex;flex-direction:column;gap:8px}
 .toast{background:var(--card);border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);
-  padding:10px 14px;font-size:12.5px;color:var(--ink2);max-width:320px;line-height:1.5}
+  padding:10px 14px;font-size:12px;color:var(--ink2);max-width:320px;line-height:1.5}
 .toast b{color:var(--ink)}
 .toast.err{border-color:var(--bad);color:var(--bad)}
 
 /* ----------------------------------------------- 11. 표 · 툴팁 · 푸터 */
 details.tbl{border-top:1px solid var(--line);margin-top:4px}
-details.tbl summary{cursor:pointer;font-size:11.5px;color:var(--ink3);padding:8px 16px;user-select:none}
+details.tbl summary{cursor:pointer;font-size:11px;color:var(--ink3);padding:8px 16px;user-select:none}
 details.tbl summary:hover{color:var(--ink2)}
 .tblwrap{overflow-x:auto;padding:0 12px 12px}
-table{border-collapse:collapse;width:100%;font-size:11.5px}
-th{font-size:10.5px;color:var(--ink3);font-weight:600;text-align:right;padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+table{border-collapse:collapse;width:100%;font-size:11px}
+th{font-size:11px;color:var(--ink3);font-weight:600;text-align:right;padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 th:nth-child(1),th:nth-child(2){text-align:left}
 td{padding:3.5px 8px;text-align:right;border-bottom:1px solid var(--grid);color:var(--ink2);
   font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -585,13 +637,13 @@ td:nth-child(1),td:nth-child(2){text-align:left}
 td:first-child{font-family:Consolas,ui-monospace,monospace;color:var(--ink3)}
 
 .tt{position:fixed;z-index:70;pointer-events:none;background:var(--card);background:color-mix(in srgb,var(--card) 96%,transparent);
-  border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:11.5px;color:var(--ink2);
+  border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:11px;color:var(--ink2);
   box-shadow:var(--shadow);display:none;max-width:250px;line-height:1.45}
 .tt b{color:var(--ink);font-size:12px}
-.tt .mono{font-size:10.5px;color:var(--ink3)}
+.tt .mono{font-size:11px;color:var(--ink3)}
 
-footer.pg{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;color:var(--ink3);font-size:11.5px}
-footer.pg .fx{font-family:"Cascadia Code",Consolas,ui-monospace,monospace;font-size:10.5px;line-height:1.9;
+footer.pg{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;color:var(--ink3);font-size:11px}
+footer.pg .fx{font-family:"Cascadia Code",Consolas,ui-monospace,monospace;font-size:11px;line-height:1.9;
   display:flex;flex-wrap:wrap;gap:0 22px}
 /* 한 항목이 줄 중간에서 끊기지 않게 nowrap 을 걸어 두었는데, 시뮬레이션
    푸터의 첫 항목이 441px 라 좁은 화면에서는 이게 문서를 통째로 넓혀
@@ -600,7 +652,7 @@ footer.pg .fx{font-family:"Cascadia Code",Consolas,ui-monospace,monospace;font-s
 footer.pg .fx span{white-space:nowrap}
 @media (max-width:640px){footer.pg .fx span{white-space:normal}}
 footer.pg .srcs{margin:7px 0 5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-footer.pg .srcs i{font-style:normal;border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:10.5px}
+footer.pg .srcs i{font-style:normal;border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:11px}
 footer.pg .dis{margin-top:6px;line-height:1.7}
 
 /* ------------------------------ 11-2. 노선 경유 순서 (선택한 격자)
@@ -609,15 +661,21 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
    한눈에 대조할 수 있게 한다. */
 /* 정차가 많은 노선(30개 이상)이 섞이면 카드가 페이지를 삼키므로 높이를 묶고
    안에서 스크롤합니다. 노선이 여럿이면 가로로도 스크롤됩니다. */
+/* .rstrip 이 display:flex 라 .empty 가 내용 폭만큼만 차지해 왼쪽에 붙었습니다
+   — 865px 카드에서 문구가 좌측 25px 에서 시작하고 오른쪽 400px 이 비어,
+   같은 제품 안에서 '비어 있음' 의 생김새가 세 가지가 됐습니다. */
+.rstrip .empty{flex:1}
 .rstrip{flex:1;min-height:0;max-height:420px;overflow:auto;padding:10px 14px 14px;
   display:flex;gap:14px;align-items:flex-start}
 .rstrip .empty{color:var(--ink3);font-size:12px;padding:26px 4px;line-height:1.8}
-.rline{flex:0 0 auto;min-width:132px;max-width:190px}
+/* 고정폭 열이라 노선이 2~3개면 카드 폭의 70% 가 빈 채로 남았습니다.
+   많으면 예전처럼 좁아지고(가로 스크롤 유지), 적을 때만 벌어집니다. */
+.rline{flex:1 1 150px;min-width:132px;max-width:280px}
 /* 노선 머리 — 버스 아이콘 + 번호. 유형별 색은 실제 버스 도색 관례를 따른다. */
 .rline .rhead{display:flex;align-items:center;gap:6px;margin-bottom:8px;position:sticky;top:0;
   background:var(--card);padding-bottom:4px;z-index:1}
-.rline .rno{font-weight:700;font-size:12.5px;color:var(--ink);letter-spacing:-.01em}
-.rline .rkind{font-size:9.5px;color:var(--ink3);border:1px solid var(--line);
+.rline .rno{font-weight:700;font-size:12px;color:var(--ink);letter-spacing:-.01em}
+.rline .rkind{font-size:10px;color:var(--ink3);border:1px solid var(--line);
   border-radius:999px;padding:1px 6px;white-space:nowrap}
 .rline svg.bus{flex:0 0 auto}
 /* 정류장 목록 — 왼쪽 세로선에 점을 꿴 형태 */
@@ -629,7 +687,7 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .rstops li:last-child::before{bottom:calc(100% - 13px)}
 .rstops li::after{content:'';position:absolute;left:0;top:9px;width:11px;height:11px;border-radius:50%;
   background:var(--card);border:2.5px solid var(--sel);box-sizing:border-box}
-.rstops .snm{font-size:11.5px;color:var(--ink2);line-height:1.35;
+.rstops .snm{font-size:11px;color:var(--ink2);line-height:1.35;
   overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 /* 승차량이 많은 정류장은 점을 채워 구분 */
 .rstops li.busy::after{background:var(--sel)}
@@ -642,6 +700,11 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
   .mapcard,.routecard,.sidecard,.sc-card,.st-card,.span4,.span5,.span6,.span7,.span8{grid-column:span 12}
   /* 한 줄로 쌓이는 폭에서는 명시적 행 배치를 풀어야 순서대로 흐릅니다 */
   .dashgrid .mapcard,.dashgrid .routecard,.dashgrid .sidecard{grid-row:auto}
+  /* 시뮬레이션의 조작 루프는 '격자 클릭 → 예산 게이지·배치 목록 확인' 입니다.
+     한 줄로 쌓이면 그 둘이 지도 밖으로 나가 클릭할 때마다 스크롤 왕복을 해야
+     합니다(대시보드의 Top10 은 참고 목록이라 성격이 다릅니다).
+     이 한 쌍만 881px 까지 2열을 유지합니다 — 1020px 에서 지도 569px·패널 403px. */
+  .simgrid .sidecard{position:static}
   /* 한 줄로 쌓이면 지도 옆이 아니라 아래에 오므로 붙일 이유가 없습니다 */
   .simgrid .sidecard{position:static}
   .kpis{grid-template-columns:1fr 1fr}
@@ -664,11 +727,11 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .brief{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--sel);
   border-radius:10px;padding:12px 16px;margin-bottom:12px}
 .brief:empty{display:none}
-.brief .brief-main{font-size:13.5px;line-height:1.75;color:var(--ink2)}
+.brief .brief-main{font-size:13px;line-height:1.75;color:var(--ink2)}
 .brief .brief-main b{color:var(--ink);font-weight:650}
 .brief .brief-act{margin-top:7px;padding-top:7px;border-top:1px dashed var(--line);
   font-size:12px;color:var(--ink2);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-.brief .brief-tag{font-size:10.5px;font-weight:600;letter-spacing:.03em;border-radius:999px;
+.brief .brief-tag{font-size:11px;font-weight:600;letter-spacing:.03em;border-radius:999px;
   padding:2px 8px;background:var(--tag-eff-bg);color:var(--tag-eff-fg)}
 .brief .brief-dim{color:var(--ink3);font-size:11px}
 
@@ -679,10 +742,13 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .legendbar .lg-syms{width:100%;display:flex;flex-wrap:wrap;gap:4px 16px;
   margin-top:2px;padding-top:8px;border-top:1px dashed var(--line)}
 .legendbar .lg-sym{display:inline-flex;align-items:center;gap:5px;
-  font-size:10.5px;color:var(--ink3);white-space:nowrap}
+  font-size:11px;color:var(--ink3);white-space:nowrap}
 .legendbar .lg-sym svg{overflow:visible;flex:none}
+/* ::after 확장만으로는 형제 요소가 위에 얹혀 판정을 뺏깁니다 — 이 자리는
+   여백이 있으므로 패딩으로 직접 24px 높이를 만듭니다. */
 .legendbar .lg-clear{font-size:10px;color:var(--sel);text-decoration:underline;
-  padding:0 2px;border-radius:4px}
+  display:inline-flex;align-items:center;min-height:24px;padding:0 8px;
+  border-radius:6px;line-height:1}
 .legendbar .lg-clear:hover{background:var(--selbg)}
 
 /* ===========================================================================
@@ -700,7 +766,9 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .rgtbl td.rg-need{white-space:nowrap}
 .rgtbl .rg-bar{display:inline-block;width:44px;height:5px;border-radius:3px;
   background:var(--track);position:relative;overflow:hidden;margin-right:6px;vertical-align:1px}
-.rgtbl .rg-bar i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--mi5)}
+/* Top10 막대와 같은 이유 — 지도 범례가 MI 구간 색이라고 못박은 --mi5 를
+   값과 무관하게 상수로 쓰면 색이 아무 정보도 안 나릅니다. 길이만 읽힙니다. */
+.rgtbl .rg-bar i{position:absolute;inset:0 auto 0 0;border-radius:2px;background:var(--ink3);opacity:.55}
 .rgtbl .rg-need b{font-weight:700;color:var(--ink)}
 /* 공용 규칙(td:nth-child(2){text-align:left})은 '격자 데이터 표'(2열=권역명)
    기준이라, 2열이 숫자인 이 표에서는 자릿수가 어긋납니다. */
@@ -724,9 +792,20 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
   width:24px;height:24px;transform:translate(-50%,-50%)}
 .help:hover{background:var(--sel);border-color:var(--sel);color:#fff}
 
+@media (max-width:1020px) and (min-width:881px){
+  .simgrid .mapcard{grid-column:span 7}
+  .simgrid .sidecard{grid-column:span 5}
+}
+
 @media (max-width:560px){
+  /* 오른쪽에 열이 더 있다는 단서가 없어 '주 조치'(유일한 결론 열)를 못 봅니다 */
+  .tblwrap{background:linear-gradient(to left,rgba(0,0,0,.10),transparent 24px) right/24px 100% no-repeat}
+  /* 폭에 비례해 통째로 줄면 격자·지명이 판별 불가라, 축소 대신 가로 패닝을 씁니다 */
+  .mapbox{overflow-x:auto;overflow-y:hidden}
+  .mapsvg{min-width:620px}
+  .zctl{position:sticky;left:10px}
   .legendbar .lg-syms{gap:4px 12px}
-  .brief .brief-main{font-size:12.5px}
+  .brief .brief-main{font-size:12px}
 }
 
 
@@ -744,29 +823,29 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
    ======================================================================== */
 .rec-hint{font-size:11px;color:var(--ink3);line-height:1.55;margin-top:6px}
 .rec-loading{display:flex;align-items:center;gap:8px;padding:12px 14px;
-  font-size:11.5px;color:var(--ink3)}
+  font-size:11px;color:var(--ink3)}
 .rec-loading .spin{width:14px;height:14px;border-width:2px;flex:none}
 
 .rec-box{margin:0 14px 12px;padding:10px 12px;border:1px solid var(--sel);
   border-radius:9px;background:var(--selbg)}
 .rec-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap;
-  font-size:11.5px;color:var(--ink2);font-weight:600}
+  font-size:11px;color:var(--ink2);font-weight:600}
 .rec-badge{font-size:10px;font-weight:700;letter-spacing:.03em;border-radius:999px;
   padding:2px 8px;background:var(--sel);color:#fff}
 .rec-edited{font-size:10px;font-weight:600;border-radius:999px;padding:2px 8px;
   background:var(--tag-add-bg);color:var(--tag-add-fg)}
 .rec-nums{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:7px;
-  font-size:11.5px;color:var(--ink3)}
+  font-size:11px;color:var(--ink3)}
 .rec-nums b{color:var(--ink);font-size:13px;font-weight:650;
   font-variant-numeric:tabular-nums}
 .rec-note{margin-top:7px;padding-top:7px;border-top:1px dashed var(--line);
-  font-size:10.5px;color:var(--ink3);line-height:1.6}
+  font-size:11px;color:var(--ink3);line-height:1.6}
 
 /* 배치 목록에서 추천 항목 구분 */
 .plist li.from-ai{border-color:var(--sel);background:var(--selbg);background:color-mix(in srgb,var(--selbg) 55%,var(--bg))}
-.plist .ai-tag{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:600;
+.plist .ai-tag{display:inline-block;margin-left:6px;font-size:10px;font-weight:600;
   border-radius:999px;padding:1px 7px;background:var(--sel);color:#fff;vertical-align:1px}
-.plist .why{display:block;margin-top:3px;font-size:10.5px;line-height:1.5;
+.plist .why{display:block;margin-top:3px;font-size:11px;line-height:1.5;
   color:var(--ink3);font-family:inherit;white-space:normal}
 .plist li{align-items:start}
 .plist .ic{padding-top:2px}
@@ -777,7 +856,7 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
    무엇이 실측이고 무엇이 추정·가정인지 화면에서 구분되게 합니다.
    실측인 척 내보내면 검증 단계에서 그대로 지적당합니다.
    ======================================================================== */
-.dq-badge{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.03em;
+.dq-badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.03em;
   border-radius:999px;padding:2px 7px;margin-right:5px;vertical-align:1px;
   background:var(--tag-add-bg);color:var(--tag-add-fg)}
 .dq{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;
@@ -793,7 +872,7 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
  *   추천이 왜 이런 조합인지 묻는 질문에 대한 답을 화면에 남겨 둡니다.
  *   기존 .rec-note 를 그대로 쓰고 톤만 낮춥니다. 새 색은 만들지 않습니다.
  * ======================================================================== */
-.rec-basis{color:var(--ink3);font-size:11.5px;line-height:1.55}
+.rec-basis{color:var(--ink3);font-size:11px;line-height:1.55}
 .rec-basis b{color:var(--ink);font-weight:600}
 .rec-basis .help{margin-left:5px;vertical-align:baseline}
 
@@ -803,7 +882,7 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
  *   기존 .rec-* 규칙과 토큰을 그대로 쓰고 새 색은 만들지 않습니다.
  * ======================================================================== */
 .rec-alt{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}
-.rec-alt-head{font-size:11.5px;font-weight:600;color:var(--ink);margin-bottom:6px}
+.rec-alt-head{font-size:11px;font-weight:600;color:var(--ink);margin-bottom:6px}
 /* 사이드 패널은 좁습니다. 표가 넘칠 여지를 남기지 않습니다. */
 .rec-alt-wrap{max-width:100%;overflow-x:auto}
 .rec-alt-tbl{width:100%;table-layout:fixed;border-collapse:collapse;font-size:11px}
@@ -823,7 +902,7 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .rec-tab:hover{color:var(--ink)}
 .rec-alt-tbl tr.is-on .rec-tab{color:var(--ink);font-weight:600;
   border-bottom:0;cursor:default}
-.rec-top{display:block;font-style:normal;font-size:9.5px;font-weight:500;
+.rec-top{display:block;font-style:normal;font-size:10px;font-weight:500;
   color:var(--ink2)}
 .rec-by{color:var(--ink2);font-size:11px;line-height:1.55}
 .rec-by b{color:var(--ink);font-weight:600}
@@ -844,12 +923,19 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 :root[data-theme="dark"] .btn.primary,
 :root[data-theme="dark"] .simtool.on,
 :root[data-theme="dark"] .help:hover{color:var(--bg)}
+/* 카카오 타일은 원래 밝은 지도라, 테마와 무관한 brightness(1.04)를 그대로 두면
+   다크에서 확대했을 때 배경만 하얗게 뜹니다(육지·바다는 투명해진 상태라 더 심함). */
+:root[data-theme="dark"] .kkdetail .kakaomap{
+  filter:saturate(.28) brightness(.55) contrast(1.12)}
 @media (prefers-color-scheme:dark){
   :root:where(:not([data-theme="light"])) .rec-badge,
   :root:where(:not([data-theme="light"])) .plist .ai-tag,
   :root:where(:not([data-theme="light"])) .btn.primary,
   :root:where(:not([data-theme="light"])) .simtool.on,
   :root:where(:not([data-theme="light"])) .help:hover{color:var(--bg)}
+  /* 위 명시 테마(:root[data-theme="dark"])와 같은 보정을 '자동' 에도 겁니다 */
+  :root:where(:not([data-theme="light"])) .kkdetail .kakaomap{
+    filter:saturate(.28) brightness(.55) contrast(1.12)}
 }
 
 /* ===========================================================================
@@ -884,7 +970,7 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .scen .sload{display:block;width:100%;min-width:0;text-align:left;padding:0;
   background:none;border:0;font:inherit;color:inherit;cursor:pointer}
 .plist-head{display:flex;justify-content:space-between;gap:10px;
-  padding:0 14px 6px;font-size:11.5px;color:var(--ink2)}
+  padding:0 14px 6px;font-size:11px;color:var(--ink2)}
 .plist-head b{font-variant-numeric:tabular-nums}
 
 /* 배치 마커 수량 표기는 이제 기호 안의 .pmk-n 이고 fill 이 var(--card) 라
@@ -896,10 +982,10 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
  *   어느 범위로 추천할지 버튼 위에 항상 보이게 하고, 한 번에 전환합니다.
  * ======================================================================== */
 .rec-scope{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px;
-  font-size:11.5px;color:var(--ink2)}
+  font-size:11px;color:var(--ink2)}
 .rec-scope:empty{display:none}
 .rec-scope b{font-weight:650;color:var(--ink)}
-.rec-scope .rs-btn{font-size:10.5px;padding:2px 8px;border:1px solid var(--line);
+.rec-scope .rs-btn{font-size:11px;padding:2px 8px;border:1px solid var(--line);
   border-radius:999px;color:var(--ink2)}
 .rec-scope .rs-btn:hover{border-color:var(--sel);color:var(--ink)}
 .rec-scope-tag{display:inline-block;font-size:10px;font-weight:600;
@@ -917,7 +1003,7 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
   background:var(--card);background:color-mix(in srgb,var(--card) 92%,transparent);color:var(--ink2);
   font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center}
 .zctl button:hover{border-color:var(--sel);color:var(--ink)}
-.zctl [data-z="reset"]{display:none;width:auto;height:22px;padding:0 7px;font-size:10.5px}
+.zctl [data-z="reset"]{display:none;width:auto;height:22px;padding:0 7px;font-size:11px}
 .zctl.zoomed [data-z="reset"]{display:flex}
 /* 현재 확대 비율 — 화성시 전체가 보이는 상태가 100%, 최대 12,000% */
 /* 세로 flex 의 교차축 stretch 때문에 칩 폭이 +/- 버튼 26px 에 묶여 '100%'가
@@ -925,7 +1011,7 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .zctl{align-items:flex-start}
 .zpct{min-width:26px;padding:2px 4px;border:1px solid var(--line);border-radius:6px;
   background:color-mix(in srgb,var(--card) 92%,transparent);color:var(--ink3);
-  font-size:9.5px;line-height:1.5;text-align:center;font-variant-numeric:tabular-nums;
+  font-size:10px;line-height:1.5;text-align:center;font-variant-numeric:tabular-nums;
   font-family:Consolas,ui-monospace,monospace;pointer-events:none;white-space:nowrap}
 .mapsvg.panning{cursor:grabbing}
 
@@ -944,6 +1030,6 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .cells rect.outarea{opacity:.3}
 /* 영역 지정 중인 버튼 · 현재 영역 표시 */
 .minib.on{background:var(--sel);border-color:var(--sel);color:var(--bg);font-weight:600}
-.rec-scope .rs-area{font-size:10.5px;color:var(--ink2);border:1px solid var(--sel);
+.rec-scope .rs-area{font-size:11px;color:var(--ink2);border:1px solid var(--sel);
   border-radius:999px;padding:1px 8px}
 .rec-scope .rs-area b{color:var(--ink)}

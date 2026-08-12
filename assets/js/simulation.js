@@ -717,18 +717,27 @@
       '기준선 ' + fmt(b.baseline.elderlyTripsPerDay) + '통행/일');
 
     var eff = S.result.effectiveness || {};
-    $('#k4').innerHTML = eff.krwPerTripPerDay != null
+    /* 분모(해소 통행)가 한 자릿수면 단가는 배치를 한 칸만 옮겨도 몇 배로
+       요동칩니다. 실제로 배치 2건에서 해소 4통행/일이 나와 18,788,767원/통행
+       이라는 8자리가 화면에서 유일하게 움직인 숫자가 됐습니다 — 앞 세 타일이
+       전부 '변화 없음' 이라 그게 이 배치안의 첫인상이 됐습니다.
+       아래 '정책 판단 요약' 은 같은 상황을 '효과 미미' 로 헤지하는데 KPI 만
+       단정적인 숫자를 내밀던 것을 맞춥니다(0 건 처리와 같은 규칙). */
+    var rtrips = eff.resolvedTripsPerDay || 0;
+    var MIN_TRIPS_FOR_UNIT = 10;
+    $('#k4').innerHTML = (eff.krwPerTripPerDay != null && rtrips >= MIN_TRIPS_FOR_UNIT)
       ? fmt(eff.krwPerTripPerDay) + '<small>원/통행</small>'
-      : '<span style="color:var(--ink3)">–</span>';
+      : '<span style="color:var(--ink3)">' + (rtrips > 0 ? '산출 보류' : '–') + '</span>';
     $('#k4d').className = 'dl';
     $('#k4d').textContent = has ? ('총 사업비 ' + won(S.result.cost.totalKrw)) : '기준선';
     /* effectiveness 는 서버가 화성시 전체로 계산한 값입니다. 바로 옆 k1~k3 은
        영역이 켜져 있으면 영역 기준이라, 표기가 없으면 서로 다른 모수의 숫자를
        나란히 읽게 됩니다("영역에 3,000억 써서 통행당 880원"). 기준을 적습니다. */
-    $('#k4s').textContent = eff.resolvedTripsPerDay > 0
-      ? ('전 시간대 합계 ' + fmt(eff.resolvedTripsPerDay) + '통행 해소 기준' +
-         (S.area ? ' · 화성시 전체' : ''))
-      : '배치를 추가하면 산출됩니다';
+    $('#k4s').textContent = rtrips >= MIN_TRIPS_FOR_UNIT
+      ? ('전 시간대 합계 ' + fmt(rtrips) + '통행 해소 기준' + (S.area ? ' · 화성시 전체' : ''))
+      : (rtrips > 0
+          ? ('해소 ' + fmt(rtrips) + '통행/일 — 단가를 논하기엔 표본이 작습니다')
+          : '배치를 추가하면 산출됩니다');
   }
 
   /**
@@ -746,7 +755,10 @@
       d.className = 'dl ' + (deltaVal < 0 ? 'good' : 'bad');
       d.textContent = C.delta(deltaVal, ' ' + deltaUnit, true) + ' 기준선 대비';
     }
-    $('#' + id + 's').textContent = subtext;
+    /* 배치 전에는 증감줄이 이미 '기준선' 이라고 말하므로, 부제까지 '기준선 32개'
+       라고 적으면 네 줄을 써서 숫자 하나를 전하게 됩니다(값 32개를 그대로 반복).
+       비교 대상이 생겼을 때만 기준선 값을 함께 보여 줍니다. */
+    $('#' + id + 's').textContent = (deltaVal == null) ? '' : subtext;
   }
 
   function paintPlacementList() {
@@ -755,10 +767,16 @@
       host.innerHTML = '<div class="empty">아직 배치가 없습니다.<br>위에서 수단을 고른 뒤 지도의 격자를 클릭하세요.</div>';
       $('#btnReset').disabled = true;
       $('#btnUndo').disabled = true;
+      /* 배치가 없으면 저장할 내용도 없습니다. S.result 는 부팅 시 기준선
+         계산으로 이미 차 있어서, 예전에는 눌리면 실제로 '배치 0건 · 0원 ·
+         변화 없음' 짜리 빈 시나리오가 저장됐습니다 — 같은 패널의 되돌리기·
+         초기화는 정확히 잠겨 있는데 저장만 열려 있어 규칙이 깨져 있었습니다. */
+      $('#btnSave').disabled = true;
       return;
     }
     $('#btnReset').disabled = false;
     $('#btnUndo').disabled = false;
+    $('#btnSave').disabled = false;
     /* 10건이 넘으면 스크롤 아래에 숨습니다 — 총량은 항상 위에 보여 줍니다 */
     var totalCnt = S.placements.reduce(function (a, p) { return a + p.count; }, 0);
     var totalKrw = S.placements.reduce(function (a, p) {
@@ -853,7 +871,10 @@
     var bd = S.result.cost.breakdown;
     var host = $('#costChart');
     if (!bd.length) {
-      host.innerHTML = '<text class="qlab" x="16" y="30">배치를 추가하면 수단별 소요액이 표시됩니다.</text>';
+      /* 좌상단 구석에 박혀 있어 아래 '적용 단가' 블록과 붕 떠 보였습니다.
+         다른 카드의 빈 상태(가운데 정렬)와 생김새를 맞춥니다. */
+      host.innerHTML = '<text class="qlab" x="' + (CS.w / 2) + '" y="' + (CS.h / 2) +
+        '" text-anchor="middle">배치를 추가하면 수단별 소요액이 표시됩니다.</text>';
       return;
     }
     var max = bd.reduce(function (m, b) { return Math.max(m, b.amountKrw); }, 1);
