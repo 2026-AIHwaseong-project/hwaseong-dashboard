@@ -341,7 +341,10 @@
     }
     if (idx >= 0) {
       var removed = S.placements.splice(idx, 1)[0];
-      C.toast((S.effects[removed.type] || {}).label || '배치' + ' 취소 — ' +
+      /* 괄호 주의 — `+` 가 `||` 보다 우선이라 괄호가 없으면
+         `label || ('배치 취소 — …')` 로 묶입니다. label 은 항상 있으므로
+         지웠는데도 수단 이름만 떠서 배치한 것처럼 읽혔습니다. */
+      C.toast(((S.effects[removed.type] || {}).label || '배치') + ' 취소 — ' +
         esc(cell.name) + (removed.count > 1 ? ' (' + removed.count + '건)' : ''));
     } else {
       S.placements.push({ type: S.tool, cellId: cell.id, cellName: cell.name, count: 1 });

@@ -404,6 +404,15 @@
       return set;
     }
 
+    /* 정류장 층이 지금 화면에 실제로 그려져 있는가.
+       기하 판정(nearestStop)은 state.stops 전체를 좌표로 훑기 때문에 '그리지
+       않았다' 는 것만으로는 멈추지 않습니다. 아래 renderRoutes 의 조기 반환은
+       gRoutes 를 비우고 나가면서 fathit 을 설정하지 못하는데, 그러면
+       stopAtEvent 의 두 가드(fathit · stopsInteractive)가 모두 성립하지 않아
+       화면에 없는 정류장이 호버·클릭을 가로챕니다 — 두 화면의 기본 상태가
+       바로 그 상태였습니다. 그려진 적이 있는지를 따로 들고 판정합니다. */
+    var _stopsDrawn = false;
+
     function renderRoutes() {
       var h = '';
       /* 격자를 클릭했으면 그 격자에 걸린 것만 그립니다. 전체를 깔면 격자 색이
@@ -415,6 +424,7 @@
       if (!state.showRoutes && !only) {
         gRoutes.innerHTML = '';
         gRoutes.style.display = 'none';
+        _stopsDrawn = false;
         return;
       }
       var stops = only ? state.stops.filter(function (s) { return only[s.id]; }) : state.stops;
@@ -486,9 +496,9 @@
          칠해지지 않는 요소였고, 켜는 데만 314ms 가 걸렸습니다.
          <title> 은 브라우저 기본 툴팁인데 아래 mousemove 가 이미 같은 내용을
          띄우므로 순수 중복입니다 — 전부 없앱니다.
-         많을 때는 .st 원 자체가 히트 대상이 되고(HIT_CLASS), 대신 CSS 로
-         선 굵기를 키워 클릭 여유를 줍니다. 격자를 찍어 몇 개만 남은 상태
-         (only)에서는 예전처럼 넉넉한 투명 원을 씁니다. */
+         많을 때는 DOM 을 안 만들고 stopAtEvent 가 좌표로 찾습니다(nearestStop).
+         .st 원은 app.css 에서 pointer-events:none 이라 히트 대상이 아닙니다.
+         격자를 찍어 몇 개만 남은 상태(only)에서는 예전처럼 넉넉한 투명 원을 씁니다. */
       var fatHit = !!only || stops.length <= HIT_LAYER_MAX;
       _sIdx = null;   // 좌표 색인 무효화 (setData·격자 포커스 전환마다)
       if (fatHit) {
@@ -501,6 +511,7 @@
       gRoutes.innerHTML = h;
       /* 격자를 찍어 놓은 동안에는 전체 토글이 꺼져 있어도 그 격자 것은 보여야 합니다 */
       gRoutes.style.display = (state.showRoutes || only) ? '' : 'none';
+      _stopsDrawn = true;
       applyStopsInteractive();
       /* 위에서 DOM 을 통째로 새로 만들었으므로 선택 표시(.on)가 날아갑니다.
          정류장을 검색해 그 격자로 파고드는 흐름이 setCellFocus → renderRoutes
@@ -808,6 +819,10 @@
     function stopAtEvent(e) {
       var el = e.target.closest('.sthit');
       if (el) return el.getAttribute('data-stophit');
+      /* 안 그린 정류장은 없는 것으로 칩니다. 이 줄이 없으면 노선을 끈 기본
+         화면에서도 좌표 판정이 돌아, 보이지도 않는 정류장이 격자 툴팁을
+         덮고 격자 클릭을 가로챕니다. */
+      if (!_stopsDrawn) return null;
       if (gRoutes.classList.contains('fathit')) return null;
       if (!state.stopsInteractive) return null;
       var p = toSvgXY(e);
