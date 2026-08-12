@@ -11,6 +11,12 @@
   var C = HW.core, api = HW.api;
   var $ = C.$, $$ = C.$$, esc = C.esc, fmt = C.fmt;
 
+  /* 정류장 프로파일 전용 숫자 표기.
+     일평균을 19개 시간으로 나누면 저수요 정류장은 시간당 1명 미만이 됩니다.
+     fmt() 는 정수로 반올림하므로 그런 값이 전부 '0' 이 되어, 기록이 있는데도
+     없는 것처럼 읽힙니다. 10 미만이면 소수 한 자리까지 보여 줍니다. */
+  function fmtSm(n) { return (Math.abs(n || 0) < 10) ? C.fmt1(n) : fmt(n); }
+
   var S = {
     meta: null,
     period: 'am',
@@ -526,7 +532,10 @@
        사각지대(=저수요) 격자를 파고드는 것이 이 대시보드의 주 동선인데, 그
        종착점에서 막대가 한 개도 안 그려졌습니다(시간당 최대 6명인 정류장의
        축이 50). 데이터 크기에 맞는 단계로 올립니다. */
-    var STEPS = [2, 5, 10, 20, 25, 50, 100, 200, 500, 1000, 2000, 5000];
+    /* 0.5·1 부터 두는 이유: 일평균을 19개 시간으로 나누면 저수요 정류장은
+       시간당 1명 미만이라, 최소 단계가 2 면 막대가 축 높이의 14% 밑으로 눌려
+       사실상 안 보입니다. 평균값이므로 소수 눈금이 맞습니다. */
+    var STEPS = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000, 2000, 5000];
     var nice = STEPS[STEPS.length - 1];
     for (var si = 0; si < STEPS.length; si++) {
       if (STEPS[si] >= vmax) { nice = STEPS[si]; break; }
@@ -585,8 +594,8 @@
     });
 
     $('#stchart').innerHTML = h;
-    $('#ss1').textContent = fmt(p.summary.boardingsPerDay) + '명';
-    $('#ss2').textContent = fmt(p.summary.alightingsPerDay) + '명';
+    $('#ss1').textContent = fmtSm(p.summary.boardingsPerDay) + '명';
+    $('#ss2').textContent = fmtSm(p.summary.alightingsPerDay) + '명';
     $('#ss3').textContent = p.summary.peakSharePct + '%';
     /* 실서버 프로파일의 routes 는 노선ID 목록 — 노선번호로 바꿔 보여줍니다. */
     var rn = {};
@@ -607,7 +616,7 @@
 
     $('#sttbl').innerHTML = '<tr><th>시각</th><th>승차</th><th>하차</th></tr>' +
       hours.map(function (hr, k) {
-        return '<tr><td>' + hr + '시</td><td>' + fmt(B[k]) + '</td><td>' + fmt(A[k]) + '</td></tr>';
+        return '<tr><td>' + hr + '시</td><td>' + fmtSm(B[k]) + '</td><td>' + fmtSm(A[k]) + '</td></tr>';
       }).join('');
   }
 
@@ -913,8 +922,8 @@
       var col = e.target.closest('.colhit');
       if (!col || !S.profile) return C.hideTip();
       var k = +col.getAttribute('data-hour');
-      C.showTip('<b>' + S.profile.hours[k] + '시</b> · 승차 <b>' + fmt(S.profile.boardings[k]) +
-        '</b> · 하차 <b>' + fmt(S.profile.alightings[k]) + '</b>', e);
+      C.showTip('<b>' + S.profile.hours[k] + '시</b> · 승차 <b>' + fmtSm(S.profile.boardings[k]) +
+        '</b> · 하차 <b>' + fmtSm(S.profile.alightings[k]) + '</b>', e);
     });
     $('#stchart').addEventListener('mouseleave', C.hideTip);
   }
