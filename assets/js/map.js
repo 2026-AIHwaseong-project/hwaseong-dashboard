@@ -204,20 +204,17 @@
        합니다. 그래서 키가 없거나 SDK 로드가 실패해도(오프라인 등) 지도
        기능은 그대로 동작하고, 배경 한 겹만 없이 지금 모습으로 남습니다. */
     var kkMap = null;
-    var kkDiv = null;   /* 배경 레이어 — syncKakao 가 배율 보정을 겁니다 */
     function initKakao() {
       var cfg = (HW.CONFIG && HW.CONFIG.KAKAO) || {};
       if (!cfg.enabled || !cfg.jsKey || !svg.parentNode || !global.document) return;
       var div = global.document.createElement('div');
       div.className = 'kakaomap';
-      kkDiv = div;
       svg.parentNode.insertBefore(div, svg);
 
       /* 배경을 포기하고 지금까지의 SVG 단독 지도로 되돌립니다.
          .kkmode 를 붙이기 전에만 불리므로 화면은 원래 상태 그대로입니다. */
       function giveUp() {
         kkMap = null;
-        kkDiv = null;
         if (div.parentNode) div.parentNode.removeChild(div);
       }
 
@@ -270,30 +267,10 @@
       if (!kkMap) return;
       var sw = C.unproject(zoom.x, zoom.y + zoom.h);
       var ne = C.unproject(zoom.x + zoom.w, zoom.y);
-      var wantLon = ne.lon - sw.lon;
       kkMap.setBounds(new global.kakao.maps.LatLngBounds(
         new global.kakao.maps.LatLng(sw.lat, sw.lon),
         new global.kakao.maps.LatLng(ne.lat, ne.lon)
       ));
-      /* ── 배경과 격자의 이동·확대 속도를 맞춥니다 ──────────────────────
-         카카오맵은 **정수 줌 레벨**로만 반응합니다. setBounds 는 요청한 범위를
-         '담을 수 있는' 레벨을 고르므로 실제 표시 범위가 항상 더 넓고, 그 차이가
-         레벨 사이에서 최대 2배까지 벌어집니다. SVG 쪽 확대는 연속값이라,
-         드래그하면 격자는 손끝을 따라오는데 배경은 그보다 느리게 밀리고
-         확대하면 둘이 어긋난 채로 커집니다 — 격자 아래 깔린 건물이 실제로
-         그 격자의 것이 아니게 됩니다.
-         남은 배율 차이를 배경 div 의 transform 으로 메웁니다. setBounds 가
-         '담기게' 고르므로 got ≥ want, 즉 k ≥ 1 이라 항상 확대 방향이고
-         가장자리에 빈 자리가 생기지 않습니다. */
-      try {
-        var b = kkMap.getBounds();
-        var gotLon = b.getNorthEast().getLng() - b.getSouthWest().getLng();
-        var k = (gotLon > 0 && wantLon > 0) ? gotLon / wantLon : 1;
-        if (!isFinite(k) || k < 1) k = 1;
-        if (k > 4) k = 4;                     /* 이상값 방어 */
-        kkDiv.style.transformOrigin = '50% 50%';
-        kkDiv.style.transform = k > 1.001 ? 'scale(' + k.toFixed(4) + ')' : '';
-      } catch (e) { /* SDK 버전 차이로 getBounds 가 없으면 예전 동작 그대로 */ }
     }
 
     drawBase();
