@@ -329,9 +329,23 @@
     /* 수단별 적용 제약 확인 (규칙은 서버 모델과 같은 값을 씁니다) */
     var guardMsg = guardFor(S.tool, cell);
     if (guardMsg) { C.toast(guardMsg, 'err', 6000); return; }
-    var same = S.placements.filter(function (p) { return p.type === S.tool && p.cellId === cell.id; })[0];
-    if (same) same.count += 1;
-    else S.placements.push({ type: S.tool, cellId: cell.id, cellName: cell.name, count: 1 });
+    /* 같은 격자에 같은 수단을 다시 누르면 **취소**합니다(토글).
+       예전에는 누를 때마다 수량이 1씩 올라가서, 잘못 찍었을 때 되돌리려면
+       배치 목록의 19px 짜리 × 를 찾아 눌러야 했습니다 — 방금 누른 자리에서
+       바로 취소하는 게 지도 위 조작의 자연스러운 기대입니다.
+       수량을 2 이상으로 올리는 경로는 AI 추천 응답(count>1)과 시나리오
+       불러오기에만 남습니다. */
+    var idx = -1;
+    for (var i = 0; i < S.placements.length; i++) {
+      if (S.placements[i].type === S.tool && S.placements[i].cellId === cell.id) { idx = i; break; }
+    }
+    if (idx >= 0) {
+      var removed = S.placements.splice(idx, 1)[0];
+      C.toast((S.effects[removed.type] || {}).label || '배치' + ' 취소 — ' +
+        esc(cell.name) + (removed.count > 1 ? ' (' + removed.count + '건)' : ''));
+    } else {
+      S.placements.push({ type: S.tool, cellId: cell.id, cellName: cell.name, count: 1 });
+    }
     if (S.recommendation) S.recEdited = true;
     runSim();
   }

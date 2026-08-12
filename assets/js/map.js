@@ -78,6 +78,10 @@
        클릭한 칸 + 사방 이웃이 함께 보이고 배율은 12.2배로 여유가 남는다. */
     var CELL_ZOOM_SPAN = 5;
 
+    /* 이 개수 이하일 때만 정류장마다 투명 히트 원을 따로 만듭니다.
+       넘으면 .st 원 자체가 히트 대상입니다(map.js renderRoutes 참고). */
+    var HIT_LAYER_MAX = 400;
+
     var state = {
       cells: [], stops: [], routes: [], scale: null,
       byId: {},
@@ -200,17 +204,20 @@
        합니다. 그래서 키가 없거나 SDK 로드가 실패해도(오프라인 등) 지도
        기능은 그대로 동작하고, 배경 한 겹만 없이 지금 모습으로 남습니다. */
     var kkMap = null;
+    var kkDiv = null;   /* 배경 레이어 — syncKakao 가 배율 보정을 겁니다 */
     function initKakao() {
       var cfg = (HW.CONFIG && HW.CONFIG.KAKAO) || {};
       if (!cfg.enabled || !cfg.jsKey || !svg.parentNode || !global.document) return;
       var div = global.document.createElement('div');
       div.className = 'kakaomap';
+      kkDiv = div;
       svg.parentNode.insertBefore(div, svg);
 
       /* 배경을 포기하고 지금까지의 SVG 단독 지도로 되돌립니다.
          .kkmode 를 붙이기 전에만 불리므로 화면은 원래 상태 그대로입니다. */
       function giveUp() {
         kkMap = null;
+        kkDiv = null;
         if (div.parentNode) div.parentNode.removeChild(div);
       }
 
@@ -263,10 +270,30 @@
       if (!kkMap) return;
       var sw = C.unproject(zoom.x, zoom.y + zoom.h);
       var ne = C.unproject(zoom.x + zoom.w, zoom.y);
+      var wantLon = ne.lon - sw.lon;
       kkMap.setBounds(new global.kakao.maps.LatLngBounds(
         new global.kakao.maps.LatLng(sw.lat, sw.lon),
         new global.kakao.maps.LatLng(ne.lat, ne.lon)
       ));
+      /* ── 배경과 격자의 이동·확대 속도를 맞춥니다 ──────────────────────
+         카카오맵은 **정수 줌 레벨**로만 반응합니다. setBounds 는 요청한 범위를
+         '담을 수 있는' 레벨을 고르므로 실제 표시 범위가 항상 더 넓고, 그 차이가
+         레벨 사이에서 최대 2배까지 벌어집니다. SVG 쪽 확대는 연속값이라,
+         드래그하면 격자는 손끝을 따라오는데 배경은 그보다 느리게 밀리고
+         확대하면 둘이 어긋난 채로 커집니다 — 격자 아래 깔린 건물이 실제로
+         그 격자의 것이 아니게 됩니다.
+         남은 배율 차이를 배경 div 의 transform 으로 메웁니다. setBounds 가
+         '담기게' 고르므로 got ≥ want, 즉 k ≥ 1 이라 항상 확대 방향이고
+         가장자리에 빈 자리가 생기지 않습니다. */
+      try {
+        var b = kkMap.getBounds();
+        var gotLon = b.getNorthEast().getLng() - b.getSouthWest().getLng();
+        var k = (gotLon > 0 && wantLon > 0) ? gotLon / wantLon : 1;
+        if (!isFinite(k) || k < 1) k = 1;
+        if (k > 4) k = 4;                     /* 이상값 방어 */
+        kkDiv.style.transformOrigin = '50% 50%';
+        kkDiv.style.transform = k > 1.001 ? 'scale(' + k.toFixed(4) + ')' : '';
+      } catch (e) { /* SDK 버전 차이로 getBounds 가 없으면 예전 동작 그대로 */ }
     }
 
     drawBase();
@@ -476,11 +503,24 @@
             '" dy="-1.1em" text-anchor="middle">' + esc(s.name) + '</text>';
         });
       }
-      stops.forEach(function (s) {
-        var p = C.xy(s);
-        h += '<circle class="sthit" data-stophit="' + esc(s.id) + '" cx="' + p.x + '" cy="' + p.y + '" r="11"><title>' +
-          esc(s.name) + '</title></circle>';
-      });
+      /* ── 히트 전용 층은 '적을 때만' 만듭니다 ────────────────────────────
+         전체(2,866개)를 켜면 이 층만으로 SVG 노드가 5,732개 늘었습니다
+         (투명 원 2,866 + <title> 2,866). 전체 노드 8,998 중 64% 가 한 번도
+         칠해지지 않는 요소였고, 켜는 데만 314ms 가 걸렸습니다.
+         <title> 은 브라우저 기본 툴팁인데 아래 mousemove 가 이미 같은 내용을
+         띄우므로 순수 중복입니다 — 전부 없앱니다.
+         많을 때는 .st 원 자체가 히트 대상이 되고(HIT_CLASS), 대신 CSS 로
+         선 굵기를 키워 클릭 여유를 줍니다. 격자를 찍어 몇 개만 남은 상태
+         (only)에서는 예전처럼 넉넉한 투명 원을 씁니다. */
+      var fatHit = !!only || stops.length <= HIT_LAYER_MAX;
+      _sIdx = null;   // 좌표 색인 무효화 (setData·격자 포커스 전환마다)
+      if (fatHit) {
+        stops.forEach(function (s) {
+          var p = C.xy(s);
+          h += '<circle class="sthit" data-stophit="' + esc(s.id) + '" cx="' + p.x + '" cy="' + p.y + '" r="11"/>';
+        });
+      }
+      gRoutes.classList.toggle('fathit', fatHit);
       gRoutes.innerHTML = h;
       /* 격자를 찍어 놓은 동안에는 전체 토글이 꺼져 있어도 그 격자 것은 보여야 합니다 */
       gRoutes.style.display = (state.showRoutes || only) ? '' : 'none';
@@ -570,8 +610,13 @@
     function renderSymbolLegend() {
       /* 격자 실제 렌더 크기(cellRect)와 같은 sizeMeters 를 쓴다.
          예전엔 displaySizeMeters(1.5km)를 써서 범례와 실물이 어긋났다. */
-      var cellKm = 1;
-      if (meta.grid && meta.grid.sizeMeters) cellKm = meta.grid.sizeMeters / 1000;
+      /* 셀 크기는 서버 meta 를 따릅니다. 1000m 미만이면 km 로 적으면
+         '0.5km' 같은 어색한 표기가 되므로 m 로 씁니다. meta 에 없으면
+         크기를 지어내지 않고 범례 항목의 수치를 생략합니다. */
+      var sizeM = (meta.grid && meta.grid.sizeMeters) || 0;
+      var cellLabel = !sizeM ? '격자 1칸'
+        : (sizeM >= 1000 ? '격자 1칸 ' + (sizeM / 1000) + 'km'
+                         : '격자 1칸 ' + sizeM + 'm');
 
       function item(svgInner, label, w) {
         return '<span class="lg-sym"><svg viewBox="0 0 ' + (w || 22) + ' 14" width="' + (w || 22) + '" height="14" aria-hidden="true">' +
@@ -580,7 +625,7 @@
       var items = [];
       items.push(item('<rect x="2" y="2" width="10" height="10" rx="2" class="c m3"/>' +
         '<rect x="2" y="2" width="10" height="10" rx="2" fill="none" stroke="var(--line)"/>',
-        '격자 1칸 ' + cellKm + 'km'));
+        cellLabel));
       items.push(item('<circle cx="11" cy="7" r="3.4" class="st"/>', '정류장'));
       items.push(item('<circle cx="11" cy="7" r="4.6" class="st hub"/>', '환승 거점'));
       items.push(item('<polyline class="rt-casing" points="2,10 8,4 14,9 20,4"/>' +
@@ -747,32 +792,84 @@
       if (c && opt.onCellClick) opt.onCellClick(c, e);
     });
 
+    /* ── 정류장 히트 판정 ──────────────────────────────────────────────
+       .sthit 층이 있으면(적을 때) DOM 으로, 없으면 기하로 찾습니다.
+       전체 2,866개에 투명 원을 깔면 노드가 그만큼 늘어 켜는 데 314ms 가
+       걸렸는데, 좌표 비교는 노드를 하나도 안 만듭니다.
+       격자 버킷 색인이라 한 번 훑는 비용이 정류장 수와 무관합니다. */
+    var _sIdx = null;         // {cell: [stop,...]} · 버킷 한 변 = BUCKET
+    var BUCKET = 24;          // SVG 사용자 단위
+    function stopBuckets() {
+      if (_sIdx && _sIdx._n === state.stops.length) return _sIdx;
+      _sIdx = { _n: state.stops.length };
+      state.stops.forEach(function (st) {
+        var p = C.xy(st);
+        var k = Math.floor(p.x / BUCKET) + ':' + Math.floor(p.y / BUCKET);
+        (_sIdx[k] = _sIdx[k] || []).push({ s: st, x: p.x, y: p.y });
+      });
+      return _sIdx;
+    }
+    /** 화면상 11px 안에서 가장 가까운 정류장. 없으면 null */
+    function nearestStop(sx, sy) {
+      var idx = stopBuckets();
+      var reach = 11 * (zoom.w / W);          // 화면 11px 을 사용자 단위로
+      var bx = Math.floor(sx / BUCKET), by = Math.floor(sy / BUCKET);
+      var span = Math.ceil(reach / BUCKET);
+      var best = null, bd = reach * reach;
+      for (var i = -span; i <= span; i++) {
+        for (var j = -span; j <= span; j++) {
+          var arr = idx[(bx + i) + ':' + (by + j)];
+          if (!arr) continue;
+          for (var k = 0; k < arr.length; k++) {
+            var dx = arr[k].x - sx, dy = arr[k].y - sy, d = dx * dx + dy * dy;
+            if (d <= bd) { bd = d; best = arr[k].s; }
+          }
+        }
+      }
+      return best;
+    }
+    function stopAtEvent(e) {
+      var el = e.target.closest('.sthit');
+      if (el) return el.getAttribute('data-stophit');
+      if (gRoutes.classList.contains('fathit')) return null;
+      if (!state.stopsInteractive) return null;
+      var p = toSvgXY(e);
+      var st = nearestStop(p.x, p.y);
+      return st ? st.id : null;
+    }
+
     svg.addEventListener('mousemove', function (e) {
-      var s = e.target.closest('.sthit');
+      var s = stopAtEvent(e);
       if (!s) {
         /* 격자 위 툴팁은 gCells 핸들러가 관리하므로 건드리지 않습니다.
            그 밖(바다·여백)으로 나가면 정류장 툴팁이 남지 않게 접습니다. */
         if (!e.target.closest('.cells')) C.hideTip();
         return;
       }
-      var stop = findStop(s.getAttribute('data-stophit'));
+      var stop = findStop(s);
       if (!stop) return;
       C.showTip('<b>' + esc(stop.name) + '</b><br>경유 ' + routeNames(stop.routes) +
         ' · 클릭하면 시간대 프로파일', e);
     });
     svg.addEventListener('mouseleave', C.hideTip);
     svg.addEventListener('click', function (e) {
-      var s = e.target.closest('.sthit');
+      var s = stopAtEvent(e);
       if (!s) return;
-      var stop = findStop(s.getAttribute('data-stophit'));
+      var stop = findStop(s);
       if (!stop || !opt.onStopClick) return;
       var p = C.xy(stop);
       opt.onStopClick(stop, cellAt(p.x, p.y), e);
     });
 
+    /* mousemove 마다 2,866개를 훑던 선형 탐색을 색인으로 바꿉니다.
+       state.stops 는 setData 에서만 갈리므로 그때 색인을 버립니다. */
+    var _stopIdx = null;
     function findStop(id) {
-      for (var i = 0; i < state.stops.length; i++) if (state.stops[i].id === id) return state.stops[i];
-      return null;
+      if (!_stopIdx || _stopIdx._n !== state.stops.length) {
+        _stopIdx = { _n: state.stops.length };
+        for (var i = 0; i < state.stops.length; i++) _stopIdx[state.stops[i].id] = state.stops[i];
+      }
+      return _stopIdx[id] || null;
     }
 
     /* 실서버 stop.routes 는 노선ID 목록입니다. 화면에는 노선번호로 보여줍니다. */

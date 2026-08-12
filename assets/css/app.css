@@ -340,6 +340,9 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
    확대 역스케일(--zk)은 여기서 그대로 걸어야 확대해도 점 크기가 유지됩니다. */
 .st{fill:var(--card);stroke:var(--ink);stroke-width:calc(1.8px/var(--zk,1));
   r:calc(var(--sr,3.4px)/var(--zk,1));pointer-events:none}
+/* 히트 전용 층이 없는(전체 표시) 상태에서는 DOM 이 아니라 기하로 판정합니다
+   (map.js nearestStop). 커서만 바꿔 줍니다. */
+[data-groutes]:not(.fathit){cursor:default}
 .st.hub{fill:#ffd400;stroke-width:calc(2.4px/var(--zk,1));r:calc(var(--sr,4.6px)/var(--zk,1))}
 .st.on{fill:var(--sel);stroke:var(--card);stroke-width:calc(2.4px/var(--zk,1))}
 .sthit{fill:transparent;cursor:pointer;r:calc(11px/var(--zk,1))}
@@ -351,7 +354,8 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 /* 격자를 클릭해 그 격자 것만 보는 중에는 몇 개 안 되므로 배율과 무관하게 보입니다 */
 .stlab.always{display:block}
 /* 배치 모드: 정류장이 격자 클릭을 가로채지 않도록 통과시킵니다 */
-[data-groutes].nohit .sthit{pointer-events:none;cursor:inherit}
+[data-groutes].nohit .sthit,
+[data-groutes].nohit circle.st{pointer-events:none;cursor:inherit}
 .indmark{fill:var(--ink3);opacity:.8;pointer-events:none}
 [data-selring],[data-hovring]{pointer-events:none}
 /* 호버 테두리 — 굵기·위치는 map.js 가 칸 크기에 맞춰 계산합니다 */
@@ -954,7 +958,11 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .scen-floor{border-top:1px solid var(--line);padding:10px 14px 14px}
 .scen-floor-hd{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
 .scen-floor-hd b{font-size:13px;font-weight:650}
-.scen-floor-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+/* 저장 개수만큼 지도 카드가 통째로 길어져(12개면 지도 카드 945→1,278px)
+   아래의 '수단별 소요액'·'정책 판단 요약' 이 화면 밖으로 밀려났습니다.
+   두 줄까지만 보이고 그 아래는 이 목록 안에서만 스크롤합니다. */
+.scen-floor-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;
+  max-height:216px;overflow-y:auto;overscroll-behavior:contain}
 .scen-floor-list .empty{grid-column:1/-1;padding:14px 0;text-align:center}
 .scen-floor-list .scen .smeta{white-space:normal}
 /* 3열 고정은 좁은 화면에서 카드가 ~100px 로 쪼그라듭니다 */
