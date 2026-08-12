@@ -157,10 +157,12 @@
       S.map = HW.createMap({
         svg: $('#map'), legend: $('#legend'), meta: meta,
         placementLegend: true,   /* 범례에 배치 기호(●◆▲) 설명도 함께 */
-        /* 배치 화면에서는 기존 정류장·노선이 계속 보여야 합니다 — "여기 이미
-           정류장이 있나"가 배치 판단의 근거입니다. 대시보드는 반대로 기본
-           꺼짐입니다(격자 색을 덮지 않으려고). */
-        showRoutes: true,
+        /* 기본 꺼짐 — 대시보드와 같습니다. "여기 이미 정류장이 있나"가 배치
+           판단의 근거인 건 맞지만, 2,866개를 늘 깔면 지도 육지 픽셀의 16.6%가
+           점이 되고(우선순위 1·3·6·7위가 몰린 동탄 회랑은 30.1%) 이 화면의
+           본론인 "어느 칸이 붉은가"가 통째로 덮입니다. 툴바의 [노선·정류장
+           전체] 로 필요할 때 켭니다. 격자를 클릭하면 그 격자 것만 켜집니다. */
+        showRoutes: false,
         onClearFocus: function () { S.map.setEligible(null); },
         onAreaChange: onAreaChange,
         onCellClick: onCellClick,
@@ -1120,6 +1122,12 @@
         ? (e2.label + ' 모드 — 배치할 격자를 지도에서 클릭하세요. 반경 약 ' + e2.radiusKm + 'km에 파급됩니다. (단가 ' + won(e2.unitKrw) + ')' +
            (S.tool !== 'drt' ? ' 적용 가능한 격자만 또렷하게 표시됩니다.' : ''))
         : '수단을 고른 뒤 지도를 클릭하면 배치되고, KPI가 기준선 대비 즉시 재계산됩니다.';
+    });
+
+    $('#tgRoute').addEventListener('click', function (e) {
+      var on = e.currentTarget.classList.toggle('on');
+      e.currentTarget.setAttribute('aria-pressed', String(on));
+      S.map.setShowRoutes(on);
     });
 
     $('#layers').addEventListener('click', function (e) {

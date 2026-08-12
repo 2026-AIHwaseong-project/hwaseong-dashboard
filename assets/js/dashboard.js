@@ -349,8 +349,15 @@
       return '<button class="trow' + (r.cellId === S.selectedCellId ? ' sel' : '') + '" data-cell="' + esc(r.cellId) + '">' +
         '<span class="rk">' + r.rank + '</span>' +
         '<span class="nm">' + esc(r.name) + '<span>' + esc(r.cellId) + '</span></span>' +
-        '<span class="mi">MI +' + r.mi.toFixed(2) + '</span>' +
-        '<span class="sub2"><span>잠재 ' + fmt(r.flowTripsPerDay) + '통행/일</span>' +
+        /* 주 숫자는 **순위를 정한 값**이어야 합니다. 예전에는 MI 를 크게 찍었는데
+           정렬·막대는 priorityScore(MI⁺ × 수요규모 × 교통약자 가중)로 매겨서,
+           화면에 4위 MI +1.21 다음 5위 +1.40, 9위 +0.98 다음 10위 +1.03 이
+           찍혔습니다 — 위에서 아래로 읽으면 정렬이 고장난 것처럼 보입니다.
+           1위를 100 으로 둔 상대 점수를 올리고 MI 는 옆에 보조로 둡니다. */
+        '<span class="pscore">' + Math.round(100 * r.priorityScore / mx) +
+        '<small>점</small></span>' +
+        '<span class="sub2"><span>MI +' + r.mi.toFixed(2) + '</span>' +
+        '<span>잠재 ' + fmt(r.flowTripsPerDay) + '통행/일</span>' +
         '<em>고령 ' + Math.round(r.elderlyRatio * 100) + '%</em></span>' +
         '<span class="bar"><i style="width:' + (100 * r.priorityScore / mx).toFixed(0) + '%"></i></span>' +
         '<span class="tag ' + tagClass + '">' + esc(r.actionLabel) + '</span>' +
@@ -536,6 +543,13 @@
     /* 최댓값만 직접 라벨 — 모든 점에 숫자를 찍지 않습니다 */
     /* 0 이면 라벨을 찍지 않습니다 — 막대가 없는데 '0' 두 개만 떠 있으면
        데이터 없음이 아니라 렌더가 실패한 것처럼 읽힙니다. */
+    /* 시간당 값이 전부 0 이면 막대가 하나도 안 그려져 렌더 실패처럼 보입니다.
+       사각지대(=저수요) 격자를 파고들면 자주 만나는 상태라, 빈 그림이 아니라
+       "논할 분포가 없다" 는 결과임을 그림 안에서 밝힙니다. */
+    if (vmax <= 0) {
+      h += '<text class="qlab" x="' + (STC.w / 2) + '" y="' + mid +
+        '" text-anchor="middle">시간대별 승하차가 기록되지 않았습니다 — 분포를 논하기 어려운 규모입니다</text>';
+    }
     if (mb > 0) h += '<text class="dl2" x="' + (STC.l + mbh * step + step / 2) + '" y="' + (mid - 1 - yscale(mb) - 5) + '" text-anchor="middle">' + mb + '</text>';
     if (ma > 0) h += '<text class="dl2" x="' + (STC.l + mah * step + step / 2) + '" y="' + (mid + 1 + yscale(ma) + 12) + '" text-anchor="middle">' + ma + '</text>';
 

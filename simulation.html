@@ -87,6 +87,13 @@
           <button class="lbtn" data-layer="supply" type="button">공급 S</button>
           <button class="lbtn" data-layer="flow" type="button">유동인구</button>
         </div>
+        <!-- 대시보드와 같은 토글입니다. 배치 판단에는 "여기 이미 정류장이 있나"가
+             필요하지만, 2,866개를 늘 깔아 두면 지도 육지의 16.6%(동탄 회랑은
+             30.1%)가 점으로 덮여 정작 어느 칸이 붉은지가 안 읽힙니다.
+             기본은 끄고, 특정 지점을 따질 때 켜서 봅니다. -->
+        <div class="tset">
+          <button class="tbtn" id="tgRoute" type="button" aria-pressed="false">노선·정류장 전체</button>
+        </div>
       </div>
 
       <div class="mapbox">
