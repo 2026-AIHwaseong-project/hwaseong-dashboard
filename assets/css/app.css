@@ -32,7 +32,7 @@
 :root{
   color-scheme:light;
   --bg:#f9f9f7; --card:#fcfcfb; --line:rgba(11,11,11,.10); --grid:#e1e0d9; --axis:#c3c2b7;
-  --ink:#0b0b0b; --ink2:#52514e; --ink3:#898781;
+  --ink:#0b0b0b; --ink2:#52514e; --ink3:#6f6d67;   /* 3.50:1 → 4.9:1 (AA) */
   --sel:#4a3aa7; --selbg:rgba(74,58,167,.10);
   --water:#dde5ee; --land:#eeede7; --coast:#9aa4b0;
   /* 미스매칭 MI: 발산형(파랑 ← 중립 → 빨강). 중간값은 반드시 무채색. */
@@ -94,7 +94,7 @@
 :root[data-theme="light"]{
   color-scheme:light;
   --bg:#f9f9f7; --card:#fcfcfb; --line:rgba(11,11,11,.10); --grid:#e1e0d9; --axis:#c3c2b7;
-  --ink:#0b0b0b; --ink2:#52514e; --ink3:#898781;
+  --ink:#0b0b0b; --ink2:#52514e; --ink3:#6f6d67;
   --sel:#4a3aa7; --selbg:rgba(74,58,167,.10);
   --water:#dde5ee; --land:#eeede7; --coast:#9aa4b0;
   --mi0:#1c5cab; --mi1:#5598e7; --mi2:#9ec5f4; --mi3:#e9e7e0; --mi4:#f3a68f; --mi5:#e2604f; --mi6:#a62b28;
@@ -155,6 +155,10 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 .pbtn.on{background:var(--ink);color:var(--card)}
 .pbtn.on:hover{background:var(--ink)}
 
+/* 한글은 브라우저 기본이 음절 단위 줄바꿈이라 '노선' '수치는' 이 아무 데서나
+   쪼개집니다. 산문 요소에만 어절 유지를 겁니다(표의 긴 mono 토큰은 제외). */
+h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
+  word-break:keep-all;overflow-wrap:break-word}
 .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px;align-items:stretch}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;min-width:0}
 .span4{grid-column:span 4}.span5{grid-column:span 5}.span6{grid-column:span 6}
@@ -162,7 +166,8 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 /* 지도(8칸)는 우선순위 목록(4칸)보다 짧아 아래에 180px 쯤 빈 자리가 남았습니다.
    노선 경유 순서 카드를 그 자리에 넣습니다 — 지도에서 격자를 클릭하면 바로
    아래에서 그 격자의 버스 노선을 읽는 흐름이 됩니다.
-   우선순위는 두 행에 걸치게 해서 오른쪽 열이 통째로 이어지게 둡니다. */
+   우선순위는 두 행에 걸치게 해서 오른쪽 열이 통째로 이어지게 둡니다.
+
    ⚠️ 행 배치는 .dashgrid(= index.html 의 .grid)에만 겁니다. simulation.html 은
    같은 app.css 를 쓰지만 .routecard 가 없어서, 규칙이 전역이면 사이드카드가
    두 행을 차지한 채 2행 9~12열이 비고 '배치 수단별 사업비' 카드가 한 행
@@ -173,11 +178,19 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 .dashgrid .mapcard{grid-row:1}
 .dashgrid .routecard{grid-row:2}
 .dashgrid .sidecard{grid-row:1 / span 2}
+/* 시뮬레이션에는 .routecard 가 없어 사이드카드가 지도 높이(1440px 에서 945px)만큼
+   늘어나는데 내용은 448px 에서 끝납니다 — 500px 가까이가 빈 상자로 남습니다.
+   내용 높이로 두고, 대신 붙여 둡니다. 격자를 클릭하며 예산·배치 목록을 확인하는
+   화면이라 지도를 훑는 동안 그 패널이 화면에 남아 있어야 맞습니다.
+   상단바(.topnav)가 sticky top:0 이라 그 아래로 내려 겹치지 않게 합니다. */
+.simgrid .sidecard{align-self:start;position:sticky;top:58px}
 .sc-card{grid-column:span 5}
 .st-card{grid-column:span 7}
 .chead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px 14px 8px;flex-wrap:wrap}
 .chead h2{font-size:14.5px;font-weight:650;margin:0}
 .chead .hsub{font-size:11.5px;color:var(--ink3)}
+/* 계산 중에만 글자가 들어가는데, 비어도 테두리 캡슐이 남아 로드 실패처럼 보입니다 */
+.pchip:empty{display:none}
 .pchip{font-size:10.5px;font-family:Consolas,ui-monospace,monospace;color:var(--ink3);
   border:1px solid var(--line);border-radius:999px;padding:2px 8px;white-space:nowrap}
 .cbody{padding:0 14px 14px}
@@ -209,7 +222,7 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 .msi{font-size:11.5px;padding:4px 11px;width:150px;color:var(--ink2);
      border:1px solid var(--line);border-radius:999px;background:var(--card)}
 .msi::placeholder{color:var(--ink3)}
-.msi:focus{outline:none;border-color:var(--sel);background:var(--selbg)}
+.msi:focus{border-color:var(--sel);background:var(--selbg)}
 /* 검색창 안의 기본 X 버튼이 테마에 따라 안 보이는 경우가 있어 크기만 맞춥니다 */
 .msi::-webkit-search-cancel-button{cursor:pointer}
 
@@ -254,6 +267,9 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 /* 눈금은 색 칸의 경계에 오도록 반 칸씩 밀어 배치합니다 */
 .legendbar .lg-tick span{flex:1;text-align:right;transform:translateX(50%);white-space:nowrap}
 .legendbar .lg-tick span:last-child{flex:0}
+/* 마지막 '값' 눈금(빈 span 앞)까지 절반을 밀면 스케일 밖으로 나가 옆의
+   '공급 부족' 글자와 겹칩니다 — 상한값이 못 읽히면 색의 기준이 사라집니다. */
+.legendbar .lg-tick span:nth-last-child(2){transform:translateX(0)}
 .legendbar .lg-tick5 span{flex:1;text-align:center;transform:none;font-size:8.5px}
 .legendbar .lg-note{width:100%;font-size:10.5px;color:var(--sel);display:flex;align-items:center;gap:5px}
 .legendbar .sw-elig{display:inline-block;width:10px;height:10px;border-radius:2px;
@@ -323,17 +339,25 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 .hov-line{fill:none;stroke:var(--ink);stroke-opacity:.5;stroke-linejoin:round}
 /* 굵기는 map.js 가 칸 크기에 맞춰 attribute 로 지정합니다(여기서 정하면 덮어씀).
    불투명하게 두면 링이 주변 격자와 글씨를 가려 읽을 수 없습니다. */
+/* 굵기는 map.js 가 칸 크기에 맞춰 attribute 로 지정하지만, 격자를 클릭하면
+   2,700% 까지 확대돼 그 값이 화면상 100px 넘는 띠가 됩니다. CSS 는 presentation
+   attribute 를 이기므로 확대 상태에서만 화면 고정 굵기로 상한을 겁니다. */
 .selring-out{fill:none;stroke:var(--card);stroke-opacity:.5}
 .selring-in{fill:none;stroke:var(--sel);stroke-opacity:.8}
+.zdetail .selring-out{stroke-width:calc(5px/var(--zk,1))}
+.zdetail .selring-in{stroke-width:calc(2.6px/var(--zk,1))}
 .placed{pointer-events:none}
 /* 배치 기호 — 수단마다 색이 다르고, 모양은 색각 이상·흑백 대비입니다.
    테두리(--card)를 채움 뒤에 깔아 어떤 격자 색 위에서도 뜹니다.
    크기·굵기는 map.js 가 칸 크기에 맞춰 계산합니다. */
-.placed .pmk{stroke:var(--card);paint-order:stroke;stroke-linejoin:round}
-.placed .pmk-stop{fill:var(--good)}
-.placed .pmk-drt{fill:var(--sel)}
-.placed .pmk-freq{fill:var(--warn)}
-.placed .pmk-n{fill:var(--card);stroke:none;font-weight:700}
+ /* .placed 로 스코프하면 안 됩니다 — 범례는 .lg-sym svg 안이라 .placed 의
+    자손이 아니고, 같은 markerShape() 로 그려도 fill 이 안 걸려 검정이 됩니다.
+    색이 수단을 구분하는 지금은 범례 색 키가 지도와 달라지면 지도를 못 읽습니다. */
+.pmk{stroke:var(--card);paint-order:stroke;stroke-linejoin:round}
+.pmk-stop{fill:var(--good)}
+.pmk-drt{fill:var(--sel)}
+.pmk-freq{fill:var(--warn)}
+.pmk-n{fill:var(--card);stroke:none;font-weight:700}
 /* 이 하나만 map.js 가 계산하지 않고 CSS 가 정합니다 — SVG 사용자 단위라
    --zk 로 나누지 않으면 확대할수록 같이 부풀어 칸을 덮습니다(120배면 9px 가
    1,080px). 나머지 pmk-* 는 map.js 가 칸 크기 비례로 attribute 를 찍습니다. */
@@ -370,8 +394,19 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 .empty{padding:26px 14px;text-align:center;font-size:11.5px;color:var(--ink3);line-height:1.7}
 
 /* ---------------------------------------------------------- 7. 차트 */
+/* viewBox 고정 + width:100% 라 카드가 넓어지면 SVG 안 글자가 통째로 확대됩니다.
+   1020px 이하에서 카드가 12칸(984px)이 되면 산점도가 1.84배가 돼 축 눈금이
+   카드 제목보다 커집니다 — 위계가 뒤집혀 '깨진 차트' 로 보입니다.
+   원본 viewBox 근처로 상한을 걸고 가운데 정렬합니다. 데스크톱(≥1180)에서는
+   카드가 이미 상한보다 좁아 렌더 결과가 바뀌지 않습니다. */
+.chart{margin-left:auto;margin-right:auto}
+#scatter{max-width:560px}
+#stchart,#cmpChart,#costChart{max-width:760px}
 .chart{width:100%;height:auto;display:block}
-.qlab{fill:var(--ink3);font-size:10px}
+/* 점 위에 겹쳐도 읽히도록 후광을 줍니다 — 지도 라벨(.rlab)과 같은 수법.
+   그리는 순서는 dashboard.js 에서 점 뒤로 옮겼습니다. */
+.qlab{fill:var(--ink3);font-size:10px;paint-order:stroke;
+  stroke:var(--card);stroke-width:3px;stroke-linejoin:round}
 .qlab.hot{fill:var(--ink2);font-weight:600}
 .axlab{fill:var(--ink3);font-size:10.5px}
 .tick{fill:var(--ink3);font-size:9.5px;font-family:Consolas,ui-monospace,monospace}
@@ -478,7 +513,7 @@ h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balan
 .fld label{font-size:11px;color:var(--ink3)}
 .fld input,.fld select,.fld textarea{font:inherit;font-size:12.5px;color:var(--ink);background:var(--bg);
   border:1px solid var(--line);border-radius:7px;padding:6px 9px;width:100%}
-.fld input:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--sel)}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--sel)}
 .frow{display:flex;gap:10px;flex-wrap:wrap;padding:0 14px 12px}
 .frow .fld{flex:1;min-width:130px}
 
@@ -550,7 +585,12 @@ td:first-child{font-family:Consolas,ui-monospace,monospace;color:var(--ink3)}
 footer.pg{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;color:var(--ink3);font-size:11.5px}
 footer.pg .fx{font-family:"Cascadia Code",Consolas,ui-monospace,monospace;font-size:10.5px;line-height:1.9;
   display:flex;flex-wrap:wrap;gap:0 22px}
+/* 한 항목이 줄 중간에서 끊기지 않게 nowrap 을 걸어 두었는데, 시뮬레이션
+   푸터의 첫 항목이 441px 라 좁은 화면에서는 이게 문서를 통째로 넓혀
+   페이지 전체에 가로 스크롤이 생겼습니다(390px 에서 문서 453px 실측).
+   항목 하나가 뷰포트보다 길어질 수 있는 폭에서는 줄바꿈을 허용합니다. */
 footer.pg .fx span{white-space:nowrap}
+@media (max-width:640px){footer.pg .fx span{white-space:normal}}
 footer.pg .srcs{margin:7px 0 5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 footer.pg .srcs i{font-style:normal;border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:10.5px}
 footer.pg .dis{margin-top:6px;line-height:1.7}
@@ -594,6 +634,8 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
   .mapcard,.routecard,.sidecard,.sc-card,.st-card,.span4,.span5,.span6,.span7,.span8{grid-column:span 12}
   /* 한 줄로 쌓이는 폭에서는 명시적 행 배치를 풀어야 순서대로 흐릅니다 */
   .dashgrid .mapcard,.dashgrid .routecard,.dashgrid .sidecard{grid-row:auto}
+  /* 한 줄로 쌓이면 지도 옆이 아니라 아래에 오므로 붙일 이유가 없습니다 */
+  .simgrid .sidecard{position:static}
   .kpis{grid-template-columns:1fr 1fr}
   .t10{max-height:380px}
 }
@@ -652,17 +694,26 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
   background:var(--track);position:relative;overflow:hidden;margin-right:6px;vertical-align:1px}
 .rgtbl .rg-bar i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--mi5)}
 .rgtbl .rg-need b{font-weight:700;color:var(--ink)}
-.rgtbl .rg-zero{color:var(--ink3);opacity:.55}
+/* 공용 규칙(td:nth-child(2){text-align:left})은 '격자 데이터 표'(2열=권역명)
+   기준이라, 2열이 숫자인 이 표에서는 자릿수가 어긋납니다. */
+.rgtbl th:nth-child(2),.rgtbl td:nth-child(2){text-align:right}
+.rgtbl .rg-zero{color:var(--ink3)}   /* opacity 곱을 걷어냄 — 0 은 '조치 불필요' 라는 의미 있는 값입니다 */
 
 /* ===========================================================================
    16. 용어 도움말 버튼
    지표 이름 옆의 물음표. 눌러도(터치) 마우스를 올려도 설명이 뜹니다.
    ======================================================================== */
-.help{display:inline-flex;align-items:center;justify-content:center;
+.help{position:relative;display:inline-flex;align-items:center;justify-content:center;
   width:14px;height:14px;margin-left:4px;vertical-align:1px;
   border:1px solid var(--line);border-radius:50%;
   font-size:9px;font-weight:700;line-height:1;color:var(--ink3);
   font-family:Consolas,ui-monospace,monospace;flex:none}
+/* 보이는 원은 14px 그대로 두고 **누를 수 있는 면적만** 24px 로 넓힙니다.
+   지표 이름 옆에 붙는 자리라 원 자체를 키우면 글줄이 밀립니다.
+   WCAG 2.2 의 Target Size(Minimum)가 24×24 CSS px 인데, 14px 이면 마우스로도
+   자주 빗나갑니다 — 화면에 ? 가 20개 넘게 깔려 있어 체감이 큽니다. */
+.help::after{content:"";position:absolute;left:50%;top:50%;
+  width:24px;height:24px;transform:translate(-50%,-50%)}
 .help:hover{background:var(--sel);border-color:var(--sel);color:#fff}
 
 @media (max-width:560px){
@@ -861,6 +912,9 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .zctl [data-z="reset"]{display:none;width:auto;height:22px;padding:0 7px;font-size:10.5px}
 .zctl.zoomed [data-z="reset"]{display:flex}
 /* 현재 확대 비율 — 화성시 전체가 보이는 상태가 100%, 최대 12,000% */
+/* 세로 flex 의 교차축 stretch 때문에 칩 폭이 +/- 버튼 26px 에 묶여 '100%'가
+   겹쳐 뭉갰습니다. 내용 폭만큼 늘어나게 합니다. */
+.zctl{align-items:flex-start}
 .zpct{min-width:26px;padding:2px 4px;border:1px solid var(--line);border-radius:6px;
   background:color-mix(in srgb,var(--card) 92%,transparent);color:var(--ink3);
   font-size:9.5px;line-height:1.5;text-align:center;font-variant-numeric:tabular-nums;

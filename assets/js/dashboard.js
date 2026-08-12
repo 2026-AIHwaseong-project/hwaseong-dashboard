@@ -375,10 +375,6 @@
     });
     h += '<line class="zl" x1="' + sx(0) + '" y1="' + SC.t + '" x2="' + sx(0) + '" y2="' + (SC.h - SC.b) + '"/>';
     h += '<line class="zl" x1="' + SC.l + '" y1="' + sy(0) + '" x2="' + (SC.w - SC.r) + '" y2="' + sy(0) + '"/>';
-    h += '<text class="qlab hot" x="' + (SC.l + 6) + '" y="' + (SC.t + 14) + '">고수요·저공급 → 증차·신설</text>';
-    h += '<text class="qlab" x="' + (SC.w - SC.r - 6) + '" y="' + (SC.t + 14) + '" text-anchor="end">고수요·고공급 · 적정</text>';
-    h += '<text class="qlab" x="' + (SC.l + 6) + '" y="' + (SC.h - SC.b - 8) + '">저수요·저공급 → DRT 검토</text>';
-    h += '<text class="qlab" x="' + (SC.w - SC.r - 6) + '" y="' + (SC.h - SC.b - 8) + '" text-anchor="end">저수요·고공급 → 효율화</text>';
     h += '<text class="axlab" x="' + ((SC.l + SC.w - SC.r) / 2) + '" y="' + (SC.h - 10) + '" text-anchor="middle">공급지수 S (z)</text>';
     h += '<text class="axlab" transform="rotate(-90 14 ' + ((SC.t + SC.h - SC.b) / 2) + ')" x="14" y="' +
       ((SC.t + SC.h - SC.b) / 2) + '" text-anchor="middle">수요지수 D (z)</text>';
@@ -389,6 +385,13 @@
       h += '<circle class="dot c m' + c.bins.mi + '" data-cell="' + esc(c.id) + '" cx="' +
         sx(c.zSupply).toFixed(1) + '" cy="' + sy(c.zDemand).toFixed(1) + '" r="' + dotR + '"/>';
     });
+    /* 사분면 라벨은 **점 뒤에** 그립니다. SVG 에는 z-index 가 없어 문서 순서가
+       곧 쌓임 순서인데, 예전에는 라벨을 먼저 찍어 우상단 라벨이 점 무더기에
+       완전히 덮였습니다 — 사분면이 셋뿐인 것처럼 보였습니다. */
+    h += '<text class="qlab hot" x="' + (SC.l + 6) + '" y="' + (SC.t + 14) + '">고수요·저공급 → 증차·신설</text>';
+    h += '<text class="qlab" x="' + (SC.w - SC.r - 6) + '" y="' + (SC.t + 14) + '" text-anchor="end">고수요·고공급 · 적정</text>';
+    h += '<text class="qlab" x="' + (SC.l + 6) + '" y="' + (SC.h - SC.b - 8) + '">저수요·저공급 → DRT 검토</text>';
+    h += '<text class="qlab" x="' + (SC.w - SC.r - 6) + '" y="' + (SC.h - SC.b - 8) + '" text-anchor="end">저수요·고공급 → 효율화</text>';
     h += '<circle class="scatring" data-scatring r="7" cx="-99" cy="-99" visibility="hidden"/>';
     $('#scatter').innerHTML = h;
     placeScatterRing();
@@ -489,8 +492,16 @@
     var hours = p.hours, B = p.boardings, A = p.alightings;
     var mid = STC.t + (STC.h - STC.t - STC.b) / 2;
     var half = (STC.h - STC.t - STC.b) / 2 - 14;
-    var vmax = Math.max.apply(null, B.concat(A).concat([10]));
-    var nice = Math.ceil(vmax / 50) * 50 || 50;
+    var vmax = Math.max.apply(null, B.concat(A).concat([0]));
+    /* 축 최댓값을 50 단위로만 올리면 저수요 정류장이 통째로 백지가 됩니다 —
+       사각지대(=저수요) 격자를 파고드는 것이 이 대시보드의 주 동선인데, 그
+       종착점에서 막대가 한 개도 안 그려졌습니다(시간당 최대 6명인 정류장의
+       축이 50). 데이터 크기에 맞는 단계로 올립니다. */
+    var STEPS = [2, 5, 10, 20, 25, 50, 100, 200, 500, 1000, 2000, 5000];
+    var nice = STEPS[STEPS.length - 1];
+    for (var si = 0; si < STEPS.length; si++) {
+      if (STEPS[si] >= vmax) { nice = STEPS[si]; break; }
+    }
     var yscale = function (v) { return v / nice * half; };
     var step = (STC.w - STC.l - STC.r) / hours.length;
     var bw = Math.min(22, step - 4);
@@ -523,8 +534,10 @@
       if (A[k] > 0) h += '<path class="stbar-a" d="' + C.barDown(x, mid + 1, bw, yscale(A[k])) + '"/>';
     });
     /* 최댓값만 직접 라벨 — 모든 점에 숫자를 찍지 않습니다 */
-    h += '<text class="dl2" x="' + (STC.l + mbh * step + step / 2) + '" y="' + (mid - 1 - yscale(mb) - 5) + '" text-anchor="middle">' + mb + '</text>';
-    h += '<text class="dl2" x="' + (STC.l + mah * step + step / 2) + '" y="' + (mid + 1 + yscale(ma) + 12) + '" text-anchor="middle">' + ma + '</text>';
+    /* 0 이면 라벨을 찍지 않습니다 — 막대가 없는데 '0' 두 개만 떠 있으면
+       데이터 없음이 아니라 렌더가 실패한 것처럼 읽힙니다. */
+    if (mb > 0) h += '<text class="dl2" x="' + (STC.l + mbh * step + step / 2) + '" y="' + (mid - 1 - yscale(mb) - 5) + '" text-anchor="middle">' + mb + '</text>';
+    if (ma > 0) h += '<text class="dl2" x="' + (STC.l + mah * step + step / 2) + '" y="' + (mid + 1 + yscale(ma) + 12) + '" text-anchor="middle">' + ma + '</text>';
 
     [6, 9, 12, 15, 18, 21].forEach(function (hr) {
       if (hr < hours[0] || hr > hours[hours.length - 1]) return;
