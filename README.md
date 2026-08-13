@@ -56,6 +56,10 @@ AI 는 선정된 결과를 문장으로 다듬는 일만 맡습니다.
 **분석 대시보드** — 격자 미스매칭 지도 · 이 격자를 지나는 노선 · 노선 조정 우선순위 Top 10 ·
 수요–공급 4분면 · 정류장 시간대 프로파일 · 권역별 요약
 
+**정류장 시간대 프로파일이 있어야 하는 이유** — 격자 단위 분석만 있으면 "그래서 실제
+정류장은 어떤데?"에 답을 못 합니다. 격자를 클릭하면 최근접 정류장 프로파일로 자동
+전환되므로 거시(격자) ↔ 미시(정류장)를 오갈 수 있습니다.
+
 **정책 시뮬레이션** — 배치 시뮬레이터(수단을 고르고 격자를 클릭해 배치, 영역 지정 가능) ·
 시나리오(저장·불러오기·AI 추천 배치안) · 시간대별 사각지대 격자 기준선 대비 ·
 수단별 소요액 · 정책 판단 요약
@@ -268,6 +272,25 @@ node tools/e2e-live.js http://127.0.0.1:8768    # 다른 주소를 볼 때
 
 검증 스크립트(§6)는 Node 18+ 를 씁니다. 이건 브라우저 런타임과는 무관합니다.
 
+### 지도·차트 라이브러리를 왜 안 쓰나
+
+**초기 계획에는 MapLibre GL JS 전환이 있었습니다. 철회했습니다.** 전환 근거가 셋이었는데
+셋 다 사라졌습니다.
+
+| 전환 근거였던 것 | 현재 |
+|---|---|
+| 격자 3,000개 렌더 성능 | ❌ 소멸 — 격자가 786개로 확정됐고 SVG 로 그대로 그립니다 |
+| 실제 행정경계가 필요 | ❌ 소멸 — SGIS 읍면동 실경계 29개를 `meta.map.regions` 로 받아 SVG 에 직접 적용합니다 |
+| 배경지도·팬줌 | ❌ 소멸 — 카카오맵 배경을 SVG 뒤에 깔고 확대·이동을 직접 붙였습니다(§9) |
+
+남은 근거가 없는데 npm·Vite·번들러를 새로 들이는 건 손해입니다. **SVG 유지는 폴백이
+아니라 기본 선택지입니다.** 차트 라이브러리도 같은 이유로 검토만 하고 넣지 않았습니다.
+
+**React 도 쓰지 않습니다.** 현재 상태 조합(시간대 4 × 레이어 4 × 선택 × 배치 목록)이
+모듈 스코프 변수만으로 다 돌아가고 있어 상태관리 라이브러리도 없습니다. 전환을 검토할
+조건은 아래 중 **둘 이상**입니다 — 화면을 3개 이상으로 늘릴 계획이다 / 컴포넌트를 다른
+과제에서 재사용할 계획이다 / 팀에 React 능숙자가 둘 이상이다. 지금은 셋 다 아닙니다.
+
 ### 지원 브라우저
 
 최신 Chrome · Edge · Safari · Firefox. `fetch` · `Promise` · `Element.closest` ·
@@ -328,61 +351,17 @@ document.querySelector('.kakaomap-inner')                     // null 이 아니
 ```
 
 `false`·`null` 이면 어긋남이 아니라 타일 문제입니다 — `KAKAO.jsKey` 가 유효한지,
-카카오 개발자 콘솔의 플랫폼 > Web 사이트 도메인에 **지금 열고 있는 주소**가 등록돼
-있는지, 네트워크 탭에서 `dapi.kakao.com` 요청이 4xx 를 받지 않는지 보세요.
+카카오 개발자 콘솔의 사이트 도메인에 **지금 열고 있는 주소**가 등록돼 있는지 보세요.
 
-**계측 훅은 임시로 넣었다 뺍니다.** 카카오 핸들 `kkMap` 은 `map.js` 클로저 안에 있고
-`HW.createMap()` 이 돌려주는 공개 API 에도 없어서 밖에서는 카카오 투영에 질문을 할 수
-없습니다. `map.js` 의 `syncKakao()` 에서 `alignKakao(sw, ne);` **바로 뒤**에 아래를
-끼우고, 측정이 끝나면 `git diff assets/js/map.js` 로 훅만 들어갔는지 본 뒤
-`git checkout assets/js/map.js` 로 되돌리세요.
+배경이 살아 있는데도 어긋난다면 **[docs/KAKAO-VERIFY.md](docs/KAKAO-VERIFY.md)** 에
+계측 절차가 있습니다 — 임시 훅 넣기, Playwright 자동 측정, 합격 기준, 어긋날 때 볼 곳.
 
-```js
-  /* [임시 계측] 배경 정합 잔차 — 측정이 끝나면 반드시 지웁니다 */
-  try {
-    var _proj = kkMap.getProjection();
-    var _t = global.getComputedStyle(kkInner).transform;   // .kakaomap-inner 는 transform-origin:0 0
-    var _m = (!_t || _t === 'none') ? [1, 0, 0, 1, 0, 0]
-      : _t.slice(_t.indexOf('(') + 1, -1).split(',').map(Number);
-    var _sx = _m[0], _sy = _m[3], _tx = _m[4], _ty = _m[5];
-    var _W = kkInner.clientWidth, _H = kkInner.clientHeight, _worst = 0, _at = '';
-    for (var _i = 0; _i < 3; _i++) for (var _j = 0; _j < 3; _j++) {
-      var _fx = _i / 2, _fy = _j / 2;
-      var _ll = C.unproject(zoom.x + zoom.w * _fx, zoom.y + zoom.h * _fy);
-      var _p = _proj.containerPointFromCoords(new global.kakao.maps.LatLng(_ll.lat, _ll.lon));
-      var _dx = (_tx + _sx * _p.x) - _W * _fx, _dy = (_ty + _sy * _p.y) - _H * _fy;
-      var _d = Math.sqrt(_dx * _dx + _dy * _dy);
-      if (_d > _worst) { _worst = _d; _at = _fx + ',' + _fy; }
-    }
-    global.__kkProbe = {
-      level: kkMap.getLevel(),                     // 카카오가 고른 정수 줌 레벨
-      vbW: +zoom.w.toFixed(1),                     // SVG viewBox 폭(연속값)
-      sx: +_sx.toFixed(4), sy: +_sy.toFixed(4),    // alignKakao 가 실제로 건 보정 배율
-      offPx: +_worst.toFixed(2),                   // 3×3 표본점 중 최대 어긋남(px)
-      at: _at                                      // 그 지점 (0,0=좌상단 · 1,1=우하단)
-    };
-  } catch (e) { global.__kkProbe = { error: String(e) }; }
-```
+⚠️ 판정은 **화면 잔차 px** 로 합니다. "요청 경도폭 대비 실제 경도폭" 비율은 고친 뒤에도
+첫 화면에서 2배 가까이 나옵니다 — `alignKakao` 가 카카오 줌 레벨을 바꾸는 게 아니라
+남는 차이를 CSS 변형으로 메우기 때문입니다. **그 비율을 기준으로 쓰면 멀쩡한 화면을
+불합격으로 읽습니다.**
 
-새로고침한 뒤 확대·드래그하면서 콘솔에서 `__kkProbe` 를 읽습니다.
-**보는 값은 `offPx` 하나입니다.** 모든 확대 단계에서 한 자릿수 px 를 넘지 않으면
-정상입니다(`00acdee` 실측: 수정 후 화면 어긋남 최대 1.7~7.4px · 수정 전 62~292px).
-
-⚠️ **보정 배율 `sx`·`sy` 가 1 이 아닌 것은 정상입니다.** 카카오는 정수 줌 레벨로만
-반응해서 `setBounds` 가 요청보다 항상 넓은 범위를 잡는데, `alignKakao` 는 그 레벨을
-바꾸는 게 아니라 남는 차이를 CSS 변형으로 메우기 때문입니다. 그래서 "요청 경도폭 대비
-실제 경도폭"(`getBounds()` 비율)은 고친 뒤에도 첫 화면에서 2배 가까이 나옵니다 —
-**그 비율을 합격 기준으로 쓰면 멀쩡한 화면을 불합격으로 읽습니다.**
-
-숫자와 별개로 눈으로도 봅니다. ① 지도를 천천히 크게 드래그했을 때 격자·읍면동 경계선과
-배경 건물·도로가 같은 속도로 밀리는가, ② 화성호 해안선이나 병점역 일대를 화면 중앙에
-두고 휠로 3~4단 확대할 때 SVG 해안선과 배경 해안선이 벌어졌다 붙었다 하지 않는가,
-③ 격자 하나를 클릭해 확대한 뒤 그 칸 안에 보이는 건물·단지가 카카오맵 본사이트에서 같은
-좌표를 찍었을 때와 같은 동네인가. 격자를 클릭한 `.zdetail` 상태에서는 SVG 육지·바다가
-투명해져 배경이 그대로 드러나므로 어긋남이 가장 잘 보입니다.
-
-**지도 좌표·축척 참고 수치.** 배경 정합이나 스케일바를 손으로 검산할 때 쓰는 값입니다.
-정본은 실서버 `/api/v1/meta` 이고 아래는 2026-08-13 응답 기준입니다.
+**지도 좌표·축척 참고 수치.** 정본은 실서버 `/api/v1/meta` 이고 아래는 2026-08-13 기준입니다.
 
 | 항목 | 값 |
 |---|---|
@@ -392,11 +371,9 @@ document.querySelector('.kakaomap-inner')                     // null 이 아니
 
 **폭을 960 으로 나누면 틀립니다.** `core.js` 의 투영은 사방에 `pad` 24 를 남기고 가로·세로
 중 빡빡한 쪽에 맞추는데, 화성시 bbox 는 가로가 지배해서 실제로 쓰이는 폭은 912 단위
-입니다 — 54,890 m ÷ 912 = 60.2 m 입니다.
+입니다 — 54,890 m ÷ 912 = 60.2 m 입니다. `index.html` 의 `viewBox="0 0 960 580"` 은
+폴백이고, 서버가 붙은 화면에서 실제로 쓰이는 값은 **960×640** 입니다.
 
-**`index.html` 의 `viewBox="0 0 960 580"` 은 폴백입니다.** `map.js` 는 `meta.map.viewBox` 를
-먼저 쓰고 없을 때만 이 값으로 떨어지므로, 서버가 붙은 화면에서 **실제로 쓰이는 값은
-960×640** 입니다. 정적 HTML 만 보고 세로를 580 으로 잡으면 어긋납니다.
 
 **브라우저 로컬 저장.** 시연 PC 를 초기화하려면 개발자도구 > Application > Local Storage 에서
 `hw.` 로 시작하는 키를 지우세요.
@@ -428,6 +405,7 @@ python3 tools/build-boundary.py
 | 문서 | 내용 |
 |---|---|
 | [docs/API.md](docs/API.md) | 프론트 렌더링 계약 + 설계 근거 |
+| [docs/KAKAO-VERIFY.md](docs/KAKAO-VERIFY.md) | 카카오 배경 정합 검증 런북 (회귀 확인용) |
 | [백엔드 docs/API_SPEC.md](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend/blob/main/docs/API_SPEC.md) | 엔드포인트 10개 계약 **(정본)** |
 | [백엔드 README](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend) | 산출 로직 · 사용 데이터 · 검증 · AI 보고서 프롬프트 |
 
