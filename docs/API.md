@@ -184,7 +184,7 @@ JSON 파싱이 안 되면 평문을 그대로 씁니다(`api.js`). 서버가 어
 |---|---|
 | 엔드포인트 · 응답 스키마 · 오류 코드 | 백엔드 `docs/API_SPEC.md` **(정본)** |
 | 산출 로직 수식 · 사용 데이터 · 검증 | 백엔드 `README.md` |
-| 설계 결정 근거 (DB 미채택 · 수단 게이트) | 백엔드 `docs/BACKEND.md` |
-| AI 보고서 프롬프트 · 품질 기준 | [AI-REPORT.md](AI-REPORT.md) |
-| 지도 좌표계 · 축척 · 카카오 배경 정합 | [KAKAO-SYNC.md](KAKAO-SYNC.md) |
+| 설계 결정 근거 (DB 미채택 · 소유권 분리) | 백엔드 `README.md` §8 |
+| AI 보고서 프롬프트 · 품질 기준 | 백엔드 `README.md` §6 |
+| 지도 좌표계 · 축척 · 카카오 배경 정합 계측 | 이 저장소 `README.md` §9 |
 | 프론트 설정 키 | `assets/js/config.js` |

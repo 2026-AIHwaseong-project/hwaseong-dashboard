@@ -317,6 +317,87 @@ AI 보고서 생성은 **반드시 백엔드에서** 호출합니다.
 (`config.js` 주석은 이 키의 허용 도메인이 `localhost:8000` 뿐이라고 적어 두었지만,
 실제로 확인해 보면 `:5500` 과 `file://` 에서도 타일이 정상 수신됩니다 — 주석 쪽이 낡았습니다.)
 
+**카카오 배경이 격자와 어긋나 보일 때.** 재기 전에 **배경이 실제로 살아 있는지부터**
+확인하세요. 타일이 5초 안에 안 오면 `map.js` 가 배경 div 를 걷어내고 SVG 단독 지도로
+남습니다(§7). 그 상태에서는 **어긋남이라는 것이 아예 존재하지 않으므로 측정 자체가
+무의미합니다.** 콘솔에서 둘 다 통과해야 측정에 들어갑니다.
+
+```js
+document.querySelector('#map').classList.contains('kkmode')   // true 여야 합니다
+document.querySelector('.kakaomap-inner')                     // null 이 아니어야 합니다
+```
+
+`false`·`null` 이면 어긋남이 아니라 타일 문제입니다 — `KAKAO.jsKey` 가 유효한지,
+카카오 개발자 콘솔의 플랫폼 > Web 사이트 도메인에 **지금 열고 있는 주소**가 등록돼
+있는지, 네트워크 탭에서 `dapi.kakao.com` 요청이 4xx 를 받지 않는지 보세요.
+
+**계측 훅은 임시로 넣었다 뺍니다.** 카카오 핸들 `kkMap` 은 `map.js` 클로저 안에 있고
+`HW.createMap()` 이 돌려주는 공개 API 에도 없어서 밖에서는 카카오 투영에 질문을 할 수
+없습니다. `map.js` 의 `syncKakao()` 에서 `alignKakao(sw, ne);` **바로 뒤**에 아래를
+끼우고, 측정이 끝나면 `git diff assets/js/map.js` 로 훅만 들어갔는지 본 뒤
+`git checkout assets/js/map.js` 로 되돌리세요.
+
+```js
+  /* [임시 계측] 배경 정합 잔차 — 측정이 끝나면 반드시 지웁니다 */
+  try {
+    var _proj = kkMap.getProjection();
+    var _t = global.getComputedStyle(kkInner).transform;   // .kakaomap-inner 는 transform-origin:0 0
+    var _m = (!_t || _t === 'none') ? [1, 0, 0, 1, 0, 0]
+      : _t.slice(_t.indexOf('(') + 1, -1).split(',').map(Number);
+    var _sx = _m[0], _sy = _m[3], _tx = _m[4], _ty = _m[5];
+    var _W = kkInner.clientWidth, _H = kkInner.clientHeight, _worst = 0, _at = '';
+    for (var _i = 0; _i < 3; _i++) for (var _j = 0; _j < 3; _j++) {
+      var _fx = _i / 2, _fy = _j / 2;
+      var _ll = C.unproject(zoom.x + zoom.w * _fx, zoom.y + zoom.h * _fy);
+      var _p = _proj.containerPointFromCoords(new global.kakao.maps.LatLng(_ll.lat, _ll.lon));
+      var _dx = (_tx + _sx * _p.x) - _W * _fx, _dy = (_ty + _sy * _p.y) - _H * _fy;
+      var _d = Math.sqrt(_dx * _dx + _dy * _dy);
+      if (_d > _worst) { _worst = _d; _at = _fx + ',' + _fy; }
+    }
+    global.__kkProbe = {
+      level: kkMap.getLevel(),                     // 카카오가 고른 정수 줌 레벨
+      vbW: +zoom.w.toFixed(1),                     // SVG viewBox 폭(연속값)
+      sx: +_sx.toFixed(4), sy: +_sy.toFixed(4),    // alignKakao 가 실제로 건 보정 배율
+      offPx: +_worst.toFixed(2),                   // 3×3 표본점 중 최대 어긋남(px)
+      at: _at                                      // 그 지점 (0,0=좌상단 · 1,1=우하단)
+    };
+  } catch (e) { global.__kkProbe = { error: String(e) }; }
+```
+
+새로고침한 뒤 확대·드래그하면서 콘솔에서 `__kkProbe` 를 읽습니다.
+**보는 값은 `offPx` 하나입니다.** 모든 확대 단계에서 한 자릿수 px 를 넘지 않으면
+정상입니다(`00acdee` 실측: 수정 후 화면 어긋남 최대 1.7~7.4px · 수정 전 62~292px).
+
+⚠️ **보정 배율 `sx`·`sy` 가 1 이 아닌 것은 정상입니다.** 카카오는 정수 줌 레벨로만
+반응해서 `setBounds` 가 요청보다 항상 넓은 범위를 잡는데, `alignKakao` 는 그 레벨을
+바꾸는 게 아니라 남는 차이를 CSS 변형으로 메우기 때문입니다. 그래서 "요청 경도폭 대비
+실제 경도폭"(`getBounds()` 비율)은 고친 뒤에도 첫 화면에서 2배 가까이 나옵니다 —
+**그 비율을 합격 기준으로 쓰면 멀쩡한 화면을 불합격으로 읽습니다.**
+
+숫자와 별개로 눈으로도 봅니다. ① 지도를 천천히 크게 드래그했을 때 격자·읍면동 경계선과
+배경 건물·도로가 같은 속도로 밀리는가, ② 화성호 해안선이나 병점역 일대를 화면 중앙에
+두고 휠로 3~4단 확대할 때 SVG 해안선과 배경 해안선이 벌어졌다 붙었다 하지 않는가,
+③ 격자 하나를 클릭해 확대한 뒤 그 칸 안에 보이는 건물·단지가 카카오맵 본사이트에서 같은
+좌표를 찍었을 때와 같은 동네인가. 격자를 클릭한 `.zdetail` 상태에서는 SVG 육지·바다가
+투명해져 배경이 그대로 드러나므로 어긋남이 가장 잘 보입니다.
+
+**지도 좌표·축척 참고 수치.** 배경 정합이나 스케일바를 손으로 검산할 때 쓰는 값입니다.
+정본은 실서버 `/api/v1/meta` 이고 아래는 2026-08-13 응답 기준입니다.
+
+| 항목 | 값 |
+|---|---|
+| `map.viewBox` | `[0, 0, 960, 640]` |
+| 전체 경도폭 | 0.61867° ≈ 54,890 m |
+| 1 SVG 사용자 단위 | ≈ 60.2 m (1km 격자 ≈ 16.6 단위) |
+
+**폭을 960 으로 나누면 틀립니다.** `core.js` 의 투영은 사방에 `pad` 24 를 남기고 가로·세로
+중 빡빡한 쪽에 맞추는데, 화성시 bbox 는 가로가 지배해서 실제로 쓰이는 폭은 912 단위
+입니다 — 54,890 m ÷ 912 = 60.2 m 입니다.
+
+**`index.html` 의 `viewBox="0 0 960 580"` 은 폴백입니다.** `map.js` 는 `meta.map.viewBox` 를
+먼저 쓰고 없을 때만 이 값으로 떨어지므로, 서버가 붙은 화면에서 **실제로 쓰이는 값은
+960×640** 입니다. 정적 HTML 만 보고 세로를 580 으로 잡으면 어긋납니다.
+
 **브라우저 로컬 저장.** 시연 PC 를 초기화하려면 개발자도구 > Application > Local Storage 에서
 `hw.` 로 시작하는 키를 지우세요.
 
@@ -346,15 +427,12 @@ python3 tools/build-boundary.py
 
 | 문서 | 내용 |
 |---|---|
-| [docs/API.md](docs/API.md) | 프론트 렌더링 계약 + 설계 근거 (엔드포인트 정본은 백엔드 `docs/API_SPEC.md`) |
-| [docs/AI-REPORT.md](docs/AI-REPORT.md) | AI 보고서 생성 규격 (서버 측 LLM 호출) |
-| [docs/KAKAO-SYNC.md](docs/KAKAO-SYNC.md) | 격자·카카오 배경 정합 — 계측 절차와 수정 이력 |
+| [docs/API.md](docs/API.md) | 프론트 렌더링 계약 + 설계 근거 |
+| [백엔드 docs/API_SPEC.md](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend/blob/main/docs/API_SPEC.md) | 엔드포인트 10개 계약 **(정본)** |
+| [백엔드 README](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend) | 산출 로직 · 사용 데이터 · 검증 · AI 보고서 프롬프트 |
 
 격자와 카카오 배경이 확대할수록 어긋나던 문제는 해결됐습니다.
 카카오는 정수 줌 레벨로만 반응하는데 SVG 확대는 연속값이라 최대 2배까지 벌어졌고,
 1,455% 확대에서 정류장 위치가 중앙값 890m 어긋났습니다(격자가 1km 인데).
 카카오 투영에 직접 물어 아핀을 맞추는 방식으로 **890m → 3m** 로 줄였습니다.
-회귀가 의심되면 `docs/KAKAO-SYNC.md` 의 계측 절차로 다시 재면 됩니다.
-
-`docs/AI-REPORT.md` 는 백엔드 최신 변경 반영이 밀려 있습니다(갱신 예정) — 서버는
-Claude·GPT·Gemini 3사를 지원하는데 그 문서는 Claude 단독 전제로 쓰여 있습니다.
+회귀가 의심되면 §9 의 계측 절차로 다시 재면 됩니다.
