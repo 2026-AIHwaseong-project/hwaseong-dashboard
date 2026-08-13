@@ -346,7 +346,7 @@ python3 tools/build-boundary.py
 
 | 문서 | 내용 |
 |---|---|
-| [docs/API.md](docs/API.md) | 프론트가 기대하는 응답 계약 (엔드포인트 정본은 백엔드 `docs/API_SPEC.md`) |
+| [docs/API.md](docs/API.md) | 프론트 렌더링 계약 + 설계 근거 (엔드포인트 정본은 백엔드 `docs/API_SPEC.md`) |
 | [docs/AI-REPORT.md](docs/AI-REPORT.md) | AI 보고서 생성 규격 (서버 측 LLM 호출) |
 | [docs/KAKAO-SYNC.md](docs/KAKAO-SYNC.md) | 격자·카카오 배경 정합 — 계측 절차와 수정 이력 |
 
@@ -356,4 +356,5 @@ python3 tools/build-boundary.py
 카카오 투영에 직접 물어 아핀을 맞추는 방식으로 **890m → 3m** 로 줄였습니다.
 회귀가 의심되면 `docs/KAKAO-SYNC.md` 의 계측 절차로 다시 재면 됩니다.
 
-`docs/API.md` 와 `docs/AI-REPORT.md` 는 백엔드 최신 변경 반영이 밀려 있습니다(갱신 예정).
+`docs/AI-REPORT.md` 는 백엔드 최신 변경 반영이 밀려 있습니다(갱신 예정) — 서버는
+Claude·GPT·Gemini 3사를 지원하는데 그 문서는 Claude 단독 전제로 쓰여 있습니다.
