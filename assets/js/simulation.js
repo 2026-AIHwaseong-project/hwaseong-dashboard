@@ -721,6 +721,10 @@
     if (!b) return;
     var has = S.placements.length > 0;
 
+    /* dashboard.js 와 같은 버그 — 부팅 자리표시자의 .pending(opacity:.4) 이
+       innerHTML 교체로는 안 벗겨집니다(class 는 안 건드리므로). 여기서 한 번에 뗍니다. */
+    $$('.kpi .vl.pending').forEach(function (el) { el.classList.remove('pending'); });
+
     kpiTile('k1', fmt(b.kpi.needCells), '개',
       has ? b.delta.needCells : null, '개',
       '기준선 ' + fmt(b.baseline.needCells) + '개');
@@ -858,7 +862,7 @@
 
     P.forEach(function (p, i) {
       var cx = CM.l + step * i + step / 2;
-      /* 2px 간격을 두고 나란히 — 기준선(왼쪽, 고스트) / 시나리오(오른쪽, 채움) */
+      /* 2px 간격을 두고 나란히 — 기준선(왼쪽, 빨강) / 시나리오(오른쪽, 파랑) */
       var xb = cx - bw - 1, xs = cx + 1;
       var hb = yOf(p.baseline.needCells), hs = yOf(p.kpi.needCells);
 

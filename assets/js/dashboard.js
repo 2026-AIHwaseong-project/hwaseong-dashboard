@@ -191,6 +191,11 @@
   function paintKpi() {
     var k = S.grid.kpi;
     var top = S.priorities && S.priorities.items[0];
+    /* 부팅 자리표시자 '–' 에 준 .pending(흐리게, opacity:.4) 이 실제 값이 들어온
+       뒤에도 안 벗겨졌습니다 — innerHTML 교체는 텍스트만 바꿀 뿐 class 는
+       그대로 두는데, "innerHTML 교체로 자동 해제된다"고 잘못 가정했던 것입니다.
+       실측: 값이 '30개'로 다 채워진 뒤에도 opacity 0.4 로 흐리게 남아 있었습니다. */
+    $$('.kpi .vl.pending').forEach(function (el) { el.classList.remove('pending'); });
     $('#k1').innerHTML = fmt(k.needCells) + '<small>개</small>';
     $('#k1s').textContent = '전체 ' + fmt(k.totalCells) + '개 중 ' + k.needShare + '%' +
       (top ? ' · 최우선 ' + top.name : '');

@@ -484,7 +484,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .dl2{fill:var(--ink2);font-size:10px;font-family:Consolas,ui-monospace,monospace}
 .keys{display:flex;gap:12px;align-items:center;font-size:11px;color:var(--ink2);flex-wrap:wrap}
 .keys i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
-.keys i.ghost{background:transparent;border:1.5px solid var(--bad);border-radius:2px}
+.keys i.ghost{background:var(--bad);border-radius:2px}
 .stsel{font:inherit;font-size:12px;color:var(--ink);background:var(--card);border:1px solid var(--line);
   border-radius:7px;padding:4px 8px;max-width:170px}
 .stpick{display:flex;gap:6px;align-items:center;margin-left:auto}
@@ -496,10 +496,12 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
    뒤집힙니다 — 제목 15px 아래로 내립니다. */
 .ststats b{font-size:13px;font-weight:650;margin-left:5px;color:var(--ink)}
 
-/* 비교 차트: 기준선 = 고스트(외곽선), 시나리오 = 채움 — 모양으로 구분하고,
-   그 위에 색으로 배치 전(빨강)·배치 후(파랑)를 한 번 더 대비시킵니다.
-   흐려서 비교가 잘 안 된다는 제보로 --ink3 대신 --bad, 굵기도 올렸습니다. */
-.cmp-base{fill:none;stroke:var(--bad);stroke-width:2;stroke-dasharray:3 2}
+/* 비교 차트: 기준선(배치 전) = 빨강 채움, 시나리오(배치 후) = 파랑 채움.
+   한때 기준선을 고스트(점선 외곽선)로 그려 모양으로 구분했는데, 옅어서
+   비교가 잘 안 된다는 제보로 그만두고 색으로만 확실히 대비시킵니다.
+   두 막대는 2px 간격을 두고 나란히 그려지므로(barUp 호출부 참고) 채워도
+   서로 가리지 않습니다. */
+.cmp-base{fill:var(--bad)}
 .cmp-sim{fill:var(--c-board)}
 .cmp-sim.worse{fill:var(--bad)}
 .cmp-lab{fill:var(--ink2);font-size:10px;font-family:Consolas,ui-monospace,monospace}
