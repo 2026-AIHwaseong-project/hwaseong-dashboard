@@ -1066,6 +1066,14 @@
     C.toast('시나리오 <b>' + esc(S.name) + '</b> 을(를) 저장했습니다.');
   }
 
+  /* 시나리오는 저장 당시의 period id('am' 등)만 들고 있습니다. 목록 카드에서
+     "이게 출근인지 퇴근인지"를 이름만 보고는 알 수 없었습니다 — 표시용 이름은
+     meta 에서 그때그때 찾습니다(예전 저장본이라 meta 에 없는 id 면 원래 값 그대로). */
+  function periodName(pid) {
+    var p = ((S.meta && S.meta.periods) || []).filter(function (x) { return x.id === pid; })[0];
+    return p ? p.name : (pid || '–');
+  }
+
   function renderScenarioList() {
     var list = loadScenarios();
     var host = $('#scenList');
@@ -1081,6 +1089,7 @@
         '<button class="sload" data-load="' + i + '" type="button" title="' + esc(s.name) + '">' +
         '<span class="snm">' + esc(s.name) + '</span>' +
         '<span class="smeta"><span>' + esc(s.savedAt) + '</span>' +
+        '<span>' + esc(periodName(s.period)) + '</span>' +
         '<span>배치 ' + (s.placements || []).length + '건</span>' +
         '<span>' + esc(won(su.costKrw)) + '</span>' +
         '<span>' + (su.needDelta < 0 ? '사각지대 −' + Math.abs(su.needDelta) + '개' : '변화 없음') + '</span>' +

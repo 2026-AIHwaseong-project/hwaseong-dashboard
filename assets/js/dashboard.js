@@ -881,6 +881,14 @@
     $('#tgRoute').addEventListener('click', function (e) {
       var on = e.currentTarget.classList.toggle('on');
       e.currentTarget.setAttribute('aria-pressed', String(on));
+      /* 격자를 찍어 둔 채로 켜면 map.js 의 renderRoutes 가 여전히 그 격자로만
+         제한합니다(cellFocus 가 showRoutes 보다 우선 판정됨) — "전체"를 눌러도
+         그 칸 밖은 안 보였습니다. 격자 초점을 풀어야 이름대로 전체가 뜹니다.
+         (지역 검색이 넓혀 볼 때 쓰는 것과 같은 처리 — wireMapSearch 참고.) */
+      if (on && S.map.getCellFocus()) {
+        S.map.setCellFocus(null);
+        renderCellRoutes(null);
+      }
       S.map.setShowRoutes(on);
     });
     $('#tgLabel').addEventListener('click', function (e) {

@@ -186,10 +186,21 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .dashgrid .sidecard{grid-row:1 / span 2}
 /* 시뮬레이션에는 .routecard 가 없어 사이드카드가 지도 높이(1440px 에서 945px)만큼
    늘어나는데 내용은 448px 에서 끝납니다 — 500px 가까이가 빈 상자로 남습니다.
-   내용 높이로 두고, 대신 붙여 둡니다. 격자를 클릭하며 예산·배치 목록을 확인하는
-   화면이라 지도를 훑는 동안 그 패널이 화면에 남아 있어야 맞습니다.
-   상단바(.topnav)가 sticky top:0 이라 그 아래로 내려 겹치지 않게 합니다. */
-.simgrid .sidecard{align-self:start;position:sticky;top:58px}
+   align-self:start 로 내용 높이만 차지하게 둡니다.
+
+   한때 position:sticky 도 같이 걸어 "지도를 훑는 동안 패널이 화면에 남는다"를
+   노렸는데, 실측해 보니 CSS Grid 에서 sticky 의 기준 상자는 그 아이템의
+   행(row)이 아니라 그리드 컨테이너 전체입니다 — .simgrid 는 3행(지도+사이드바 ·
+   비교+비용 · 정책요약)인데 사이드바가 1행을 지나 3행 끝까지 화면에 눌어붙어
+   있었습니다. AI 추천에 배치를 여러 건 더하면(항목당 ~28px) 내용이 지도보다
+   커지는데, 그러면 붙어 있는 카드가 스크롤할수록 아래 '수단별 소요액'을 최대
+   886px 까지 뒤덮었습니다(실측, AI 추천 10건 기준) — max-height 로 카드 자신의
+   키를 뷰포트 안으로 눌러도 sticky 기준 상자 자체가 3행 전체라 소용없었습니다.
+   행 하나만을 위한 sticky 를 CSS Grid 만으로 만들려면 그 행을 별도 컨테이너로
+   떼어내야 하는데, 배보다 배꼽이 큽니다 — sticky 를 걷어내고 카드 자체 높이만
+   뷰포트로 눌러 내부 스크롤시킵니다(스크롤을 따라다니는 대신 늘 뷰포트 안에는
+   담깁니다). */
+.simgrid .sidecard{align-self:start;max-height:calc(100vh - 72px);overflow-y:auto}
 .sc-card{grid-column:span 5}
 .st-card{grid-column:span 7}
 .chead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px 14px 8px;flex-wrap:wrap}
