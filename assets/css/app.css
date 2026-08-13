@@ -31,10 +31,10 @@
 /* ---------------------------------------------------------------- 1. 토큰 */
 :root{
   color-scheme:light;
-  --bg:#f9f9f7; --card:#fcfcfb; --line:rgba(11,11,11,.10); --grid:#e1e0d9; --axis:#c3c2b7;
-  --ink:#0b0b0b; --ink2:#52514e; --ink3:#6f6d67;   /* 3.50:1 → 4.9:1 (AA) */
-  --sel:#4a3aa7; --selbg:rgba(74,58,167,.10);
-  --water:#dde5ee; --land:#eeede7; --coast:#9aa4b0;
+  --bg:#e8edf2; --card:#fcfcfb; --line:rgba(11,11,11,.10); --grid:#e1e0d9; --axis:#c3c2b7;
+  --ink:#22334d; --ink2:#4a5568; --ink3:#566478;   /* 배경 #e8edf2 위 5.0:1 (AA) */
+  --sel:#4a6fa5; --selbg:rgba(74,111,165,.12);
+  --water:#d3dde9; --land:#eeede7; --coast:#9aa4b0;
   /* 미스매칭 MI: 발산형(파랑 ← 중립 → 빨강). 중간값은 반드시 무채색. */
   --mi0:#1c5cab; --mi1:#5598e7; --mi2:#9ec5f4; --mi3:#e9e7e0; --mi4:#f3a68f; --mi5:#e2604f; --mi6:#a62b28;
   /* 수요/유동인구: 단일 색상 순차형(파랑) */
@@ -93,10 +93,10 @@
 }
 :root[data-theme="light"]{
   color-scheme:light;
-  --bg:#f9f9f7; --card:#fcfcfb; --line:rgba(11,11,11,.10); --grid:#e1e0d9; --axis:#c3c2b7;
-  --ink:#0b0b0b; --ink2:#52514e; --ink3:#6f6d67;
-  --sel:#4a3aa7; --selbg:rgba(74,58,167,.10);
-  --water:#dde5ee; --land:#eeede7; --coast:#9aa4b0;
+  --bg:#e8edf2; --card:#fcfcfb; --line:rgba(11,11,11,.10); --grid:#e1e0d9; --axis:#c3c2b7;
+  --ink:#22334d; --ink2:#4a5568; --ink3:#566478;
+  --sel:#4a6fa5; --selbg:rgba(74,111,165,.12);
+  --water:#d3dde9; --land:#eeede7; --coast:#9aa4b0;
   --mi0:#1c5cab; --mi1:#5598e7; --mi2:#9ec5f4; --mi3:#e9e7e0; --mi4:#f3a68f; --mi5:#e2604f; --mi6:#a62b28;
   --sb0:#dcebfb; --sb1:#9ec5f4; --sb2:#5598e7; --sb3:#2a78d6; --sb4:#184f95;
   --so0:#fbe4d4; --so1:#f5b98f; --so2:#ec8c50; --so3:#d95926; --so4:#9c3a12;
@@ -938,7 +938,7 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 
 /* ===========================================================================
  * [22] 다크모드 대비 보정
- *   --sel 은 라이트에서 진한 보라(#4a3aa7), 다크에서 밝은 라벤더(#9085e9)입니다.
+ *   --sel 은 라이트에서 스틸 블루(#4a6fa5), 다크에서 밝은 라벤더(#9085e9)입니다.
  *   그 위에 흰 글자를 고정해 두면 다크에서 대비가 3.13:1 까지 떨어집니다
  *   (WCAG AA 기준 4.5:1). 밝은 배경에는 어두운 글자를 얹어야 합니다.
  *   기존 규칙은 건드리지 않고 다크에서만 글자색을 덮어씁니다. → 6.03:1
