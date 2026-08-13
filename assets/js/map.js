@@ -60,6 +60,7 @@
        갈라져 보인다. */
     var MIN_W = W / (120 * Z_SCALE);    // 확대 한도 — 1km: 120배 · 500m: 240배
     var ZDETAIL_K = 10 * Z_SCALE;       // 정류장 이름이 드러나는 배율
+    var animTargetW = null;
     var zoomAnim = null;
 
     /* 격자를 클릭했을 때 화면 가로에 담을 격자 수. 셀 실크기(cellRect)에서
@@ -102,9 +103,9 @@
       showLabels: true,
       cellFocus: null,         // 이 격자에 걸린 정류장·노선만 그린다 (null = 필터 없음)
       zdetail: false,          // 10배 이상 확대 — 이때만 정류장 이름을 DOM 에 만듭니다
-      areaMode: false,         // 드래그로 분석 영역을 지정하는 중인지
+      areaMode: false,         // 영역을 고르는 중인지
+      areaDraft: null,         // 고르는 중인 격자 ID Set (확정 전)
       area: null,              // 영역 안 격자 ID Set (null = 화성시 전체)
-      areaBox: null,           // 영역 사각형 {x,y,w,h} (SVG 좌표)
       stopsInteractive: true,
       armed: false
     };
@@ -643,8 +644,13 @@
         if (!c) return;
         var cls = 'c ' + L.prefix + binOf(c, L.key);
         if (elig) cls += elig.has(id) ? ' elig' : ' inelig';
-        /* 분석 영역을 정했으면 밖의 칸은 뒤로 물립니다 */
-        if (state.area && !state.area.has(id)) cls += ' outarea';
+        /* 지정 중에는 고른 칸을 또렷하게, 확정 뒤에는 영역 밖을 물립니다.
+           아직 하나도 안 골랐으면 지도를 그대로 보여 줘야 고를 수 있습니다. */
+        var pick = null, isDraft = false;
+        if (state.areaMode) {
+          if (state.areaDraft && state.areaDraft.size) { pick = state.areaDraft; isDraft = true; }
+        } else if (state.area) pick = state.area;
+        if (pick) cls += pick.has(id) ? (isDraft ? ' indraft' : '') : ' outarea';
         rect.setAttribute('class', cls);
       });
       renderLegend();
@@ -878,7 +884,14 @@
       var r = e.target.closest('rect');
       if (!r) return;
       var c = state.byId[r.getAttribute('data-id')];
-      if (c && opt.onCellClick) opt.onCellClick(c, e);
+      if (!c) return;
+      /* 영역을 고르는 중에는 클릭이 '배치'가 아니라 '이 칸 넣기/빼기' 입니다 */
+      if (state.areaMode) {
+        if (areaDragged) { areaDragged = false; return; }   /* 드래그 끝의 클릭은 무시 */
+        toggleDraftCell(c.id);
+        return;
+      }
+      if (opt.onCellClick) opt.onCellClick(c, e);
     });
 
     /* ── 정류장 히트 판정 ──────────────────────────────────────────────
@@ -1013,7 +1026,12 @@
          들여다보고 다시 축소했을 때, 화면은 전체인데 노선·정류장은 그 격자
          하나로만 남아 켜 둔 '전체'가 사라진 것처럼 보였다. 손으로 축소해도
          전체 배율까지 돌아오면 zoomReset 과 같은 처리를 한다. */
-      if (!isZoomed() && state.cellFocus) {
+      /* ⚠️ '지금 배율'로 판단하면 안 된다. 격자를 클릭해 확대할 때 첫 프레임은
+         아직 전체 배율이라, 방금 설정한 cellFocus 를 그 자리에서 지워 버린다
+         (같은 격자 재클릭 해제가 한 박자씩 밀리던 원인). 애니메이션 중에는
+         '가려는 배율'로 판단한다. */
+      var wGoal = (zoomAnim && animTargetW != null) ? animTargetW : zoom.w;
+      if (wGoal >= W - 0.5 && state.cellFocus) {
         state.cellFocus = null;
         renderRoutes();
         if (opt.onExitCellFocus) opt.onExitCellFocus();
@@ -1036,6 +1054,7 @@
 
     function animateTo(t) {
       if (zoomAnim) cancelAnimationFrame(zoomAnim);
+      animTargetW = t.w;
       var reduce = global.matchMedia &&
         global.matchMedia('(prefers-reduced-motion: reduce)').matches;
       /* 백그라운드 탭에서는 requestAnimationFrame 이 멈춥니다. 애니메이션으로
@@ -1055,6 +1074,7 @@
           w: from.w + (t.w - from.w) * k, h: from.h + (t.h - from.h) * k
         };
         applyZoom();
+        if (k >= 1) animTargetW = null;
         zoomAnim = k < 1 ? requestAnimationFrame(step) : null;
       }
       zoomAnim = requestAnimationFrame(step);
@@ -1157,25 +1177,45 @@
       el.setAttribute('class', dragging ? 'area-box dragging' : 'area-box');
       gArea.setAttribute('visibility', 'visible');
     }
-    /** 사각형 안(중심점 기준)에 든 격자를 영역으로 잡습니다 */
-    function commitArea(box) {
-      var ids = new Set();
+    function draftChanged() {
+      paint();
+      if (opt.onAreaDraft) opt.onAreaDraft(state.areaDraft ? state.areaDraft.size : 0);
+    }
+    /** 사각형 안(중심점 기준)에 든 격자를 고른 목록에 더합니다 (덮어쓰지 않습니다) */
+    function addBoxToDraft(box) {
+      if (!state.areaDraft) state.areaDraft = new Set();
       state.cells.forEach(function (c) {
         var r = cellRect(c);
         var mx = r.x + (r.w - CELL_OV) / 2, my = r.y + (r.h - CELL_OV) / 2;
-        if (mx >= box.x && mx <= box.x + box.w && my >= box.y && my <= box.y + box.h) ids.add(c.id);
+        if (mx >= box.x && mx <= box.x + box.w &&
+            my >= box.y && my <= box.y + box.h) state.areaDraft.add(c.id);
       });
-      if (!ids.size) { clearArea(); return; }
-      state.area = ids; state.areaBox = box;
-      drawArea(box, false);
+      draftChanged();
+    }
+    /** 격자 하나를 넣고 빼기 — 드래그로 잘못 들어온 칸을 고칠 때 씁니다 */
+    function toggleDraftCell(id) {
+      if (!state.areaDraft) state.areaDraft = new Set();
+      if (state.areaDraft.has(id)) state.areaDraft.delete(id);
+      else state.areaDraft.add(id);
+      draftChanged();
+    }
+    /** [지정 완료] — 고른 목록을 분석 영역으로 확정합니다 */
+    function commitArea() {
+      var ids = state.areaDraft;
+      state.areaDraft = null;
+      state.areaMode = false;
+      svg.classList.remove('areamode');
+      gArea.setAttribute('visibility', 'hidden');
+      if (!ids || !ids.size) { clearArea(); return; }
+      state.area = ids;
       paint();
-      if (opt.onAreaChange) opt.onAreaChange(ids, box);
+      if (opt.onAreaChange) opt.onAreaChange(ids);
     }
     function clearArea() {
-      state.area = null; state.areaBox = null;
+      state.area = null; state.areaDraft = null;
       gArea.setAttribute('visibility', 'hidden');
       paint();
-      if (opt.onAreaChange) opt.onAreaChange(null, null);
+      if (opt.onAreaChange) opt.onAreaChange(null);
     }
 
     /* 드래그 = 이동. 4px 미만 움직임은 클릭으로 취급해 배치·선택을 방해하지 않습니다 */
@@ -1183,6 +1223,10 @@
     svg.addEventListener('pointerdown', function (e) {
       if (e.button !== 0) return;
       if (state.areaMode) {
+        /* 새 제스처가 시작되면 '드래그 뒤 클릭 무시' 를 풉니다. click 이 온 뒤에만
+           풀면, 드래그가 격자 밖에서 끝나 click 이 안 오는 경우 다음 클릭 한 번을
+           통째로 삼킵니다. */
+        areaDragged = false;
         var p = toSvgXY(e);
         band = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
         drawArea(normBand(band), true);
@@ -1213,17 +1257,16 @@
       zoom = clampBox(pan.x - dx / r.width * zoom.w, pan.y - dy / r.height * zoom.h, zoom.w);
       applyZoom();
     });
+    var areaDragged = false;
     function endBand() {
       if (!band) return false;
       var box = normBand(band);
       band = null;
-      /* 살짝 눌린 정도면 취소 — 실수로 영역이 통째로 바뀌지 않게 */
-      if (box.w < zoom.w * 0.01 || box.h < zoom.h * 0.01) {
-        if (state.areaBox) drawArea(state.areaBox, false);
-        else gArea.setAttribute('visibility', 'hidden');
-        return true;
-      }
-      commitArea(box);
+      gArea.setAttribute('visibility', 'hidden');
+      /* 살짝 눌린 정도면 드래그가 아니라 클릭입니다 — 격자 클릭 처리에 맡깁니다 */
+      if (box.w < zoom.w * 0.01 || box.h < zoom.h * 0.01) return true;
+      areaDragged = true;            /* 뒤따르는 click 이 칸을 도로 빼지 않게 */
+      addBoxToDraft(box);
       return true;
     }
     svg.addEventListener('pointerup', function () {
@@ -1338,10 +1381,16 @@
       setAreaMode: function (v) {
         state.areaMode = !!v;
         svg.classList.toggle('areamode', !!v);
+        /* 지정을 시작하면 지금 영역에서 이어서 고칠 수 있게 그대로 물려받고,
+           취소하면 고르던 것을 버립니다(확정된 영역은 그대로 둡니다). */
+        state.areaDraft = v ? new Set(state.area || []) : null;
+        if (!v) gArea.setAttribute('visibility', 'hidden');
+        draftChanged();
       },
+      commitArea: commitArea,
       clearArea: clearArea,
       area: function () { return state.area; },
-      areaBox: function () { return state.areaBox; },
+      areaDraftSize: function () { return state.areaDraft ? state.areaDraft.size : 0; },
       defaultCellTip: defaultCellTip,
       /** 읍면동으로 확대 / 정류장·격자 중심 이동 / 전체 복귀 / 확대 여부 */
       zoomToRegion: zoomToRegion,

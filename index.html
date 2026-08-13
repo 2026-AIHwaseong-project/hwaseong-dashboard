@@ -81,11 +81,19 @@
           <button class="tbtn" id="tgRoute" type="button" aria-pressed="false">노선·정류장 전체</button>
           <button class="tbtn on" id="tgLabel" type="button" aria-pressed="true">지명</button>
         </div>
-        <!-- 읍면동 이름으로 그 권역을 확대·강조하거나, 우선순위 표에서 본
-             격자 ID(예: 다사6707)를 그대로 넣어 그 칸으로 바로 파고듭니다. -->
+        <!-- 지도에서 찾는 세 가지를 한 칸에서 받습니다 — 읍면동 이름, 우선순위 표에
+             나오는 격자 ID(예: 다사6707), 정류장 이름. 셋 다 "지도에서 찾기"라
+             사용자가 무엇인지 먼저 분류하게 만들 이유가 없습니다. -->
         <div class="msearch">
           <input id="regionSearch" class="msi" type="search" list="regionList" autocomplete="off"
-                 placeholder="지역·격자 검색" aria-label="읍면동 이름 또는 격자 ID로 지도에서 찾기">
+                 placeholder="지역 · 격자 · 정류장 검색"
+                 aria-label="읍면동 이름, 격자 ID, 정류장 이름으로 지도에서 찾기">
+          <!-- 돋보기. 입력칸 안에 겹쳐 두므로 글자를 쳐도 사라지지 않습니다
+               (placeholder 에 넣으면 첫 글자를 치는 순간 없어집니다).
+               색은 토큰을 쓰므로 다크 모드에서도 알아서 맞습니다. -->
+          <svg class="msi-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <circle cx="6.8" cy="6.8" r="4.3"/><path d="M10 10 L14 14"/>
+          </svg>
           <datalist id="regionList"></datalist>
           <button class="tbtn" id="regionGo" type="button">찾기</button>
         </div>
@@ -148,9 +156,9 @@
           <span><i style="background:var(--c-board)"></i>승차</span>
           <span><i style="background:var(--c-alight)"></i>하차</span>
         </div>
+        <!-- 검색은 지도 카드의 통합 검색으로 옮겼습니다. 여기 목록은 검색 결과
+             안에서 방향(상·하행)처럼 같은 이름의 다른 정류장을 고를 때 씁니다. -->
         <div class="stpick">
-          <input class="stsearch" id="stopSearch" type="search" placeholder="🔍 정류장 검색"
-                 aria-label="정류장 이름 검색">
           <select class="stsel" id="stopSelect" aria-label="정류장 선택"></select>
         </div>
       </div>

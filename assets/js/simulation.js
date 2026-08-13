@@ -165,6 +165,7 @@
         showRoutes: false,
         onClearFocus: function () { S.map.setEligible(null); },
         onAreaChange: onAreaChange,
+        onAreaDraft: onAreaDraft,
         onCellClick: onCellClick,
         onCellHover: function (cell, ev) { C.showTip(cellTip(cell), ev); },
         /* 정류장을 눌러도 그 정류장이 놓인 격자에 배치됩니다.
@@ -304,8 +305,8 @@
     $('#scenName').addEventListener('input', function () { S.name = this.value || '이름 없는 시나리오'; });
   }
 
-  /** 지도에서 영역이 정해지거나 풀렸을 때 */
-  function onAreaChange(ids, box) {
+  /** [지정 완료] 로 영역이 확정되거나 해제됐을 때 */
+  function onAreaChange(ids) {
     S.area = ids;
     setAreaMode(false);
     $('#btnAreaClear').hidden = !ids;
@@ -335,11 +336,21 @@
     if (!b) return;
     b.classList.toggle('on', !!on);
     b.setAttribute('aria-pressed', String(!!on));
-    b.textContent = on ? '영역 지정 중…' : '영역 지정';
+    /* 지정 중에는 이 버튼이 '취소' 가 됩니다 — 확정은 [지정 완료] 가 합니다 */
+    b.textContent = on ? '취소' : '영역 지정';
+    $('#btnAreaDone').hidden = !on;
     S.map.setAreaMode(!!on);
     $('#simhint').textContent = on
-      ? '지도에서 사각형을 끌어 분석할 범위를 정하세요. 그 안에서만 배치하고, 그 안의 결과만 집계합니다.'
+      ? '끌어서 여러 칸을 한 번에, 격자를 눌러 한 칸씩 넣고 뺄 수 있습니다. 다 고르면 [지정 완료]를 누르세요.'
       : '수단을 고른 뒤 지도를 클릭하면 배치되고, KPI가 기준선 대비 즉시 재계산됩니다.';
+  }
+
+  /** 고르는 중에 개수를 버튼에 실시간으로 보여 줍니다 */
+  function onAreaDraft(n) {
+    var b = $('#btnAreaDone');
+    if (!b) return;
+    b.textContent = n ? ('지정 완료 · ' + n + '칸') : '지정 완료';
+    b.disabled = !n;
   }
 
   /** 지금 어느 범위를 보고 있는지 추천 칩 옆에 함께 알립니다 */
@@ -1242,6 +1253,7 @@
     $('#btnArea').addEventListener('click', function () {
       setAreaMode(!$('#btnArea').classList.contains('on'));
     });
+    $('#btnAreaDone').addEventListener('click', function () { S.map.commitArea(); });
     $('#btnAreaClear').addEventListener('click', function () { S.map.clearArea(); });
     $('#btnReset').addEventListener('click', resetAll);
     /* 직접 바인딩하면 MouseEvent 가 strategy 인자로 들어가 전략이 초기화됩니다 */
