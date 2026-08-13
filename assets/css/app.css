@@ -186,7 +186,25 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .dashgrid .sidecard{grid-row:1 / span 2}
 /* 시뮬레이션에는 .routecard 가 없어 사이드카드가 지도 높이(1440px 에서 945px)만큼
    늘어나는데 내용은 448px 에서 끝납니다 — 500px 가까이가 빈 상자로 남습니다.
-   align-self:start 로 내용 높이만 차지하게 둡니다.
+   한때 align-self:start 로 내용 높이만 차지하게 뒀는데, 그러면 반대로 지도보다
+   짧을 때 지도 카드 옆(수단별 소요액 위)에 빈 캔버스가 남습니다 — 오른쪽 열이
+   먼저 끝나 버리는 모양입니다. 제보로 사이드카드가 늘 지도와 같은 높이로
+   끝나야 합니다 — 내용이 짧으면 그 안이 비어도 되고(오른쪽 열의 경계가 지도와
+   나란해지는 게 우선), 내용이 지도보다 길면 카드 밖으로 안 넘치고 안에서만
+   스크롤해야 합니다.
+
+   CSS 만으로는 못 만듭니다. align-self:stretch(기본값) + min-height:0 +
+   overflow:auto 조합을 실측해 봤는데, min-height:0 은 '이미 정해진 높이보다
+   작아지는 것'만 허용할 뿐 auto 트랙 자체의 크기 계산(=애초에 얼마나 커야
+   하는지)에서 사이드카드의 내용을 빼주지는 않습니다. 배치를 여러 건 추가하니
+   행이 그대로 982 → 1198px 로 늘어났습니다(카드 안이 아니라 행 전체가 늘어나
+   '수단별 소요액'을 밀어냄 — 스크롤은 한 번도 안 걸렸습니다).
+   그래서 높이는 simulation.js 의 syncSideHeight() 가 지도 카드의 실측 높이를
+   재서 인라인 style.height 로 직접 입힙니다(ResizeObserver 로 지도 카드
+   크기 변화 — 저장 시나리오 증가·창 크기 변경 — 를 계속 따라갑니다). 여기
+   overflow-y:auto 는 그렇게 입혀진 고정 높이 안에서 넘치는 내용을 스크롤시키는
+   역할만 합니다. 881px 미만(app.css @media)처럼 한 줄로 쌓이는 폭에서는
+   syncSideHeight 가 스스로 높이를 비웁니다(맞출 지도가 옆에 없으므로).
 
    한때 position:sticky 도 같이 걸어 "지도를 훑는 동안 패널이 화면에 남는다"를
    노렸는데, 실측해 보니 CSS Grid 에서 sticky 의 기준 상자는 그 아이템의
@@ -194,13 +212,10 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
    비교+비용 · 정책요약)인데 사이드바가 1행을 지나 3행 끝까지 화면에 눌어붙어
    있었습니다. AI 추천에 배치를 여러 건 더하면(항목당 ~28px) 내용이 지도보다
    커지는데, 그러면 붙어 있는 카드가 스크롤할수록 아래 '수단별 소요액'을 최대
-   886px 까지 뒤덮었습니다(실측, AI 추천 10건 기준) — max-height 로 카드 자신의
-   키를 뷰포트 안으로 눌러도 sticky 기준 상자 자체가 3행 전체라 소용없었습니다.
-   행 하나만을 위한 sticky 를 CSS Grid 만으로 만들려면 그 행을 별도 컨테이너로
-   떼어내야 하는데, 배보다 배꼽이 큽니다 — sticky 를 걷어내고 카드 자체 높이만
-   뷰포트로 눌러 내부 스크롤시킵니다(스크롤을 따라다니는 대신 늘 뷰포트 안에는
-   담깁니다). */
-.simgrid .sidecard{align-self:start;max-height:calc(100vh - 72px);overflow-y:auto}
+   886px 까지 뒤덮었습니다(실측, AI 추천 10건 기준). 행 하나만을 위한 sticky 를
+   CSS Grid 만으로 만들려면 그 행을 별도 컨테이너로 떼어내야 해서 배보다
+   배꼽이 큽니다 — 다시 시도하지 않습니다. */
+.simgrid .sidecard{overflow-y:auto}
 .sc-card{grid-column:span 5}
 .st-card{grid-column:span 7}
 .chead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px 14px 8px;flex-wrap:wrap}

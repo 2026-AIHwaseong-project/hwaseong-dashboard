@@ -179,6 +179,8 @@
       S.map.setData({ stops: r[0].stops, routes: r[1].routes, cells: r[2].cells, scale: r[2].scale });
       wireControls();
       renderScenarioList();
+      syncSideHeight();
+      wireSideHeightSync();
 
       var cellId = q.get('cell');
       if (cellId) {
@@ -199,6 +201,44 @@
       paintRecScope();
       return runSim();
     }).catch(fail);
+  }
+
+  /* 사이드카드(시나리오 패널) 높이를 지도 카드에 맞춥니다 — CSS 만으로는 안 됩니다.
+     그리드의 auto 행 높이는 두 아이템의 내용을 다 고려해서 정해지므로, 사이드카드가
+     지도보다 길어지면 min-height:0 + overflow:auto 를 걸어도 행 자체가 그만큼
+     늘어나 버립니다(실측: 배치 여러 건 추가 시 행이 982 → 1198px 로 그대로 늘어남 —
+     사이드카드 안에서 넘치는 게 아니라 행 전체가 커져 '수단별 소요액' 이 밀려납니다).
+     지도 높이를 직접 재서 입혀야 행이 지도 크기에 묶이고, 사이드카드는 그 안에서만
+     (overflow-y:auto) 넘칩니다. */
+  function syncSideHeight() {
+    var map = $('.mapcard'), side = $('.sidecard');
+    if (!map || !side) return;
+    var mapTop = map.getBoundingClientRect().top;
+    var sideTop = side.getBoundingClientRect().top;
+    /* 881px 미만은 한 줄로 쌓여 사이드카드가 지도 옆이 아니라 아래로 옵니다
+       (app.css @media max-width:1020px/880px). 같은 줄이 아니면(top 이 다르면)
+       맞출 대상이 없으므로 원래 높이(내용 높이)로 둡니다. */
+    if (Math.abs(mapTop - sideTop) > 1) { side.style.height = ''; return; }
+    side.style.height = map.getBoundingClientRect().height + 'px';
+  }
+
+  /* 지도 카드 크기가 바뀔 때마다(저장 시나리오가 늘어 지도 카드가 길어지거나,
+     창 크기가 바뀌어 지도 SVG 의 높이가 달라지거나) 다시 맞춥니다. 사이드카드
+     자신의 내용이 느는 것은 신경 쓰지 않습니다 — 그건 고정된 높이 안에서
+     overflow-y:auto 가 알아서 스크롤시킵니다. */
+  function wireSideHeightSync() {
+    var map = $('.mapcard');
+    if (!map) return;
+    /* 881px 경계를 넘나들 때도 지도 카드의 렌더 크기(폭에 따라 SVG 높이도
+       바뀝니다)가 함께 바뀌므로 관찰 하나로 잡힐 '거라고 예상했는데, 헤드리스
+       리사이즈로 실측해 보니 ResizeObserver 콜백이 안 불리는 경우가 있었습니다
+       (탭이 그려지지 않는 자동화 환경 — map.js 의 카카오 동기화가 document.hidden
+       에서 겪은 것과 같은 종류의 문제로 보입니다). window resize 를 계속
+       안전망으로 겹쳐 둡니다 — syncSideHeight 는 다시 불러도 비용이 없습니다. */
+    if (global.ResizeObserver) {
+      new global.ResizeObserver(syncSideHeight).observe(map);
+    }
+    global.addEventListener('resize', syncSideHeight);
   }
 
   function fail(err) {
