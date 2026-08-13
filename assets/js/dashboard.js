@@ -67,7 +67,24 @@
         /* 격자를 클릭하면 그 격자로 파고듭니다 — 확대 + 그 격자의 정류장·노선만
            + 아래 카드에 노선 경유 순서. 전체 뷰에서 노선을 다 깔면 격자 색이
            덮이므로, 자세히는 클릭했을 때만 보여 줍니다. */
-        onCellClick: function (cell) { enterCellFocus(cell.id); },
+        onCellClick: function (cell) {
+          /* 같은 격자를 다시 누르면 초점을 풉니다. zoomReset 이 cellFocus 를
+             지우고 onExitCellFocus 까지 부르므로 범례의 [해제] 와 같은 경로입니다. */
+          if (S.map.getCellFocus && S.map.getCellFocus() === cell.id) {
+            /* 재클릭은 "이 격자 그만 보기" 입니다. '노선·정류장 전체' 가 켜져
+               있으면 여기서 노선 200개·정류장 2,866개가 한꺼번에 되돌아와,
+               해제인데 화면이 더 복잡해집니다. 함께 끄고 버튼 상태도 맞춥니다. */
+            var tg = $('#tgRoute');
+            if (tg && tg.classList.contains('on')) {
+              tg.classList.remove('on');
+              tg.setAttribute('aria-pressed', 'false');
+              S.map.setShowRoutes(false);
+            }
+            S.map.zoomReset();
+            return;
+          }
+          enterCellFocus(cell.id);
+        },
         onExitCellFocus: function () { renderCellRoutes(null); },
         onCellHover: function (cell, ev) { C.showTip(cellTip(cell), ev); },
         /* 정류장 위에 있는 격자도 선택되게 합니다.
@@ -781,14 +798,10 @@
     /* setCellFocus 가 노선·정류장 DOM 을 새로 그리므로 선택 표시를 다시 얹습니다
        (map.renderRoutes 도 복원하지만, 순서에 기대지 않고 여기서도 확실히 합니다) */
     if (keepStop && S.selectedStopId) S.map.highlightStop(S.selectedStopId);
-    /* 클릭의 답(경유 노선 카드)은 지도 아래에 있어 1440x900 에서 261px,
-       1920x1080 에서도 81px 접힘 아래입니다 — 스크롤하지 않으면 방금 누른
-       결과를 볼 수 없었습니다. block:'nearest' 라 이미 보이면 안 움직입니다. */
-    var rc = document.querySelector('.routecard');
-    if (rc && rc.scrollIntoView) {
-      try { rc.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
-      catch (e) { rc.scrollIntoView(false); }
-    }
+    /* 페이지를 대신 스크롤하지 않습니다. 지도든 Top10 이든, 누르는 순간
+       화면이 저절로 움직이면 방금 누른 대상이 시야에서 밀려나 "튀었다"고
+       느껴집니다. 경유 노선 카드는 지도 바로 아래에 있으므로, 필요하면
+       사용자가 스스로 내려 봅니다. */
   }
 
   function cellTip(c) {
@@ -818,6 +831,18 @@
     function regionList() {
       return (S.map.regions && S.map.regions()) || [];
     }
+    /* 정류장 이름은 1,749개(중복 제외)입니다. 같은 이름이 양방향으로 두 개씩
+       있는 경우가 1,019건이라, 자동완성에는 이름만 한 번씩 올립니다.
+       어느 쪽 정류장인지는 프로파일 카드의 선택 목록에서 고릅니다. */
+    function stopNames() {
+      if (!S.stops) return [];
+      var seen = {}, out = [];
+      S.stops.forEach(function (st) {
+        if (seen[st.name]) return;
+        seen[st.name] = 1; out.push(st.name);
+      });
+      return out.sort(function (a, b) { return a.localeCompare(b, 'ko'); });
+    }
     /* 자동완성 목록은 처음 검색창에 들어올 때 한 번만 채웁니다 */
     var listFilled = false;
     function fillRegionList() {
@@ -825,7 +850,7 @@
       if (!dl || listFilled) return;
       var rs = regionList();
       if (!rs.length) return;         /* 아직 격자 로드 전 — 다음 기회에 */
-      dl.innerHTML = rs.map(function (r) {
+      dl.innerHTML = rs.concat(stopNames()).map(function (r) {
         return '<option value="' + esc(r) + '"></option>';
       }).join('');
       listFilled = true;
@@ -862,7 +887,24 @@
         return;
       }
 
-      C.toast('“' + esc(q) + '” 에 해당하는 읍면동·격자를 찾지 못했습니다.');
+      /* 3순위: 정류장 — 정확 → 접두 → 부분 일치 */
+      var ql = q.toLowerCase();
+      var pick = function (test) {
+        return (S.stops || []).filter(function (st) { return test(st.name.toLowerCase()); });
+      };
+      var hits = pick(function (n) { return n === ql; });
+      if (!hits.length) hits = pick(function (n) { return n.indexOf(ql) === 0; });
+      if (!hits.length) hits = pick(function (n) { return n.indexOf(ql) >= 0; });
+      if (hits.length) {
+        inp.value = hits[0].name;
+        selectStop(hits[0].id, true);      /* 지도가 그 정류장의 격자로 파고듭니다 */
+        /* 같은 이름이 여러 개면(양방향 등) 선택 목록을 그 후보들로 좁혀
+           반대편 정류장을 바로 고를 수 있게 합니다. */
+        if (refreshStopOptions) refreshStopOptions(q);
+        return;
+      }
+
+      C.toast('“' + esc(q) + '” 에 해당하는 읍면동·격자·정류장을 찾지 못했습니다.');
     }
 
     inp.addEventListener('change', go);        /* 자동완성에서 고른 경우 */
