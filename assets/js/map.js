@@ -269,9 +269,34 @@
         } catch (e) { giveUp(); }
       };
       global.document.head.appendChild(s);   // 실패해도 조용히 넘어갑니다(SVG 단독으로)
-      global.addEventListener('resize', function () {
-        if (kkMap) { kkMap.relayout(); syncKakao(); }
-      });
+
+      /* 컨테이너 크기가 바뀌면 다시 맞춥니다.
+         alignKakao 가 거는 변형은 그때의 컨테이너 크기로 계산한 값이라,
+         지도 카드가 커지거나 줄었는데 그대로 두면 배경만 옛 크기 기준으로
+         남습니다. 전에는 window 의 resize 만 들었는데 그건 **창** 크기가
+         바뀔 때만 옵니다. 창은 그대로인 채 카드만 바뀌는 경우는 못 잡습니다 —
+         카드 높이를 495 → 300 으로 바꿔 보면 syncKakao 가 한 번도 불리지
+         않고 배경이 옛 배율로 남는 것을 확인했습니다. 컨테이너를 직접 봅니다.
+
+         관찰 대상은 .kakaomap(틀)입니다. 변형이 걸리는 .kakaomap-inner 를
+         보면 자기가 만든 변화에 자기가 반응할 여지를 남기게 됩니다 —
+         transform 은 레이아웃 박스를 안 바꾸므로 실제로는 안 돌지만,
+         관찰자를 굳이 그 자리에 두지 않습니다. 크기가 실제로 달라졌을
+         때만 도는 가드도 함께 둡니다. */
+      var _lastW = 0, _lastH = 0;
+      function onBoxResize() {
+        if (!kkMap) return;
+        var w = div.clientWidth, h = div.clientHeight;
+        if (!w || !h || (w === _lastW && h === _lastH)) return;
+        _lastW = w; _lastH = h;
+        kkMap.relayout();
+        syncKakao();
+      }
+      if (global.ResizeObserver) {
+        new global.ResizeObserver(onBoxResize).observe(div);
+      } else {
+        global.addEventListener('resize', onBoxResize);   // 구형 브라우저 폴백
+      }
     }
     /** 현재 SVG viewBox 창(zoom)에 꼭 맞도록 카카오 지도의 중심·배율을 맞춥니다.
      *
