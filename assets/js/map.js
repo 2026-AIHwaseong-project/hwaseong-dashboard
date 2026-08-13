@@ -204,17 +204,28 @@
        합니다. 그래서 키가 없거나 SDK 로드가 실패해도(오프라인 등) 지도
        기능은 그대로 동작하고, 배경 한 겹만 없이 지금 모습으로 남습니다. */
     var kkMap = null;
+    var kkInner = null;
     function initKakao() {
       var cfg = (HW.CONFIG && HW.CONFIG.KAKAO) || {};
       if (!cfg.enabled || !cfg.jsKey || !svg.parentNode || !global.document) return;
       var div = global.document.createElement('div');
       div.className = 'kakaomap';
+      /* 카카오는 정수 줌 레벨로만 반응해서 setBounds 가 요청보다 넓은 범위를
+         보여줍니다(docs/KAKAO-SYNC.md). 그 차이를 syncKakao 가 CSS 변형으로
+         메우는데, 변형을 .kakaomap 에 직접 걸면 클리핑 상자까지 같이 커져
+         배경이 지도 카드 밖으로 삐져나옵니다(.mapbox 에 overflow 가 없습니다).
+         그래서 .kakaomap 은 자르는 틀로만 두고, 안쪽 div 를 변형합니다. */
+      var inner = global.document.createElement('div');
+      inner.className = 'kakaomap-inner';
+      div.appendChild(inner);
       svg.parentNode.insertBefore(div, svg);
+      kkInner = inner;
 
       /* 배경을 포기하고 지금까지의 SVG 단독 지도로 되돌립니다.
          .kkmode 를 붙이기 전에만 불리므로 화면은 원래 상태 그대로입니다. */
       function giveUp() {
         kkMap = null;
+        kkInner = null;
         if (div.parentNode) div.parentNode.removeChild(div);
       }
 
@@ -224,7 +235,7 @@
       s.onload = function () {
         try {
           global.kakao.maps.load(function () {
-            kkMap = new global.kakao.maps.Map(div, {
+            kkMap = new global.kakao.maps.Map(inner, {
               center: new global.kakao.maps.LatLng(37.2, 126.83), level: 9
             });
             kkMap.setDraggable(false);   // 이동·확대는 지금처럼 SVG 쪽에서만 받습니다
@@ -262,7 +273,21 @@
         if (kkMap) { kkMap.relayout(); syncKakao(); }
       });
     }
-    /** 현재 SVG viewBox 창(zoom)에 꼭 맞도록 카카오 지도의 중심·배율을 맞춥니다 */
+    /** 현재 SVG viewBox 창(zoom)에 꼭 맞도록 카카오 지도의 중심·배율을 맞춥니다.
+     *
+     *  setBounds 만으로는 안 맞습니다. 카카오는 **정수 줌 레벨**로만 반응해서
+     *  요청 범위를 '담을 수 있는' 레벨을 고르고, 그래서 항상 요청보다 넓게
+     *  보여줍니다. 확대할수록 어긋나다가 레벨이 한 칸 떨어지면 다시 붙는
+     *  톱니가 생기고, 실측으로 **정류장 위치가 중앙값 890m** 어긋났습니다
+     *  (1,455% 확대·1km 격자 기준 — 배경 건물이 다른 격자의 것이 됩니다).
+     *
+     *  남은 차이는 배경에 CSS 변형을 걸어 메웁니다 — alignKakao 참고.
+     *
+     *  ⚠️ 예전 시도(61351ed)는 scale 만 걸고 transform-origin 을 50% 50% 로
+     *     둬서 중심 어긋남이 남는다고 보고 되돌렸습니다(554ae83). 실측해 보면
+     *     setBounds 는 요청 중심을 유지하므로 중심은 이미 0.3~3.1px 로 맞아
+     *     있었고, 문제는 배율뿐이었습니다. 그래도 여기서는 평행이동 항을
+     *     함께 유도해 중심 드리프트까지 구조적으로 없앱니다. */
     function syncKakao() {
       if (!kkMap) return;
       var sw = C.unproject(zoom.x, zoom.y + zoom.h);
@@ -271,6 +296,57 @@
         new global.kakao.maps.LatLng(sw.lat, sw.lon),
         new global.kakao.maps.LatLng(ne.lat, ne.lon)
       ));
+      alignKakao(sw, ne);
+    }
+
+    /** 카카오가 **실제로** 그리는 화면 위로 우리 창을 정확히 겹칩니다.
+     *
+     *  카카오에게 "우리 창의 좌상단(sw.lon, ne.lat)과 우하단(ne.lon, sw.lat)을
+     *  네 화면 어디에 그리느냐"고 직접 물어(containerPointFromCoords), 그 두
+     *  점이 컨테이너의 (0,0)과 (W,H)에 오도록 아핀을 맞춥니다. 두 모서리가
+     *  정확히 고정되므로 배율과 중심이 동시에 맞습니다.
+     *
+     *  위도를 직접 비율 계산하지 않는 이유: 카카오는 메르카토르라 화면 y 가
+     *  위도에 비선형입니다. 위도 폭의 비(Δ카카오/Δ우리)를 세로 배율로 쓰면
+     *  넓은 범위에서 어긋납니다 — 실측으로 첫 화면 6.8px 가 남았습니다.
+     *  카카오 투영에 직접 물으면 그 비선형이 값 안에 이미 반영됩니다.
+     *  남는 것은 두 모서리 사이 곡률 잔차뿐이고, 화성시 위도폭에서는
+     *  0.3px 미만입니다(등장방형 대비 편차 계산).
+     *
+     *  투영 API 가 없는 SDK 버전에서는 조용히 무보정으로 남습니다 —
+     *  지금까지의 동작과 같아 더 나빠지지는 않습니다. */
+    function alignKakao(sw, ne) {
+      if (!kkInner) return;
+      var tl, br, W, H;
+      try {
+        var proj = kkMap.getProjection();
+        W = kkInner.clientWidth;
+        H = kkInner.clientHeight;
+        if (!proj || !proj.containerPointFromCoords || !W || !H) return;
+        tl = proj.containerPointFromCoords(new global.kakao.maps.LatLng(ne.lat, sw.lon));
+        br = proj.containerPointFromCoords(new global.kakao.maps.LatLng(sw.lat, ne.lon));
+      } catch (e) { return; }
+      if (!tl || !br) return;
+
+      var spanX = br.x - tl.x, spanY = br.y - tl.y;
+      if (!(spanX > 0) || !(spanY > 0)) return;
+
+      var sx = W / spanX;
+      var sy = H / spanY;
+      var tx = -tl.x * sx;
+      var ty = -tl.y * sy;
+
+      /* 이미 맞아 있으면(레벨이 딱 떨어진 경우) 변형을 걸지 않습니다 —
+         scale(1.0000) 도 합성 레이어를 만들어 타일이 미세하게 흐려집니다. */
+      if (Math.abs(sx - 1) < 0.002 && Math.abs(sy - 1) < 0.002 &&
+          Math.abs(tx) < 0.5 && Math.abs(ty) < 0.5) {
+        kkInner.style.transform = '';
+        return;
+      }
+      kkInner.style.transformOrigin = '0 0';
+      kkInner.style.transform =
+        'translate(' + tx.toFixed(2) + 'px,' + ty.toFixed(2) + 'px) ' +
+        'scale(' + sx.toFixed(5) + ',' + sy.toFixed(5) + ')';
     }
 
     drawBase();
