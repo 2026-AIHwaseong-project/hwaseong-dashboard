@@ -1306,10 +1306,19 @@
         return '<span>' + esc(e.label) + ' <b>' + esc(won(e.unitKrw)) + '</b> ' +
           '<i>' + esc(basisLabel) + '</i></span>';
       }).join('');
-      /* 단가가 확정되지 않았으면 분명히 알립니다. 실제 사업비로 오해하면 안 됩니다. */
+      /* 단가가 확정되지 않았으면 분명히 알립니다. 실제 사업비로 오해하면 안 됩니다.
+         셋 다 미확정이던 시절에는 "모두 미확정" 이라고 적었는데, 2026-08-14 에
+         똑버스·증편이 공개자료 대조로 확인되면서 사실과 어긋나게 됐습니다.
+         남은 것만 이름으로 짚어 줍니다 — 무엇이 근거가 있고 무엇이 없는지가
+         이 배지의 존재 이유입니다. */
       if (meta.effects.some(function (e) { return e.costAssumed; }) || HW.CONFIG.costIsAssumed()) {
+        var unconfirmed = ['stop', 'drt', 'freq'].filter(function (t) {
+          var c = HW.CONFIG.COST[t];
+          return c && c.confirmed === false;
+        }).map(function (t) { return HW.CONFIG.COST[t].label.split(' ')[0]; });
         costList.innerHTML += '<span class="cost-assumed">' +
-          '<span class="dq-badge">가정값</span>단가·내용연수 모두 미확정' +
+          '<span class="dq-badge">가정값</span>' +
+          (unconfirmed.length ? esc(unconfirmed.join('·')) + ' 단가 미확정' : '단가 미확정') +
           '<button class="help" data-help="assumedCost" type="button">?</button></span>';
         C.wireHelp(costList);
       }
