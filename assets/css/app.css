@@ -219,17 +219,20 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
    '값이 0' 인지 구분이 안 됩니다. index.html 의 초기 '–' 에 .pending 을 주면
    흐리게 떠서 갈립니다(값이 들어오면 innerHTML 교체로 자동 해제). */
 .kpi .vl.pending{opacity:.4}
-.kpi .lb{font-size:11px;color:var(--ink3);margin-bottom:3px}
+/* 이 넷(라벨·증감줄·부제)이 --ink3(4.9:1, 최소 AA 통과 수준)라 11px 크기에서
+   흐려 보인다는 제보 — 값이 무엇인지 말해 주는 글자라 더 진한 --ink2 로 올린다. */
+.kpi .lb{font-size:11px;color:var(--ink2);margin-bottom:3px}
 /* 8자리 파생값(18,788,767원/통행)이 들어오면 26px 로는 타일을 넘칩니다.
    tabular-nums 는 배치할 때마다 자릿수가 흔들리지 않게 합니다. */
 .kpi .vl{font-size:clamp(19px,1.9vw,26px);font-weight:650;letter-spacing:-.01em;line-height:1.15;
   font-variant-numeric:tabular-nums}
 .kpi .vl small{font-size:14px;font-weight:600;color:var(--ink2);margin-left:2px}
 .kpi .vl.txt{font-size:19px}
-.kpi .dl{font-size:11px;font-weight:600;margin-top:2px;min-height:17px;font-variant-numeric:tabular-nums;color:var(--ink3)}
+.kpi .dl{font-size:11px;font-weight:600;margin-top:2px;min-height:17px;font-variant-numeric:tabular-nums;color:var(--ink2)}
 .kpi .dl.good{color:var(--good)} .kpi .dl.bad{color:var(--bad)}
-/* 증감줄(.dl)과 같은 11.5px 이면 위계가 없어 둘이 대등하게 읽힙니다 */
-.kpi .sb{font-size:11px;color:var(--ink3);opacity:.9;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 증감줄(.dl)과 같은 11.5px 이면 위계가 없어 둘이 대등하게 읽힙니다.
+   opacity:.9 는 이미 조정해 둔 색을 다시 흐리게 만들 뿐이라 뺀다. */
+.kpi .sb{font-size:11px;color:var(--ink2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ------------------------------------------------------------- 5. 지도 */
 .mapcard{display:flex;flex-direction:column}
@@ -436,10 +439,12 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .trow .sub2 em{font-style:normal;color:var(--ink2);font-weight:600}
 .trow .sub2 em.hi{color:var(--tag-new-fg)}
 .trow .bar{grid-column:2;height:4px;border-radius:2px;background:var(--track);position:relative;overflow:hidden}
-/* 지도 범례가 --mi5 를 'MI +0.25~+0.7 구간' 이라고 못박아 둔 색인데, 여기서는
-   값과 무관하게 상수로 채워 1위(+1.78)와 9위(+0.98)의 막대 색이 같았습니다.
-   색이 지표인 화면에서 색을 장식으로 쓰면 안 됩니다 — 길이만 읽히게 둡니다. */
-.trow .bar i{position:absolute;inset:0 auto 0 0;border-radius:2px;background:var(--ink3);opacity:.55}
+/* 지도 범례가 --mi5 를 'MI +0.25~+0.7 구간' 이라고 못박아 둔 색이라 여기서는
+   안 씁니다(그 색을 순위와 무관하게 상수로 채우면 1위와 9위의 막대 색이
+   같아져 버립니다 — 실제로 그랬던 적이 있습니다). 대신 '나쁨' 의미가 이미
+   정해진 --bad 를 씁니다 — 시급도 막대라 그 뜻과도 맞고, 지도 범례의 색과
+   부딪히지 않습니다. 제보(흐려서 안 보임)에 맞춰 불투명도도 올렸습니다. */
+.trow .bar i{position:absolute;inset:0 auto 0 0;border-radius:2px;background:var(--bad);opacity:.85}
 .trow .tag{grid-column:3;justify-self:end}
 .tag{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.03em;border-radius:999px;padding:2px 8px}
 .tag.new{background:var(--tag-new-bg);color:var(--tag-new-fg)}
@@ -479,7 +484,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .dl2{fill:var(--ink2);font-size:10px;font-family:Consolas,ui-monospace,monospace}
 .keys{display:flex;gap:12px;align-items:center;font-size:11px;color:var(--ink2);flex-wrap:wrap}
 .keys i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
-.keys i.ghost{background:transparent;border:1.5px solid var(--ink3);border-radius:2px}
+.keys i.ghost{background:transparent;border:1.5px solid var(--bad);border-radius:2px}
 .stsel{font:inherit;font-size:12px;color:var(--ink);background:var(--card);border:1px solid var(--line);
   border-radius:7px;padding:4px 8px;max-width:170px}
 .stpick{display:flex;gap:6px;align-items:center;margin-left:auto}
@@ -491,8 +496,10 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
    뒤집힙니다 — 제목 15px 아래로 내립니다. */
 .ststats b{font-size:13px;font-weight:650;margin-left:5px;color:var(--ink)}
 
-/* 비교 차트: 기준선 = 고스트(외곽선), 시나리오 = 채움 — 색이 아닌 스타일로 구분 */
-.cmp-base{fill:none;stroke:var(--ink3);stroke-width:1.5;stroke-dasharray:3 2}
+/* 비교 차트: 기준선 = 고스트(외곽선), 시나리오 = 채움 — 모양으로 구분하고,
+   그 위에 색으로 배치 전(빨강)·배치 후(파랑)를 한 번 더 대비시킵니다.
+   흐려서 비교가 잘 안 된다는 제보로 --ink3 대신 --bad, 굵기도 올렸습니다. */
+.cmp-base{fill:none;stroke:var(--bad);stroke-width:2;stroke-dasharray:3 2}
 .cmp-sim{fill:var(--c-board)}
 .cmp-sim.worse{fill:var(--bad)}
 .cmp-lab{fill:var(--ink2);font-size:10px;font-family:Consolas,ui-monospace,monospace}
@@ -786,9 +793,9 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 .rgtbl td.rg-need{white-space:nowrap}
 .rgtbl .rg-bar{display:inline-block;width:44px;height:5px;border-radius:3px;
   background:var(--track);position:relative;overflow:hidden;margin-right:6px;vertical-align:1px}
-/* Top10 막대와 같은 이유 — 지도 범례가 MI 구간 색이라고 못박은 --mi5 를
-   값과 무관하게 상수로 쓰면 색이 아무 정보도 안 나릅니다. 길이만 읽힙니다. */
-.rgtbl .rg-bar i{position:absolute;inset:0 auto 0 0;border-radius:2px;background:var(--ink3);opacity:.55}
+/* Top10 막대와 같은 이유로 --mi5 대신 --bad 를 씁니다 — 지도 범례의 MI 구간
+   색과 안 부딪히면서, 흐려서 안 보인다는 제보에 맞춰 불투명도도 올립니다. */
+.rgtbl .rg-bar i{position:absolute;inset:0 auto 0 0;border-radius:2px;background:var(--bad);opacity:.85}
 .rgtbl .rg-need b{font-weight:700;color:var(--ink)}
 /* 공용 규칙(td:nth-child(2){text-align:left})은 '격자 데이터 표'(2열=권역명)
    기준이라, 2열이 숫자인 이 표에서는 자릿수가 어긋납니다. */

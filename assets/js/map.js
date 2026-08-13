@@ -982,6 +982,17 @@
         state.zdetail = detail;
         if (state.stops && state.stops.length) renderRoutes();
       }
+      /* 격자를 클릭해 확대했다가 −버튼·휠로 손수 다시 축소해 전체 배율로
+         돌아오면 cellFocus 가 안 풀렸다 — 지금까지는 '전체' 리셋 버튼
+         (zoomReset)만 그걸 지웠다. 그러면 '노선·정류장 전체'를 켠 채로 격자를
+         들여다보고 다시 축소했을 때, 화면은 전체인데 노선·정류장은 그 격자
+         하나로만 남아 켜 둔 '전체'가 사라진 것처럼 보였다. 손으로 축소해도
+         전체 배율까지 돌아오면 zoomReset 과 같은 처리를 한다. */
+      if (!isZoomed() && state.cellFocus) {
+        state.cellFocus = null;
+        renderRoutes();
+        if (opt.onExitCellFocus) opt.onExitCellFocus();
+      }
       if (zctl) zctl.classList.toggle('zoomed', isZoomed());
       /* 1,200% 넘어가면 소수점이 의미가 없어 정수로 끊습니다 */
       if (zpctEl) zpctEl.textContent = Math.round(k * 100).toLocaleString('ko-KR') + '%';
