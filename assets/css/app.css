@@ -252,6 +252,11 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
    읽히고, 충분히 확대(.zdetail, ≈10배 이상)했을 때만 걷혀 실제 지도가
    드러납니다. */
 .kakaomap{position:absolute;inset:0;z-index:0;border-radius:0 0 9px 9px;overflow:hidden;pointer-events:none}
+/* 카카오 지도는 .kakaomap 이 아니라 이 안쪽 div 에 붙습니다. 정수 줌 레벨
+   보정(map.js alignKakao)이 여기에 transform 을 거는데, 바깥 .kakaomap 에
+   걸면 자르는 상자까지 같이 커져 배경이 지도 카드 밖으로 넘칩니다
+   (.mapbox 에는 overflow 가 없습니다). 틀과 내용을 나눠 둡니다. */
+.kakaomap-inner{position:absolute;inset:0;transform-origin:0 0}
 /* fill 만 지우면 해안선 stroke 가 남아 실제 지도 위에 굵은 회색 띠로 뜹니다 */
 .kkmode.zdetail .wtr,.kkmode.zdetail .land{fill-opacity:0;stroke-opacity:0}
 .kkmode.zdetail .c{fill-opacity:.55}
