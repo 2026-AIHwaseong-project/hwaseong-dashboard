@@ -50,7 +50,7 @@
     /* 격자 크기 비례 계수 — 1km 격자면 1. 확대 한도·시맨틱 줌·스냅 거리처럼
        "셀이 화면에서 얼마나 크게 보이는가"에 걸린 상수들이 이 값으로 조정된다.
        주의: 배치 마커(r=8.5)·겹침 오프셋·선택링 패딩은 시각 판단이 필요해
-       비례 적용하지 않았다 — 격자 세분화 후 실화면 보고 조정 (GRID-500M.md). */
+       cellRect 로 구한 실제 칸 크기에 비례시킨다 — renderPlacements 참고. */
     var Z_SCALE = 1000 / ((meta.grid && meta.grid.sizeMeters) || 1000);
     /* 아래 셋은 drawBase→applyZoom 이 처음 실행되기 전에 초기화돼 있어야 한다.
        MIN_W 의 기본 배율(120)은 1km 실측 근거다 — 정류장 절반이 서로 30m
@@ -211,7 +211,7 @@
       var div = global.document.createElement('div');
       div.className = 'kakaomap';
       /* 카카오는 정수 줌 레벨로만 반응해서 setBounds 가 요청보다 넓은 범위를
-         보여줍니다(docs/KAKAO-SYNC.md). 그 차이를 syncKakao 가 CSS 변형으로
+         보여줍니다. 그 차이를 syncKakao 가 CSS 변형으로
          메우는데, 변형을 .kakaomap 에 직접 걸면 클리핑 상자까지 같이 커져
          배경이 지도 카드 밖으로 삐져나옵니다(.mapbox 에 overflow 가 없습니다).
          그래서 .kakaomap 은 자르는 틀로만 두고, 안쪽 div 를 변형합니다. */
