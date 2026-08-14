@@ -556,7 +556,7 @@
       '<span class="hs" data-foot></span>' +
       '<span class="sp"></span>' +
       '<button class="btn" data-copy type="button" disabled>본문 복사</button>' +
-      '<button class="btn" data-dl-hwp type="button" disabled><i>▤</i>한글 문서</button>' +
+      '<button class="btn" data-dl-hwp type="button" disabled>' + HW.icon('doc') + '한글 문서</button>' +
       '<button class="btn primary" data-dl-xlsx type="button" disabled><i>▦</i>엑셀 파일</button>' +
       '</footer>' +
       '</div>';

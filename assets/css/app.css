@@ -31,10 +31,20 @@
 /* ---------------------------------------------------------------- 1. 토큰 */
 :root{
   color-scheme:light;
-  --bg:#e8edf2; --card:#fcfcfb; --line:rgba(11,11,11,.10); --grid:#e1e0d9; --axis:#c3c2b7;
-  --ink:#22334d; --ink2:#4a5568; --ink3:#566478;   /* 배경 #e8edf2 위 5.0:1 (AA) */
-  --sel:#4a6fa5; --selbg:rgba(74,111,165,.12);
-  --water:#d3dde9; --land:#eeede7; --coast:#9aa4b0;
+  /* 화성특례시 공식 CI 색을 그대로 씁니다(BI 원본 픽셀에서 추출).
+     --brand 파랑 #0054A6 · --brand-2 주황 #F36F21.
+     이 둘은 크롬(상단 레일·내비·주요 버튼)에서만 씁니다. 지도·차트의 색은
+     값을 나르는 지표라 따로 두며, 크롬과 캔버스가 위치로 갈려 섞이지 않습니다. */
+  --brand:#0054A6; --brand-ink:#003C77; --brand-soft:#E7EFF8; --brand-line:#C7DAEE;
+  /* 공식 주황은 흰 바탕에서 2.95:1 이라 글자로는 못 씁니다(AA 4.5:1 미달, 큰
+     글자 3:1 도 미달). 채움·마커에만 쓰고, 글자가 필요하면 --brand-2-ink
+     (5.2:1)를 씁니다. 색만으로 뜻을 나르지 않는다는 원칙과도 맞습니다. */
+  --brand-2:#F36F21; --brand-2-ink:#C2410C; --brand-2-soft:#FDEEE3;
+  --bg:#EEF2F7; --card:#FFFFFF; --line:#DCE4EE; --grid:#E3E9F1; --axis:#B7C3D4;
+  /* --ink3 은 배경 #EEF2F7 위에서 4.6:1 (WCAG AA) */
+  --ink:#12233A; --ink2:#41546E; --ink3:#5D6E85;
+  --sel:#0054A6; --selbg:rgba(0,84,166,.09);
+  --water:#DCE6F1; --land:#F4F1EA; --coast:#9AA9BC;
   /* 미스매칭 MI: 발산형(파랑 ← 중립 → 빨강). 중간값은 반드시 무채색. */
   --mi0:#1c5cab; --mi1:#5598e7; --mi2:#9ec5f4; --mi3:#e9e7e0; --mi4:#f3a68f; --mi5:#e2604f; --mi6:#a62b28;
   /* 수요/유동인구: 단일 색상 순차형(파랑) */
@@ -56,9 +66,13 @@
 @media (prefers-color-scheme:dark){
   :root:where(:not([data-theme="light"])){
     color-scheme:dark;
-    --bg:#0d0d0d; --card:#1a1a19; --line:rgba(255,255,255,.10); --grid:#2c2c2a; --axis:#383835;
-    --ink:#ffffff; --ink2:#c3c2b7; --ink3:#898781;
-    --sel:#9085e9; --selbg:rgba(144,133,233,.14);
+    --bg:#0F141A; --card:#171E27; --line:rgba(255,255,255,.11); --grid:#242D3A; --axis:#33404F;
+    --ink:#F2F6FB; --ink2:#B7C4D4; --ink3:#8B9AAC;
+    /* 다크에서는 공식 파랑(#0054A6)이 배경에 묻혀 글자로 못 씁니다(대비 부족).
+       같은 계열을 밝게 올린 값을 쓰고, 주황은 다크에서도 6.3:1 이라 그대로 둡니다. */
+    --brand:#5AA6EA; --brand-ink:#8CC4F5; --brand-soft:#16283C; --brand-line:#27405C;
+    --brand-2:#F36F21; --brand-2-ink:#FFA066; --brand-2-soft:#2C1B10;
+    --sel:#5AA6EA; --selbg:rgba(90,166,234,.14);
     --water:#10151c; --land:#232a33; --coast:#3e4a58;
     --mi0:#9fc4f7; --mi1:#5b93e0; --mi2:#3a68a8; --mi3:#2e3339; --mi4:#96453c; --mi5:#d15a4b; --mi6:#f0928a;
     --sb0:#26364a; --sb1:#1f4f8a; --sb2:#2f77c9; --sb3:#5b9ce8; --sb4:#a4c9f5;
@@ -75,9 +89,11 @@
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --bg:#0d0d0d; --card:#1a1a19; --line:rgba(255,255,255,.10); --grid:#2c2c2a; --axis:#383835;
-  --ink:#ffffff; --ink2:#c3c2b7; --ink3:#898781;
-  --sel:#9085e9; --selbg:rgba(144,133,233,.14);
+  --bg:#0F141A; --card:#171E27; --line:rgba(255,255,255,.11); --grid:#242D3A; --axis:#33404F;
+  --ink:#F2F6FB; --ink2:#B7C4D4; --ink3:#8B9AAC;
+  --brand:#5AA6EA; --brand-ink:#8CC4F5; --brand-soft:#16283C; --brand-line:#27405C;
+  --brand-2:#F36F21; --brand-2-ink:#FFA066; --brand-2-soft:#2C1B10;
+  --sel:#5AA6EA; --selbg:rgba(90,166,234,.14);
   --water:#10151c; --land:#232a33; --coast:#3e4a58;
   --mi0:#9fc4f7; --mi1:#5b93e0; --mi2:#3a68a8; --mi3:#2e3339; --mi4:#96453c; --mi5:#d15a4b; --mi6:#f0928a;
   --sb0:#26364a; --sb1:#1f4f8a; --sb2:#2f77c9; --sb3:#5b9ce8; --sb4:#a4c9f5;
@@ -93,10 +109,12 @@
 }
 :root[data-theme="light"]{
   color-scheme:light;
-  --bg:#e8edf2; --card:#fcfcfb; --line:rgba(11,11,11,.10); --grid:#e1e0d9; --axis:#c3c2b7;
-  --ink:#22334d; --ink2:#4a5568; --ink3:#566478;
-  --sel:#4a6fa5; --selbg:rgba(74,111,165,.12);
-  --water:#d3dde9; --land:#eeede7; --coast:#9aa4b0;
+  --brand:#0054A6; --brand-ink:#003C77; --brand-soft:#E7EFF8; --brand-line:#C7DAEE;
+  --brand-2:#F36F21; --brand-2-ink:#C2410C; --brand-2-soft:#FDEEE3;
+  --bg:#EEF2F7; --card:#FFFFFF; --line:#DCE4EE; --grid:#E3E9F1; --axis:#B7C3D4;
+  --ink:#12233A; --ink2:#41546E; --ink3:#5D6E85;
+  --sel:#0054A6; --selbg:rgba(0,84,166,.09);
+  --water:#DCE6F1; --land:#F4F1EA; --coast:#9AA9BC;
   --mi0:#1c5cab; --mi1:#5598e7; --mi2:#9ec5f4; --mi3:#e9e7e0; --mi4:#f3a68f; --mi5:#e2604f; --mi6:#a62b28;
   --sb0:#dcebfb; --sb1:#9ec5f4; --sb2:#5598e7; --sb3:#2a78d6; --sb4:#184f95;
   --so0:#fbe4d4; --so1:#f5b98f; --so2:#ec8c50; --so3:#d95926; --so4:#9c3a12;
@@ -113,14 +131,34 @@
 /* --------------------------------------------------- 2. 리셋 · 타이포 */
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
+/* Pretendard 를 먼저 부릅니다. Windows 기본인 맑은 고딕은 자간·획이 낡아
+   같은 레이아웃도 오래된 화면처럼 보입니다. 망 차단·오프라인이면 조용히
+   기존 시스템 스택으로 떨어지므로 화면이 깨지지는 않습니다. */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
 body{background:var(--bg);color:var(--ink);
-  font-family:"Segoe UI Variable","Segoe UI","Malgun Gothic","Apple SD Gothic Neo",Pretendard,system-ui,sans-serif;
-  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  font-family:"Pretendard Variable",Pretendard,"Segoe UI Variable","Segoe UI",
+    "Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  /* 표·지표가 많은 화면이라 숫자 폭을 고정합니다 — 값이 바뀔 때 자릿수가 흔들리지 않습니다 */
+  font-variant-numeric:tabular-nums}
 .mono{font-family:"Cascadia Code",Consolas,"D2Coding",ui-monospace,monospace}
 a{color:inherit}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
-:focus-visible{outline:2px solid var(--sel);outline-offset:2px;border-radius:4px}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:4px}
 svg text{font-family:inherit}
+
+/* ── 브라우저가 기본값으로 그리는 표면들 ────────────────────────────────
+   선택 영역·캐럿·스크롤바는 손대지 않으면 어느 디자인에도 속하지 않는
+   OS 기본색으로 남습니다. 화면이 조립된 게 아니라 만들어졌다는 가장 값싼
+   신호라 여기서 한 번에 브랜드 색으로 맞춥니다. */
+::selection{background:var(--brand);color:#fff}
+:root{caret-color:var(--brand);accent-color:var(--brand);
+  scrollbar-color:var(--axis) transparent;scrollbar-width:thin}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--axis);border-radius:99px;
+  border:3px solid var(--bg);background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:var(--ink3);background-clip:content-box}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
   clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
@@ -133,40 +171,54 @@ svg text{font-family:inherit}
      안 그러면 산점도가 1.24배로 확대돼 축 글자가 카드 제목보다 커집니다. */
 .wrap{max-width:1680px;margin:0 auto;padding:14px 18px 30px}
 
-/* 상단 전역 내비게이션 */
-.topnav{position:sticky;top:0;z-index:30;background:var(--bg);background:color-mix(in srgb,var(--bg) 92%,transparent);
-  backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-.topnav .tn-in{max-width:1680px;   /* .wrap 과 같은 값이어야 좌측 정렬이 맞습니다 */margin:0 auto;padding:8px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
-.brand i{display:block;width:9px;height:9px;border-radius:2px;background:var(--sel);font-style:normal}
-.brand span{font-family:Consolas,ui-monospace,monospace;font-size:10px;font-weight:500;letter-spacing:.1em;
-  color:var(--ink3);border:1px solid var(--line);border-radius:999px;padding:2px 7px}
-.navlinks{display:flex;gap:3px}
-.navlinks a{font-size:12px;padding:5px 12px;border-radius:8px;color:var(--ink2);text-decoration:none}
-.navlinks a:hover{background:var(--selbg)}
-.navlinks a[aria-current="page"]{background:var(--ink);color:var(--card);font-weight:600}
+/* 상단 전역 내비게이션 — 관공서 문서의 인장(印章) 자리.
+   흰 바탕에 공식 CI 를 얹고, 그 아래 브랜드 파랑 레일 3px 로 화면 전체를
+   시가 발행한 문서처럼 묶습니다. 배경을 흐리지 않는 이유: 이 화면 밑에는
+   지도가 깔리는데 backdrop-filter 로 비치면 격자 색이 왜곡돼 보입니다. */
+.topnav{position:sticky;top:0;z-index:30;background:var(--card);
+  border-bottom:3px solid var(--brand)}
+.topnav .tn-in{max-width:1680px;   /* .wrap 과 같은 값이어야 좌측 정렬이 맞습니다 */margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+/* 공식 CI. 원본 BI 에서 가로형 시그니처를 투명 배경으로 뽑아 둔 것입니다. */
+.brand .ci{height:30px;width:auto;display:block;flex:0 0 auto}
+/* CI 옆 서비스명. CI 가 기관을 말하므로 여기는 이 도구의 이름만 답니다. */
+.brand .svc{font-size:13.5px;font-weight:700;letter-spacing:-.02em;color:var(--ink);
+  white-space:nowrap;padding-left:11px;border-left:1px solid var(--line);line-height:1.2}
+.navlinks{display:flex;gap:2px}
+.navlinks a{font-size:13px;font-weight:600;padding:7px 14px;border-radius:8px;
+  color:var(--ink2);text-decoration:none;transition:background .12s,color .12s}
+.navlinks a:hover{background:var(--brand-soft);color:var(--brand-ink)}
+.navlinks a[aria-current="page"]{background:var(--brand);color:#fff}
 .tn-sp{flex:1}
 .tn-act{display:flex;gap:6px;align-items:center}
 
-header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin:8px 0 14px}
-.eyebrow{font-family:"Cascadia Code",Consolas,ui-monospace,monospace;font-size:11px;letter-spacing:.14em;color:var(--ink3);margin:0 0 6px}
-h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balance}
-.sub{margin:5px 0 0;color:var(--ink2);font-size:13px;max-width:70ch}
+header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin:18px 0 14px}
+h1{font-size:23px;font-weight:800;margin:0;letter-spacing:-.03em;text-wrap:balance;line-height:1.25}
+.sub{margin:7px 0 0;color:var(--ink2);font-size:13px;max-width:70ch;line-height:1.65}
 
-.periods{display:flex;gap:4px;border:1px solid var(--line);border-radius:10px;padding:4px;background:var(--card)}
-.pbtn{border-radius:7px;padding:5px 13px;text-align:center;color:var(--ink2)}
-.pbtn b{display:block;font-size:13px;font-weight:600;line-height:1.25;color:inherit}
-.pbtn span{display:block;font-size:10px;letter-spacing:.05em;font-family:Consolas,ui-monospace,monospace;opacity:.75}
-.pbtn:hover{background:var(--selbg)}
-.pbtn.on{background:var(--ink);color:var(--card)}
-.pbtn.on:hover{background:var(--ink)}
+/* 시간대 탭 — 이 화면의 주장이 "시간대를 바꾸면 답이 달라진다" 이므로
+   탭은 부가 컨트롤이 아니라 문서의 목차처럼 굵게 섭니다.
+   고른 탭만 공식 파랑으로 채우고, 주황은 그 아래 3px 밑줄 한 줄로 '지금 여기'
+   만 표시합니다 — 주황은 대비가 2.95:1 이라 글자로는 쓸 수 없기 때문입니다. */
+.periods{display:flex;gap:2px;border:1px solid var(--line);border-radius:11px;padding:3px;background:var(--card)}
+.pbtn{position:relative;border-radius:8px;padding:7px 15px 8px;text-align:center;color:var(--ink2);
+  transition:background .12s,color .12s}
+.pbtn b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:inherit;letter-spacing:-.01em}
+.pbtn span{display:block;font-size:10.5px;letter-spacing:.02em;margin-top:1px;opacity:.8}
+.pbtn:hover{background:var(--brand-soft);color:var(--brand-ink)}
+.pbtn.on,.pbtn.on:hover{background:var(--brand);color:#fff}
+.pbtn.on::after{content:"";position:absolute;left:15px;right:15px;bottom:3px;height:2.5px;
+  border-radius:2px;background:var(--brand-2)}
 
 /* 한글은 브라우저 기본이 음절 단위 줄바꿈이라 '노선' '수치는' 이 아무 데서나
    쪼개집니다. 산문 요소에만 어절 유지를 겁니다(표의 긴 mono 토큰은 제외). */
 h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   word-break:keep-all;overflow-wrap:break-word}
 .grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px;align-items:stretch}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;min-width:0}
+/* 카드 = 문서의 한 조(條). 띄우지 않고 괘선으로 가릅니다 — 관공서 문서는
+   그림자로 떠 있지 않고 선으로 나뉩니다. 그림자는 실제로 떠야 하는 것
+   (모달·툴팁)에만 남겨 두어 그 뜻을 지킵니다. */
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;min-width:0}
 .span4{grid-column:span 4}.span5{grid-column:span 5}.span6{grid-column:span 6}
 .span7{grid-column:span 7}.span8{grid-column:span 8}.span12{grid-column:span 12}
 /* 지도(8칸)는 우선순위 목록(4칸)보다 짧아 아래에 180px 쯤 빈 자리가 남았습니다.
@@ -218,18 +270,30 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .simgrid .sidecard{overflow-y:auto}
 .sc-card{grid-column:span 5}
 .st-card{grid-column:span 7}
-.chead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px 14px 8px;flex-wrap:wrap}
-.chead h2{font-size:15px;font-weight:700;margin:0}
-.chead .hsub{font-size:11px;color:var(--ink3)}
+/* 카드 제목줄. 제목 왼쪽에 브랜드 파랑 막대를 세워 조(條)의 머리를 표시합니다 —
+   관공서 문서에서 항목 앞에 붙는 표식과 같은 역할이고, 아이콘 없이도 각 카드가
+   무엇의 시작인지 눈이 바로 잡습니다. 아래 1px 괘선으로 제목과 내용을 가릅니다. */
+.chead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  padding:13px 16px 11px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:12px}
+.chead h2{font-size:15px;font-weight:700;margin:0;letter-spacing:-.02em;
+  display:flex;align-items:center;gap:9px}
+.chead h2::before{content:"";width:3px;height:14px;border-radius:2px;
+  background:var(--brand);flex:0 0 auto}
+.chead .hsub{font-size:11.5px;color:var(--ink3);line-height:1.5}
 /* 계산 중에만 글자가 들어가는데, 비어도 테두리 캡슐이 남아 로드 실패처럼 보입니다 */
 .pchip:empty{display:none}
 .pchip{font-size:11px;font-family:Consolas,ui-monospace,monospace;color:var(--ink3);
   border:1px solid var(--line);border-radius:999px;padding:2px 8px;white-space:nowrap}
 .cbody{padding:0 14px 14px}
 
-/* --------------------------------------------------------- 4. KPI 타일 */
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px 11px;min-width:0}
+/* --------------------------------------------------------- 4. KPI 타일
+   넷을 각각 떠 있는 카드로 두면 화면에 상자가 넷 더 생기고, 정작 주인공인
+   지도와 대등해 보입니다. 한 장의 띠로 묶고 사이를 괘선으로만 가릅니다 —
+   관공서 문서의 요약표와 같은 구조이고, 상자 수가 넷 줄어 화면이 조용해집니다. */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-bottom:12px;
+  background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.kpi{padding:13px 16px 12px;min-width:0}
+.kpi + .kpi{border-left:1px solid var(--line)}
 /* 부팅 직후 자리표시자('–')와 계산된 실제 값이 같은 모양이면 '로딩 중' 인지
    '값이 0' 인지 구분이 안 됩니다. index.html 의 초기 '–' 에 .pending 을 주면
    흐리게 떠서 갈립니다(값이 들어오면 innerHTML 교체로 자동 해제). */
@@ -584,7 +648,12 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   color:var(--ink3);margin-bottom:5px}
 .budget .brow b{font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums}
 .budget .btrack{height:8px;border-radius:4px;background:var(--track);overflow:hidden;position:relative}
-.budget .btrack i{position:absolute;inset:0 auto 0 0;border-radius:4px;background:var(--sb3);transition:width .3s}
+/* 폭(width)을 애니메이션하면 매 프레임 레이아웃을 다시 계산합니다.
+   가로로만 늘어나는 막대라 transform:scaleX 로 같은 그림을 얻으면서
+   합성 단계에서만 처리됩니다. JS 는 --p(0~1)만 넣습니다. */
+.budget .btrack i{position:absolute;inset:0 auto 0 0;width:100%;border-radius:4px;
+  background:var(--sb3);transform-origin:left center;transform:scaleX(0);
+  transition:transform .3s}
 .budget .btrack i.over{background:var(--bad)}
 @media (prefers-reduced-motion:reduce){.budget .btrack i{transition:none}}
 .budget .bnote{font-size:11px;color:var(--ink3);margin-top:5px}
@@ -618,8 +687,13 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .btn:disabled{opacity:.42;cursor:not-allowed}
 .btn.primary{background:var(--sel);border-color:var(--sel);color:#fff}
 .btn.primary:hover:not(:disabled){filter:brightness(1.08);background:var(--sel)}
-.btn.sm{font-size:11px;padding:4px 10px;font-weight:500}
+.btn.sm{font-size:11.5px;padding:5px 11px;font-weight:600}
 .btn i{font-style:normal;font-size:11px}
+/* 직접 그린 아이콘(core.js ICONS). currentColor 라 버튼 색을 따라가고,
+   글자와 광학 중심을 맞추려고 살짝 올려 둡니다. */
+.ic{flex:0 0 auto;margin-top:-1px}
+.btn .ic{width:14px;height:14px}
+.btn.sm .ic{width:13px;height:13px}
 .minib{font-size:11px;padding:4px 10px;border:1px solid var(--line);border-radius:7px;color:var(--ink2);background:var(--card)}
 .minib:hover:not(:disabled){background:var(--selbg)}
 .minib:disabled{opacity:.4;cursor:not-allowed}
@@ -761,11 +835,19 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
   .simgrid .sidecard{position:static}
   /* 한 줄로 쌓이면 지도 옆이 아니라 아래에 오므로 붙일 이유가 없습니다 */
   .simgrid .sidecard{position:static}
+  /* 2열로 접히면 3·4번째가 아랫줄로 갑니다. 왼쪽 괘선을 1·3번에서 걷어내고
+     아랫줄에는 윗줄과 가르는 가로 괘선을 답니다 — 띠 구조가 유지됩니다. */
   .kpis{grid-template-columns:1fr 1fr}
+  .kpi:nth-child(odd){border-left:0}
+  .kpi:nth-child(n+3){border-top:1px solid var(--line)}
   .t10{max-height:380px}
 }
 @media (max-width:560px){
+  /* 2열로 접히면 3·4번째가 아랫줄로 갑니다. 왼쪽 괘선을 1·3번에서 걷어내고
+     아랫줄에는 윗줄과 가르는 가로 괘선을 답니다 — 띠 구조가 유지됩니다. */
   .kpis{grid-template-columns:1fr 1fr}
+  .kpi:nth-child(odd){border-left:0}
+  .kpi:nth-child(n+3){border-top:1px solid var(--line)}
   h1{font-size:18px}
   .periods{width:100%;justify-content:space-between}
   .wrap{padding:12px 12px 24px}
@@ -778,8 +860,12 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
    13. 한 줄 브리핑
    숫자만 나열하지 않고 "어디가 문제이고 무엇을 검토할지"를 문장으로 먼저.
    ======================================================================== */
-.brief{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--sel);
-  border-radius:10px;padding:12px 16px;margin-bottom:12px}
+/* 예전에는 왼쪽에 3px 파란 띠를 둘렀는데, 그 '색깔 사이드탭'은 AI 가 만든
+   화면의 대표적 표식이라 검출기도 잡습니다. 이 화면의 세계에서 요약문을
+   구별하는 방법은 띠가 아니라 바탕입니다 — 관공서 문서의 요약 상자처럼
+   브랜드 계열의 옅은 바탕을 깔고 테두리는 다른 카드와 같은 1px 로 둡니다. */
+.brief{background:var(--brand-soft);border:1px solid var(--brand-line);
+  border-radius:12px;padding:13px 17px;margin-bottom:12px}
 .brief:empty{display:none}
 .brief .brief-main{font-size:13px;line-height:1.75;color:var(--ink2)}
 .brief .brief-main b{color:var(--ink);font-weight:650}
@@ -963,11 +1049,21 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 
 /* ===========================================================================
  * [22] 다크모드 대비 보정
- *   --sel 은 라이트에서 스틸 블루(#4a6fa5), 다크에서 밝은 라벤더(#9085e9)입니다.
+ *   --sel 은 라이트에서 공식 파랑(#0054A6), 다크에서 밝은 파랑(#5AA6EA)입니다.
  *   그 위에 흰 글자를 고정해 두면 다크에서 대비가 3.13:1 까지 떨어집니다
  *   (WCAG AA 기준 4.5:1). 밝은 배경에는 어두운 글자를 얹어야 합니다.
  *   기존 규칙은 건드리지 않고 다크에서만 글자색을 덮어씁니다. → 6.03:1
  * ======================================================================== */
+
+/* 공식 CI 는 다크 배경에서 못 읽습니다 — 파랑 #0054A6 이 다크 카드 위에서
+   2.25:1 입니다(주황은 5.68:1 로 살아남지만 로고는 한 덩어리라 의미 없음).
+   로고 자체를 밝게 고치는 것은 CI 변형이라 하면 안 되므로, 다크에서만
+   흰 판을 깔아 규정대로 밝은 바탕 위에 얹습니다. */
+:root[data-theme="dark"] .brand .ci{background:#fff;padding:5px 9px;border-radius:7px;box-sizing:content-box}
+@media (prefers-color-scheme:dark){
+  :root:where(:not([data-theme="light"])) .brand .ci{
+    background:#fff;padding:5px 9px;border-radius:7px;box-sizing:content-box}
+}
 /* 추천 박스 안의 설명글은 10.5px 로 작습니다. --ink3 로는 다크에서 3.97:1 이라
    읽기 어렵습니다. 전역 토큰은 그대로 두고 이 박스 안에서만 한 단계 올립니다. */
 .rec-box .rec-note{color:var(--ink2)}

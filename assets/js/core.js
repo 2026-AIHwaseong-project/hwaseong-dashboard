@@ -380,9 +380,15 @@
       { id: 'dashboard', href: pages.dashboard, label: '대시보드' },
       { id: 'simulation', href: pages.simulation, label: '정책 시뮬레이션' }
     ];
+    /* 화성특례시 공식 CI. 기관을 말하는 것은 이 이미지이고, 그 옆 서비스명이
+       이 도구의 이름입니다. alt 는 기관명으로 둡니다 — 스크린리더에게 이
+       이미지의 뜻은 '화성특례시' 이지 서비스 이름이 아닙니다. */
     host.innerHTML =
       '<div class="tn-in">' +
-      '<div class="brand"><i></i>' + esc(app.name || '') + '</div>' +
+      '<div class="brand">' +
+      '<img class="ci" src="assets/img/hwaseong-ci.png" alt="화성특례시" ' +
+      'width="512" height="151" decoding="async">' +
+      '<span class="svc">' + esc(app.navName || app.name || '') + '</span></div>' +
       '<nav class="navlinks" aria-label="주요 화면">' +
       links.map(function (l) {
         return '<a href="' + l.href + '"' + (l.id === current ? ' aria-current="page"' : '') + '>' + esc(l.label) + '</a>';
@@ -391,12 +397,40 @@
       '<div class="tn-sp"></div>' +
       '<div class="tn-act">' +
       '<button class="btn sm" data-theme-btn type="button">테마 · 자동</button>' +
-      '<button class="btn sm primary" data-report-open type="button"><i>▤</i>AI 보고서 생성</button>' +
+      '<button class="btn sm primary" data-report-open type="button">' +
+      HW.icon('doc') + 'AI 보고서 생성</button>' +
       '</div></div>';
   }
 
+  /* ── 아이콘 ─────────────────────────────────────────────────────────
+     한 벌로 직접 그립니다. 예전에는 ▤ · ✦ 같은 글자 기호를 아이콘 자리에
+     썼는데, 그건 폰트마다 모양·굵기·정렬이 제각각이라 나란히 놓으면 한 벌로
+     안 보입니다(✦ 는 폰트에 따라 아예 네모로 뜹니다).
+     규칙: 24 격자 · 획 1.7 · 끝과 모서리는 둥글게 · 채움 없음.
+     currentColor 를 쓰므로 버튼 색이 바뀌면 아이콘도 따라갑니다. */
+  var ICONS = {
+    /* 문서 — 보고서 */
+    doc: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>' +
+         '<path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+    /* 반짝임 — AI 가 만들어 주는 것 */
+    spark: '<path d="M12 3.5 13.7 9l5.5 1.7-5.5 1.7L12 18l-1.7-5.6L4.8 10.7 10.3 9z"/>' +
+           '<path d="M18.5 3.5v3M20 5h-3"/>',
+    /* 돋보기 — 검색 */
+    search: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l4.5 4.5"/>'
+  };
+  /** 인라인 SVG 아이콘 한 개. size 는 픽셀(기본 16). */
+  function icon(name, size) {
+    var d = ICONS[name];
+    if (!d) return '';
+    var s = size || 16;
+    return '<svg class="ic" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" ' +
+      'fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" ' +
+      'stroke-linejoin="round" aria-hidden="true" focusable="false">' + d + '</svg>';
+  }
+  HW.icon = icon;
+
   HW.core = {
-    $: $, $$: $$, el: el, esc: esc,
+    $: $, $$: $$, el: el, esc: esc, icon: icon,
     HELP: HELP, wireHelp: wireHelp,
     clamp: clamp, fmt: fmt, fmt1: fmt1, pct: pct, won: won, delta: delta,
     todayISO: todayISO, nowStamp: nowStamp, korDate: korDate,
