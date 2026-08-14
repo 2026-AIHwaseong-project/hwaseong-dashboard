@@ -1411,18 +1411,69 @@
       applyZoom();
     }
 
+    /** 지도 상자의 화면 좌표 — 한 프레임 동안 캐시합니다.
+     *
+     *  ⚠️ 핸들러 안에서 그때그때 읽으면 안 됩니다. 바로 앞에서 applyZoom 이
+     *     viewBox 와 --zk 를 써 놓았고, --zk 는 CSS 23곳에서 점·선·글자 크기를
+     *     역스케일하는 데 쓰입니다. 그래서 이 한 줄이 SVG 전체의 스타일 재계산과
+     *     레이아웃을 그 자리에서 끝내게 만듭니다(강제 동기 레이아웃).
+     *
+     *     휠은 한 프레임에 여러 개가 몰려 들어오는데 스로틀이 없어, 그때마다
+     *     전체 레이아웃을 다시 했습니다 — 실측 **이벤트당 81.7ms**, 12노치
+     *     버스트에서 **980.8ms 로 휠 처리 JS 전체의 95%** 였습니다.
+     *     (팬에서는 --zk 가 안 바뀌어 같은 호출이 2.8ms 입니다. 배율이 바뀌느냐가
+     *      30배를 가릅니다.)
+     *
+     *  한 프레임만 들고 있는 이유 — 같은 프레임 안에서는 상자가 움직일 수 없으니
+     *  버스트 전체가 한 번만 읽으면 됩니다. 반대로 프레임이 바뀌면 사이드바가
+     *  접히거나 스크롤돼 상자가 옮겨졌을 수 있어 그냥 버립니다. ResizeObserver 만
+     *  걸면 '크기는 그대로인데 위치만 밀린' 경우를 놓칩니다. */
+    var mapRect = null, mapRectRaf = 0;
+    function svgRect() {
+      if (mapRect) return mapRect;
+      mapRect = svg.getBoundingClientRect();
+      if (global.requestAnimationFrame && !mapRectRaf) {
+        mapRectRaf = global.requestAnimationFrame(function () { mapRectRaf = 0; mapRect = null; });
+      }
+      return mapRect;
+    }
+
     function toSvgXY(e) {
-      var r = svg.getBoundingClientRect();
+      /* 끄는 중이면 그 제스처 내내 잡아 둔 값을 씁니다(pointerdown 에서 한 번) */
+      var r = panRect || svgRect();
       if (!r.width || !r.height) return { x: zoom.x, y: zoom.y };
       return { x: zoom.x + (e.clientX - r.left) / r.width * zoom.w,
                y: zoom.y + (e.clientY - r.top) / r.height * zoom.h };
     }
 
-    /* 휠 = 커서 기준 확대/축소 */
+    /* 휠 = 커서 기준 확대/축소.
+       휠은 한 프레임 안에 여러 개가 몰려 들어옵니다(트랙패드는 특히). 이벤트마다
+       applyZoom 을 부르면 그 프레임에는 마지막 것 하나만 화면에 나오는데도 12번을
+       다 계산합니다 — 실측 12노치 버스트에서 카카오 setBounds 만 12회(19.7ms)였고,
+       그동안 실제로 그려진 프레임은 5개였습니다. 배율을 곱해 모아 두었다가 프레임당
+       한 번만 적용합니다.
+
+       같은 프레임 안에서는 zoom 이 안 바뀌므로 이벤트마다 toSvgXY 가 내놓는 지도
+       좌표가 모두 같습니다. 그래서 배율만 곱해 두고 마지막 커서 위치를 쓰면
+       한 번에 적용한 결과가 한 노치씩 적용한 것과 같습니다(커서 고정 확대는
+       같은 기준점에 대해 곱셈이라 결합법칙이 성립합니다). */
+    var wheelF = 1, wheelRaf = 0, wheelX = 0, wheelY = 0;
     svg.addEventListener('wheel', function (e) {
       e.preventDefault();
       var p = toSvgXY(e);
-      zoomAt(e.deltaY < 0 ? 1.25 : 0.8, p.x, p.y);
+      wheelX = p.x; wheelY = p.y;
+      wheelF *= (e.deltaY < 0 ? 1.25 : 0.8);
+      if (!global.requestAnimationFrame) {          // 구형 폴백 — 예전처럼 바로
+        var f0 = wheelF; wheelF = 1;
+        zoomAt(f0, wheelX, wheelY);
+        return;
+      }
+      if (wheelRaf) return;
+      wheelRaf = global.requestAnimationFrame(function () {
+        wheelRaf = 0;
+        var f = wheelF; wheelF = 1;
+        zoomAt(f, wheelX, wheelY);
+      });
     }, { passive: false });
 
     /* ------------------------------------------------------- 분석 영역
