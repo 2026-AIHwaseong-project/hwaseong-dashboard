@@ -391,6 +391,25 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
    드러냅니다. (실제 형상이 필요하면 노선 shapefile 을 따로 받아야 합니다) */
 .kkmode.zdetail .rt{stroke-dasharray:calc(5px/var(--zk)) calc(4px/var(--zk));opacity:.3}
 .kkmode.zdetail .rt-casing{opacity:.25}
+
+/* ── 끄는 동안만 노선을 싸게 그립니다 ─────────────────────────────────
+   전체 배율에서 마우스로 끌 때 프레임 간격 중앙값이 200ms 였고, 그 비용은
+   노선 층입니다(층을 통째로 끄면 66.6ms). 전체 뷰에서는 화면 밖이 없어
+   map.js 의 뷰포트 클리핑이 아무것도 못 자릅니다 — 남는 수단은 둘뿐입니다.
+
+     케이싱 끔 166.6ms(-17%) · optimizeSpeed 183.3ms(-8%) · 둘 다 133.4ms(-33%)
+
+   그런데 둘 다 화면이 하는 주장을 깎습니다. 케이싱은 붉은 칸 위에서 노선이
+   끊겨 보이지 않게 하는 대비 장치고, optimizeSpeed 는 안티에일리어싱을 꺼
+   가는 선을 계단지게 만듭니다. 33% 를 벌자고 정지 화면(캡처·발표에 쓰는 바로
+   그 화면)을 상시로 깎을 이유는 없습니다.
+
+   그래서 **끄는 동안에만** 겁니다. .panning 은 map.js 의 pointermove 가
+   4px 이상 움직였을 때 붙였다가 손을 떼면 바로 뗍니다. 움직이는 중에는
+   가장자리 계단이나 대비 차이를 눈이 잡지 못하고, 손을 떼는 순간 원래
+   품질로 돌아옵니다 — 정지 화면은 픽셀 단위로 이전과 같습니다. */
+.panning .rt{shape-rendering:optimizeSpeed}
+.panning .rt-casing{display:none}
 /* --sr 은 map.js 가 정류장별로 실어 보내는 기본 반지름(일 승하차량 비례, 1.6~4.6px).
    확대 역스케일(--zk)은 여기서 그대로 걸어야 확대해도 점 크기가 유지됩니다. */
 .st{fill:var(--card);stroke:var(--ink);stroke-width:calc(1.8px/var(--zk,1));
