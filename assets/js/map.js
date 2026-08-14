@@ -62,6 +62,16 @@
     var ZDETAIL_K = 10 * Z_SCALE;       // 정류장 이름이 드러나는 배율
     var animTargetW = null;
     var zoomAnim = null;
+    /* 노선 클리핑 상태도 같은 이유로 여기서 초기화한다 — applyZoom 이 매번
+       routeClipStale() 을 부르는데, 그 안에서 _rtGeom.length 를 읽는다.
+       아래(renderRouteLines 옆)에 두면 첫 drawBase 때 undefined 라 터진다.
+       뜻과 근거는 renderRouteLines 주석 참고. */
+    var RT_PAD = 1.0;       // 창 사방에 둘 여유(창 크기의 배수)
+    var _rtGeom = [];       // [{id, pts:[[x,y],…]}] — renderRoutes 가 채운다
+    var _rtBox = null;      // 지금 그려 둔 창(여유 포함)
+    var _rtW = 0;           // 그때의 창 너비
+    var _rtFull = false;    // 그때 상자가 지도를 다 덮었나(= 아무것도 안 잘렸나)
+    var _onRoutes = [];     // 선택된 정류장이 지나는 노선 id — 다시 깎아도 강조 유지
 
     /* 격자를 클릭했을 때 화면 가로에 담을 격자 수. 셀 실크기(cellRect)에서
        역산하므로 500m 로 세분화해도 화면에 보이는 그림은 같다.
@@ -137,7 +147,15 @@
       });
       h += '</g>';
 
-      h += '<g data-groutes></g>';
+      /* 노선 선과 정류장을 다른 층에 담습니다. 확대해서 끌 때 노선만 '화면에 드는
+         만큼'으로 다시 깎는데(renderRouteLines), 한 innerHTML 에 섞여 있으면 그때마다
+         정류장 2,866개까지 통째로 재파싱하게 됩니다. 부모(data-groutes)는 그대로라
+         display·fathit·nohit 같은 기존 상태와 CSS 선택자는 손대지 않아도 됩니다. */
+      h += '<g data-groutes><g data-grtline></g><g data-grtstop></g></g>';
+      /* 정류장 이름표는 따로 담습니다. 노선·정류장과 같은 innerHTML 에 섞여 있으면
+         이름표만 다시 그리려 해도 노선 400개·정류장 2,866개(59만 자)를 통째로
+         재파싱해야 합니다. 층을 나눠 이름표만 갈아끼웁니다. */
+      h += '<g data-gstoplab></g>';
 
       /* 3단계: 읍면동 이름을 실제 도형 중심에 배치 */
       h += '<g data-glabels>';
@@ -159,7 +177,13 @@
 
       /* 호버 테두리. 셀에 직접 stroke 를 주면 선의 절반이 칸 밖으로 나가
          이웃을 덮으므로, 맨 위 레이어에 칸 안쪽으로 그립니다. */
+      /* 밝기 강조는 칸 위에 반투명 한 장을 덮어서 냅니다. 예전에는 격자 rect 에
+         filter:saturate()brightness() 를 걸었는데, filter 는 그 칸을 별도 페인트
+         서피스로 승격시켜 마우스가 칸을 넘을 때마다 지도 전체가 다시 래스터됐습니다
+         — 실측 호버 프레임 p95 118.5ms · 50ms 초과 6/72. 이 한 장으로 바꾸면
+         p95 21ms · 초과 1 입니다. 색상(hue)은 안 바뀌므로 지표 해석은 그대로입니다. */
       h += '<g data-hovring visibility="hidden">' +
+        '<rect class="hov-fill" x="-99" y="-99" width="10" height="10"/>' +
         '<rect class="hov-line" x="-99" y="-99" width="10" height="10"/></g>';
 
       h += '<g transform="translate(' + (W - 38) + ',72)"><circle class="compass" r="11"/>' +
@@ -206,6 +230,12 @@
        기능은 그대로 동작하고, 배경 한 겹만 없이 지금 모습으로 남습니다. */
     var kkMap = null;
     var kkInner = null;
+    /* 컨테이너 크기 캐시. alignKakao 가 매번 clientWidth 를 읽으면, 바로 앞에서
+       viewBox 를 써 레이아웃을 더럽힌 직후라 브라우저가 그 자리에서 문서 전체
+       레이아웃을 동기로 돌립니다(write→read 레이아웃 스래싱). 휠 핸들러 JS 중앙
+       106ms 가 이 한 줄에서 나왔습니다. 크기는 ResizeObserver 가 알려줄 때만
+       바뀌므로 그때 갱신합니다. */
+    var kkBoxW = 0, kkBoxH = 0;
     function initKakao() {
       var cfg = (HW.CONFIG && HW.CONFIG.KAKAO) || {};
       if (!cfg.enabled || !cfg.jsKey || !svg.parentNode || !global.document) return;
@@ -227,6 +257,7 @@
       function giveUp() {
         kkMap = null;
         kkInner = null;
+        kkBoxW = kkBoxH = 0;
         if (div.parentNode) div.parentNode.removeChild(div);
       }
 
@@ -284,17 +315,17 @@
          transform 은 레이아웃 박스를 안 바꾸므로 실제로는 안 돌지만,
          관찰자를 굳이 그 자리에 두지 않습니다. 크기가 실제로 달라졌을
          때만 도는 가드도 함께 둡니다. */
-      var _lastW = 0, _lastH = 0;
       function onBoxResize() {
         if (!kkMap) return;
         var w = div.clientWidth, h = div.clientHeight;
-        if (!w || !h || (w === _lastW && h === _lastH)) return;
-        _lastW = w; _lastH = h;
+        if (!w || !h || (w === kkBoxW && h === kkBoxH)) return;
+        kkBoxW = w; kkBoxH = h;
         kkMap.relayout();
         syncKakao();
       }
       if (global.ResizeObserver) {
         new global.ResizeObserver(onBoxResize).observe(div);
+        onBoxResize();          /* 첫 크기를 캐시에 채웁니다 */
       } else {
         global.addEventListener('resize', onBoxResize);   // 구형 브라우저 폴백
       }
@@ -346,8 +377,10 @@
       var tl, br, W, H;
       try {
         var proj = kkMap.getProjection();
-        W = kkInner.clientWidth;
-        H = kkInner.clientHeight;
+        /* 캐시가 비어 있을 때만 실제로 읽습니다(첫 호출·구형 폴백 경로) */
+        if (!kkBoxW || !kkBoxH) { kkBoxW = kkInner.clientWidth; kkBoxH = kkInner.clientHeight; }
+        W = kkBoxW;
+        H = kkBoxH;
         if (!proj || !proj.containerPointFromCoords || !W || !H) return;
         tl = proj.containerPointFromCoords(new global.kakao.maps.LatLng(ne.lat, sw.lon));
         br = proj.containerPointFromCoords(new global.kakao.maps.LatLng(sw.lat, ne.lon));
@@ -379,6 +412,9 @@
     initKakao();
     var gCells = svg.querySelector('[data-cells]');
     var gRoutes = svg.querySelector('[data-groutes]');
+    var gRtLine = svg.querySelector('[data-grtline]');
+    var gRtStop = svg.querySelector('[data-grtstop]');
+    var gStopLab = svg.querySelector('[data-gstoplab]');
     var gLabels = svg.querySelector('[data-glabels]');
     var gDongLine = svg.querySelector('[data-dongline]');
     var gPlaced = svg.querySelector('[data-placed]');
@@ -397,7 +433,15 @@
          굵기는 칸의 13%. 500m 격자(약 8px)에서 20% 로 두면 테두리가 칸 면적의
          60% 를 덮어 검은 네모처럼 보입니다. */
       var sw = Math.max(0.6, Math.min(1.8, w * 0.13));
-      var el = gHovRing.firstChild;
+      /* 밝기 덮개는 칸 전체를, 테두리는 그 안쪽에 */
+      var fill = gHovRing.querySelector('.hov-fill');
+      if (fill) {
+        fill.setAttribute('x', rx.toFixed(2));
+        fill.setAttribute('y', ry.toFixed(2));
+        fill.setAttribute('width', Math.max(0.5, w).toFixed(2));
+        fill.setAttribute('height', Math.max(0.5, h).toFixed(2));
+      }
+      var el = gHovRing.querySelector('.hov-line');
       el.setAttribute('x', (rx + sw / 2).toFixed(2));
       el.setAttribute('y', (ry + sw / 2).toFixed(2));
       el.setAttribute('width', Math.max(0.5, w - sw).toFixed(2));
@@ -524,8 +568,18 @@
          정류장 2,866개를 display:none 인 채로 세워 두면 SVG 노드 9천 개를
          쓸데없이 만들게 됩니다. 켜질 때 다시 그립니다. */
       if (!state.showRoutes && !only) {
-        gRoutes.innerHTML = '';
+        /* 자식 두 층은 남겨 둡니다 — gRoutes.innerHTML='' 로 지우면 gRtLine·gRtStop
+           참조가 문서에서 떨어져 나가 이후 그리기가 조용히 아무 데도 안 나갑니다. */
+        _rtGeom = []; _rtBox = null;
+        gRtLine.innerHTML = '';
+        gRtStop.innerHTML = '';
         gRoutes.style.display = 'none';
+        /* 이름표는 이제 gRoutes 밖(별도 층)이라 여기서 같이 지워야 합니다. 안 그러면
+           격자를 찍어 이름표가 떠 있는 상태(.always)에서 노선을 끄면, 정류장 점은
+           사라지고 이름 41개만 빈 지도 위에 남습니다 — 실측으로 재현됩니다
+           (격자 재클릭 해제: 정류장 0개 · 이름표 41개). */
+        _labStops = []; _labAlways = false;
+        renderStopLabels();
         _stopsDrawn = false;
         return;
       }
@@ -536,21 +590,12 @@
           })
         : state.routes;
 
-      /* 1단계: 케이싱(바탕색 굵은 선) → 2단계: 노선 본선. 격자 위에서도 선이 끊겨 보이지 않습니다. */
-      function routePts(rt) {
-        var src = rt.pathXY;
-        if (src && src.length) return src.map(function (p) { return p[0] + ',' + p[1]; });
-        return (rt.path || []).map(function (p) {
-          var q = C.project(p[0], p[1]);
-          return q.x.toFixed(1) + ',' + q.y.toFixed(1);
-        });
-      }
-      routes.forEach(function (rt) {
-        h += '<polyline class="rt-casing" points="' + routePts(rt).join(' ') + '"/>';
-      });
-      routes.forEach(function (rt) {
-        h += '<polyline class="rt" data-route="' + esc(rt.id) + '" points="' + routePts(rt).join(' ') + '"/>';
-      });
+      /* 노선 선은 좌표만 뽑아 두고, 그리는 일은 renderRouteLines 가 맡습니다
+         (화면에 드는 구간만 — 아래 설명). */
+      _rtGeom = routes.map(routeXY);
+      _rtBox = null;                 /* 목록이 바뀌었으니 이전 클립 창은 버립니다 */
+      renderRouteLines();
+
       /* 점 크기를 일 승하차량에 비례시킵니다. 전부 같은 크기로 그리면
          병점역(일 1만)과 시골 정류장(일 몇 명)이 똑같이 보여서, 2,866개가
          격자 색을 고르게 덮어 미스매칭이 안 읽힙니다.
@@ -581,17 +626,7 @@
           '" style="--sr:' + stopR(s).toFixed(2) + 'px"' +
           ' cx="' + p.x + '" cy="' + p.y + '"/>';
       });
-      /* 정류장 이름은 확대해야 보이는데(.stlab{display:none}) 예전에는 2,866개를
-         항상 만들어 두고 CSS 로만 감췄습니다. SVG 요소 12,636개 중 2,866개가
-         한 번도 안 보이는 텍스트였습니다. 확대 상태에서만 만듭니다.
-         격자를 클릭한 상태(only)면 몇 개 안 되므로 배율과 무관하게 바로 붙입니다. */
-      if (state.zdetail || only) {
-        stops.forEach(function (s) {
-          var p = C.xy(s);
-          h += '<text class="stlab' + (only ? ' always' : '') + '" x="' + p.x + '" y="' + p.y +
-            '" dy="-1.1em" text-anchor="middle">' + esc(s.name) + '</text>';
-        });
-      }
+      /* 이름표는 아래 renderStopLabels 가 별도 층에 그립니다(화면에 드는 것만). */
       /* ── 히트 전용 층은 '적을 때만' 만듭니다 ────────────────────────────
          전체(2,866개)를 켜면 이 층만으로 SVG 노드가 5,732개 늘었습니다
          (투명 원 2,866 + <title> 2,866). 전체 노드 8,998 중 64% 가 한 번도
@@ -610,15 +645,215 @@
         });
       }
       gRoutes.classList.toggle('fathit', fatHit);
-      gRoutes.innerHTML = h;
+      gRtStop.innerHTML = h;
       /* 격자를 찍어 놓은 동안에는 전체 토글이 꺼져 있어도 그 격자 것은 보여야 합니다 */
       gRoutes.style.display = (state.showRoutes || only) ? '' : 'none';
+      _labStops = stops;
+      _labAlways = !!only;
+      renderStopLabels();
       _stopsDrawn = true;
       applyStopsInteractive();
       /* 위에서 DOM 을 통째로 새로 만들었으므로 선택 표시(.on)가 날아갑니다.
          정류장을 검색해 그 격자로 파고드는 흐름이 setCellFocus → renderRoutes
          순서라, 여기서 복원하지 않으면 "검색한 정류장이 선택돼 보인다"가 깨집니다. */
       if (state.selectedStopId) highlightStop(state.selectedStopId);
+    }
+
+    /* ── 노선 선: 화면에 드는 구간만 ──────────────────────────────────
+       확대해 놓고 마우스로 끌 때 프레임을 통째로 먹는 것이 이 층입니다. 층을
+       하나씩 꺼 가며 잰 결과(zdetail·1,455% · 동탄 · 프레임 간격 중앙값):
+
+         현재 200ms │ 노선 층만 끔 33ms(-83%) │ 점선만 해제 83ms(-58%)
+         케이싱만 끔·정류장 점 끔·이름표 끔·격자 끔·카카오 배경 끔 → 모두 0%
+
+       즉 비용은 사실상 전부 노선이고, 그중 대부분이 점선입니다. 점선 개수는
+       '경로 길이 ÷ 점선 주기'인데 주기를 --zk 로 역스케일해 화면상 굵기를
+       유지하므로, 확대할수록 주기가 잘게 쪼개집니다(14.5배에서 5px → 0.34
+       사용자단위). 게다가 노선 201개는 저마다 시 전체를 가로지르는 폴리라인이라
+       화면에 0.5% 만 걸쳐도 브라우저는 경로 **전체** 길이만큼 점선을 셉니다.
+
+       그래서 창 밖 구간을 잘라 냅니다. 점선을 포기하지 않고 같은 이득이 나고
+       (200 → 83ms, 점선 해제와 동일), 둘을 겹치면 67ms 입니다. 자른 자리는
+       창 밖이라 보이지 않으므로 화면은 그대로입니다 — app.css 의 "노선은
+       실제 도로 형상이 아니라 모식도" 라는 표현을 지웠다면 잃었을 주장입니다.
+       (자른 조각은 점선 위상이 그 자리에서 다시 시작하므로, 그것만은
+        stroke-dashoffset 으로 되돌려 줘야 합니다 — 아래 emitRun 참고.)
+
+       ⚠️ 매 프레임 깎지 않습니다(1회 9.8ms). 창의 사방에 제 크기만큼 여유를
+          두고 잘라 두었다가 그 여유를 벗어났을 때만 다시 깎고(routeClipStale),
+          '더 촘촘히 자르면 싸지겠다'는 쪽은 멈춘 뒤로 미룹니다(routeClipLoose).
+          확대·축소 애니메이션은 지나갈 구간을 animateTo 가 미리 통째로 넘겨
+          200ms 동안 0회로 만듭니다.
+
+       (상태 변수 RT_PAD·_rtGeom·_rtBox·_rtW·_onRoutes 는 초기화 순서 때문에
+        파일 상단 MIN_W 옆에 선언돼 있습니다 — 거기 주석 참고.) */
+
+    function routeXY(rt) {
+      var src = rt.pathXY, pts = [], i;
+      if (src && src.length) {
+        for (i = 0; i < src.length; i++) pts.push([+src[i][0], +src[i][1]]);
+      } else {
+        var path = rt.path || [];
+        for (i = 0; i < path.length; i++) {
+          var q = C.project(path[i][0], path[i][1]);
+          pts.push([+q.x.toFixed(1), +q.y.toFixed(1)]);
+        }
+      }
+      return { id: rt.id, pts: pts };
+    }
+
+    /** 여유를 포함한 창이 지도를 다 덮는가 — 그러면 자를 것이 하나도 없습니다. */
+    function routeBoxCoversAll(v) {
+      var mx = v.w * RT_PAD, my = v.h * RT_PAD;
+      return v.x - mx <= 0 && v.y - my <= 0 &&
+        v.x + v.w + mx >= W && v.y + v.h + my >= H;
+    }
+
+    /** 지금 당장 다시 깎아야 하는가 — 창이 잘라 둔 상자를 벗어나 노선이 비어 보이는 경우.
+     *  applyZoom 이 매 프레임 부르므로 값 비교만 합니다.
+     *
+     *  ⚠️ 예전에는 여기에 배율 조건(zoom.w > _rtW*1.8 || < _rtW*0.5)이 함께 있었는데,
+     *     그건 '더 촘촘히 잘라 두면 프레임이 싸진다'는 최적화지 지금 고쳐야 하는 일이
+     *     아닙니다. 그런데 applyZoom 이 이걸 그 자리에서 실행하는 바람에, 축소
+     *     애니메이션 200ms 안에서 노선 층이 3~4번 통째로 다시 만들어졌습니다.
+     *     그중 뒤쪽 1~2번은 상자가 이미 지도 전체를 덮어 **한 구간도 안 잘리는**,
+     *     즉 화면상 달라지는 픽셀이 0인 23만 자짜리 재파싱이었습니다. 바꾸기 전
+     *     코드는 이 구간에서 노선 DOM 을 한 번도 안 건드렸으므로 순수 회귀였습니다.
+     *     지금은 최적화 쪽을 routeClipLoose 로 떼어 움직임이 멈춘 뒤로 미룹니다. */
+    function routeClipStale() {
+      if (!_rtGeom.length) return false;
+      if (!_rtBox) return true;
+      /* 전에도 다 덮었고 지금도 다 덮으면 결과가 '노선 전부'로 같습니다 — 건너뜁니다 */
+      if (_rtFull && routeBoxCoversAll(zoom)) return false;
+      return zoom.x < _rtBox.x0 || zoom.y < _rtBox.y0 ||
+        zoom.x + zoom.w > _rtBox.x1 || zoom.y + zoom.h > _rtBox.y1;
+    }
+
+    /** 미뤄도 되는 쪽 — 상자를 너무 넓게 잡아 둬서 프레임이 필요 이상으로 비싼 경우.
+     *  많이 확대해 들어갔을 때 걸립니다. 화면은 이미 맞으므로 멈춘 뒤에 손봅니다. */
+    function routeClipLoose() {
+      return !!_rtBox && !!_rtGeom.length && zoom.w < _rtW * 0.5;
+    }
+
+    var _rtTimer = null;
+    function scheduleRouteLines() {
+      if (_rtTimer) global.clearTimeout(_rtTimer);
+      _rtTimer = global.setTimeout(function () {
+        _rtTimer = null;
+        /* 미뤄 두는 사이에 상황이 달라졌을 수 있으니 그때 다시 봅니다. 축소
+           애니메이션의 앞 프레임들은 '상자를 너무 넓게 잡아 뒀다'로 보이지만,
+           끝나고 나면 창이 그 상자만큼 커져 있어 다시 깎아 봐야 **바이트까지
+           똑같은** 전량 재구축이 됩니다(실측 247,364자 → 247,364자). */
+        if (routeClipLoose()) renderRouteLines();
+      }, 140);
+    }
+
+    /** @param view 잘라 둘 창. 생략하면 지금 창. animateTo 는 애니메이션이 지나갈
+     *              구간을 통째로 넘겨, 그 200ms 동안 다시 깎을 일이 없게 합니다. */
+    function renderRouteLines(view) {
+      if (!gRtLine) return;
+      if (_rtTimer) { global.clearTimeout(_rtTimer); _rtTimer = null; }
+      var v = view || zoom;
+      var mx = v.w * RT_PAD, my = v.h * RT_PAD;
+      _rtBox = { x0: v.x - mx, y0: v.y - my,
+                 x1: v.x + v.w + mx, y1: v.y + v.h + my };
+      _rtW = v.w;
+      _rtFull = routeBoxCoversAll(v);
+      var b = _rtBox, cas = '', main = '', i, j;
+      for (i = 0; i < _rtGeom.length; i++) {
+        var P = _rtGeom[i].pts, id = esc(_rtGeom[i].id), run = null, at = 0, off = 0;
+        for (j = 0; j < P.length - 1; j++) {
+          var a = P[j], c = P[j + 1];
+          /* 선분의 경계상자로 판정합니다 — 걸치지 않는 것을 확실히 버리기만 하면
+             되므로, 실제로는 안 지나는데 남는 선분이 몇 개 있어도 무해합니다. */
+          var lx = a[0] < c[0] ? a[0] : c[0], hx = a[0] < c[0] ? c[0] : a[0];
+          var ly = a[1] < c[1] ? a[1] : c[1], hy = a[1] < c[1] ? c[1] : a[1];
+          if (hx >= b.x0 && lx <= b.x1 && hy >= b.y0 && ly <= b.y1) {
+            if (!run) { run = [a[0] + ',' + a[1]]; off = at; }
+            run.push(c[0] + ',' + c[1]);
+          } else if (run) {
+            emitRun(run, id, off);
+            run = null;
+          }
+          /* 노선 시작점부터의 거리. 아래 emitRun 이 점선 위상을 맞추는 데 씁니다. */
+          at += Math.sqrt((c[0] - a[0]) * (c[0] - a[0]) + (c[1] - a[1]) * (c[1] - a[1]));
+        }
+        if (run && run.length > 1) emitRun(run, id, off);
+      }
+      /* 1단계: 케이싱(바탕색 굵은 선) → 2단계: 본선. 케이싱을 먼저 다 깔아야
+         격자 색 위에서도 선이 끊겨 보이지 않습니다. 그래서 두 문자열로 모읍니다. */
+      function emitRun(run, id, off) {
+        var s = run.join(' ');
+        cas += '<polyline class="rt-casing" points="' + s + '"/>';
+        /* stroke-dashoffset — 자른 조각은 그 자리에서 점선이 다시 시작하므로,
+           다시 깎을 때마다 자르는 위치가 달라지면 화면 안의 모든 점선이 한 프레임에
+           같이 튑니다(실측 최대 9px, 케이싱 실선은 안 움직여 그 위를 미끄러집니다).
+           노선 시작점부터의 거리를 위상으로 되돌려 주면 어디서 자르든 원래 자리에
+           점선이 놓입니다 — 그래야 "자른 자리는 창 밖이라 화면은 그대로"가 참이 됩니다.
+           (.kkmode.zdetail 이 아니면 stroke-dasharray 가 없어 이 값은 무시됩니다) */
+        main += '<polyline class="rt" data-route="' + id + '" stroke-dashoffset="' +
+          off.toFixed(1) + '" points="' + s + '"/>';
+      }
+      gRtLine.innerHTML = cas + main;
+      /* 다시 만들었으니 선택 강조(.on)가 날아갑니다. 정류장 층은 그대로이므로
+         highlightStop 전체를 다시 돌리지 않고 노선 쪽만 되돌립니다. */
+      if (_onRoutes.length) {
+        Array.prototype.forEach.call(gRtLine.querySelectorAll('.rt'), function (r) {
+          if (_onRoutes.indexOf(r.getAttribute('data-route')) >= 0) r.classList.add('on');
+        });
+      }
+    }
+
+    /* ── 정류장 이름표 ────────────────────────────────────────────────
+       확대(zdetail)해야 보이는데, 예전에는 2,866개를 통째로 만들어 두고 CSS 로만
+       감췄습니다. SVG <text> 는 viewBox 가 바뀔 때마다 전부 재레이아웃 대상이라,
+       확대해 둔 채 팬하면 프레임마다 2,866개 텍스트를 다시 재게 됩니다 —
+       실측 프레임당 레이아웃 248ms, 이름표를 빼면 2.7ms(-99%).
+       그래서 **지금 화면에 드는 것만** 만듭니다. 확대하면 수십 개입니다.
+       격자를 클릭한 상태(always)는 몇 개 안 되므로 컬링하지 않습니다. */
+    var _labStops = [];       // 그릴 후보 (renderRoutes 가 고른 것)
+    var _labAlways = false;   // 격자 포커스 상태 — 배율·화면과 무관하게 전부 표시
+    var _labKey = '';         // 같은 화면이면 다시 안 그리게
+    var _labTimer = null;
+
+    /* 팬·확대 중에는 미룹니다. 이름표는 SVG 좌표라 viewBox 와 함께 따라 움직이므로
+       움직이는 동안 갱신하지 않아도 어긋나지 않습니다 — 새로 드러난 가장자리만
+       잠깐 비는데 아래 20% 여유가 그걸 덮습니다. 프레임당 비용이 0 이 됩니다. */
+    function scheduleStopLabels() {
+      if (_labTimer) global.clearTimeout(_labTimer);
+      _labTimer = global.setTimeout(function () { _labTimer = null; renderStopLabels(); }, 120);
+    }
+
+    function renderStopLabels() {
+      if (!gStopLab) return;
+      if (!(state.zdetail || _labAlways) || !_labStops.length) {
+        if (_labKey !== 'off') { gStopLab.innerHTML = ''; _labKey = 'off'; }
+        return;
+      }
+      var list = _labStops, key;
+      if (_labAlways) {
+        key = 'always:' + list.length;
+      } else {
+        var mx = zoom.w * 0.2, my = zoom.h * 0.2;
+        var x0 = zoom.x - mx, x1 = zoom.x + zoom.w + mx;
+        var y0 = zoom.y - my, y1 = zoom.y + zoom.h + my;
+        list = [];
+        for (var i = 0; i < _labStops.length; i++) {
+          var q = C.xy(_labStops[i]);
+          if (q.x >= x0 && q.x <= x1 && q.y >= y0 && q.y <= y1) list.push(_labStops[i]);
+        }
+        key = x0.toFixed(0) + ',' + y0.toFixed(0) + ',' + x1.toFixed(0) + ',' + y1.toFixed(0) +
+          ':' + list.length;
+      }
+      if (key === _labKey) return;
+      _labKey = key;
+      var h = '';
+      for (var j = 0; j < list.length; j++) {
+        var s2 = list[j], p2 = C.xy(s2);
+        h += '<text class="stlab' + (_labAlways ? ' always' : '') + '" x="' + p2.x + '" y="' + p2.y +
+          '" dy="-1.1em" text-anchor="middle">' + esc(s2.name) + '</text>';
+      }
+      gStopLab.innerHTML = h;
     }
 
     /* 배치 모드에서는 정류장이 격자 클릭을 가로채지 않도록 통과시킵니다.
@@ -772,6 +1007,7 @@
       var stop = null;
       state.stops.forEach(function (s) { if (s.id === stopId) stop = s; });
       var routeIds = (stop && stop.routes) || [];
+      _onRoutes = routeIds;   /* 노선을 다시 깎아도 강조가 유지되게 (renderRouteLines) */
       Array.prototype.forEach.call(gRoutes.querySelectorAll('.rt'), function (r) {
         r.classList.toggle('on', routeIds.indexOf(r.getAttribute('data-route')) >= 0);
       });
@@ -945,6 +1181,12 @@
     }
 
     svg.addEventListener('mousemove', function (e) {
+      /* 끄는 중에는 정류장 판정을 건너뜁니다. 판정은 toSvgXY 로 지도 상자의 화면
+         좌표를 읽는데, 바로 앞에서 applyZoom 이 viewBox 를 써 놓아 강제 동기
+         레이아웃이 걸립니다(실측 2.8ms) — 게다가 히트 층이 없는 전체 표시
+         상태에서는 nearestStop 이 2,866개를 좌표로 훑습니다. 끌고 있는 동안
+         정류장 툴팁을 띄울 이유도 없습니다(위 pointermove 에서 이미 접었습니다). */
+      if (pan && panMoved) return;
       var s = stopAtEvent(e);
       if (!s) {
         /* 격자 위 툴팁은 gCells 핸들러가 관리하므로 건드리지 않습니다.
@@ -1018,8 +1260,12 @@
          매 프레임이 아니라 상태가 바뀌는 순간에만 도는 조건입니다. */
       if (detail !== state.zdetail) {
         state.zdetail = detail;
-        if (state.stops && state.stops.length) renderRoutes();
+        /* 이름표는 별도 층이라 노선·정류장을 다시 파싱하지 않고 그 층만 갈아끼웁니다
+           (예전에는 여기서 renderRoutes 가 통째로 돌아 59만 자를 재파싱했습니다). */
+        renderStopLabels();
       }
+      /* 화면이 움직였으면 이름표 대상이 달라졌을 수 있습니다 — 멈춘 뒤 한 번 */
+      if (state.zdetail || _labAlways) scheduleStopLabels();
       /* 격자를 클릭해 확대했다가 −버튼·휠로 손수 다시 축소해 전체 배율로
          돌아오면 cellFocus 가 안 풀렸다 — 지금까지는 '전체' 리셋 버튼
          (zoomReset)만 그걸 지웠다. 그러면 '노선·정류장 전체'를 켠 채로 격자를
@@ -1036,6 +1282,15 @@
         renderRoutes();
         if (opt.onExitCellFocus) opt.onExitCellFocus();
       }
+      /* 노선 선은 잘라 둔 창을 벗어났을 때만 그 자리에서 다시 깎습니다. 이름표처럼
+         미루지 않는 이유 — 이름표는 없으면 비어 보일 뿐이지만, 노선이 비면
+         "여기는 노선이 없다"는 틀린 주장이 됩니다. 반대로 '너무 넓게 잘라 둬서
+         비싸다'는 화면이 이미 맞는 상태라 멈춘 뒤로 미룹니다.
+         바로 위 격자 초점 해제 뒤에 두는 이유 — 그 분기의 renderRoutes 가 노선
+         목록을 전체로 갈아끼우고 이미 다시 깎습니다. 앞에 두면 같은 프레임에
+         옛 목록으로 한 번, 새 목록으로 한 번, 두 번 쓰게 됩니다. */
+      if (routeClipStale()) renderRouteLines();
+      else if (routeClipLoose()) scheduleRouteLines();
       if (zctl) zctl.classList.toggle('zoomed', isZoomed());
       /* 1,200% 넘어가면 소수점이 의미가 없어 정수로 끊습니다 */
       if (zpctEl) zpctEl.textContent = Math.round(k * 100).toLocaleString('ko-KR') + '%';
@@ -1063,6 +1318,19 @@
       if (reduce || !global.requestAnimationFrame ||
           (global.document && global.document.hidden)) {
         zoom = t; applyZoom(); return;
+      }
+      /* 애니메이션이 지나갈 구간(지금 창 ∪ 목표 창)을 한 번에 담아 노선을 미리
+         깎아 둡니다. 보간은 x·w 를 각각 선형으로 섞으므로 중간 창은 전부 이
+         합집합 안에 들어옵니다 — 그래서 200ms 동안 다시 깎을 일이 0 이 됩니다.
+         이 한 번의 비용은 클릭한 그 순간에 묻히지, 애니메이션 한복판에서
+         프레임을 떨어뜨리지 않습니다. */
+      if (_rtGeom.length) {
+        var ux = Math.min(zoom.x, t.x), uy = Math.min(zoom.y, t.y);
+        renderRouteLines({
+          x: ux, y: uy,
+          w: Math.max(zoom.x + zoom.w, t.x + t.w) - ux,
+          h: Math.max(zoom.y + zoom.h, t.y + t.h) - uy
+        });
       }
       var from = { x: zoom.x, y: zoom.y, w: zoom.w, h: zoom.h }, t0 = null;
       function step(ts) {
@@ -1219,7 +1487,7 @@
     }
 
     /* 드래그 = 이동. 4px 미만 움직임은 클릭으로 취급해 배치·선택을 방해하지 않습니다 */
-    var pan = null, panMoved = false;
+    var pan = null, panMoved = false, panRect = null;
     svg.addEventListener('pointerdown', function (e) {
       if (e.button !== 0) return;
       if (state.areaMode) {
@@ -1236,6 +1504,11 @@
       }
       pan = { cx: e.clientX, cy: e.clientY, x: zoom.x, y: zoom.y };
       panMoved = false;
+      /* 지도 상자의 화면 좌표는 끄는 동안 변하지 않습니다. 그런데 아래
+         pointermove 는 applyZoom 이 viewBox 를 써서 레이아웃을 막 더럽힌 직후에
+         이걸 읽어 왔습니다 — 강제 동기 레이아웃이라 실측 호출당 2.8ms 입니다.
+         누를 때 한 번만 재 둡니다. */
+      panRect = svg.getBoundingClientRect();
     });
     svg.addEventListener('pointermove', function (e) {
       if (band) {
@@ -1250,9 +1523,10 @@
       if (!panMoved) {
         panMoved = true;
         svg.classList.add('panning');
+        C.hideTip();     /* 끌기 시작 — 정류장 툴팁은 여기서 한 번만 접습니다 */
         try { svg.setPointerCapture(e.pointerId); } catch (err) { /* 미지원 환경 */ }
       }
-      var r = svg.getBoundingClientRect();
+      var r = panRect || svg.getBoundingClientRect();
       if (!r.width) return;
       zoom = clampBox(pan.x - dx / r.width * zoom.w, pan.y - dy / r.height * zoom.h, zoom.w);
       applyZoom();
@@ -1270,11 +1544,12 @@
       return true;
     }
     svg.addEventListener('pointerup', function () {
+      panRect = null;
       if (endBand()) return;
       pan = null; svg.classList.remove('panning');
     });
     svg.addEventListener('pointercancel', function () {
-      band = null; pan = null; svg.classList.remove('panning');
+      band = null; pan = null; panRect = null; svg.classList.remove('panning');
     });
     /* 드래그 직후의 click 이 배치·선택으로 이어지지 않게 캡처 단계에서 삼킵니다 */
     svg.addEventListener('click', function (e) {
