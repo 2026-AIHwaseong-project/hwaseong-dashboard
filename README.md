@@ -430,6 +430,7 @@ python3 tools/build-boundary.py
 |---|---|
 | [docs/API.md](docs/API.md) | 프론트 렌더링 계약 + 설계 근거 |
 | [docs/KAKAO-VERIFY.md](docs/KAKAO-VERIFY.md) | 카카오 배경 정합 검증 런북 (회귀 확인용) |
+| [docs/PERF.md](docs/PERF.md) | 지도 렌더 성능 — 무엇이 느렸고 어떻게 고쳤나 (측정 방법·기각한 가설 포함) |
 | [백엔드 docs/API_SPEC.md](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend/blob/main/docs/API_SPEC.md) | 엔드포인트 10개 계약 **(정본)** |
 | [백엔드 README](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend) | 산출 로직 · 사용 데이터 · 검증 · AI 보고서 프롬프트 |
 
