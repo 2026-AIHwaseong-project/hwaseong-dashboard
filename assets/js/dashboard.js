@@ -376,6 +376,15 @@
     if (!S.focusRegion) {
       S.map.setEligible(null);
     } else {
+      /* 권역을 보러 들어가면 노선·격자 초점은 끝납니다 — "봉담읍 권역을 본다" 와
+         "400번만 본다" 는 같이 설 수 없습니다. 안 풀면 지도는 400번만 그린 채
+         남고 카드만 바뀌어, 화면 두 곳이 서로 다른 말을 합니다.
+         호출부가 아니라 **여기** 한 곳에 두는 이유 — 권역 진입구가 검색창·권역 표
+         행·범례 셋이라, 호출부마다 따로 두면 이번처럼 한 곳(표 행)만 빠집니다.
+         setCellFocus(null) 하나로는 안 됩니다: map.js 는 cellId 가 truthy 일 때만
+         routeFocus 를 지웁니다. 둘은 동시에 안 걸리므로 걸린 쪽만 부릅니다. */
+      if (S.map.getRouteFocus()) { S.map.setRouteFocus(null); renderCellRoutes(null); }
+      else if (S.map.getCellFocus()) { S.map.setCellFocus(null); renderCellRoutes(null); }
       var set = new Set();
       S.grid.cells.forEach(function (c) { if (c.region === S.focusRegion) set.add(c.id); });
       S.map.setEligible(set, S.focusRegion + ' 권역만 강조 중');
@@ -1075,8 +1084,8 @@
            검색은 언제 눌러도 "그 권역을 본다"가 되어야 하므로 먼저 풀어 둡니다. */
         if (S.focusRegion === hit) S.focusRegion = null;
         focusRegion(hit);
-        S.map.setCellFocus(null);     /* 한 격자만 보던 상태면 권역 보기로 넓힙니다 */
-        renderCellRoutes(null);
+        /* 한 격자·한 노선만 보던 상태를 권역 보기로 넓히는 일은 focusRegion 이 합니다
+           (권역 표 행·범례와 같은 경로를 쓰려고 그쪽에 뒀습니다). 여기서는 확대만. */
         S.map.zoomToRegion(hit);      /* focusRegion 은 강조만 하므로 확대는 따로 */
         return;
       }
@@ -1134,8 +1143,13 @@
          제한합니다(cellFocus 가 showRoutes 보다 우선 판정됨) — "전체"를 눌러도
          그 칸 밖은 안 보였습니다. 격자 초점을 풀어야 이름대로 전체가 뜹니다.
          (지역 검색이 넓혀 볼 때 쓰는 것과 같은 처리 — wireMapSearch 참고.) */
-      if (on && S.map.getCellFocus()) {
-        S.map.setCellFocus(null);
+      /* 노선 초점도 같은 이유로 풀어야 합니다. setRouteFocus 가 cellFocus 를 지워 두기
+         때문에, 버스 번호로 찾아 들어온 상태에서는 위 getCellFocus() 가 null 이라 이
+         분기를 그냥 지나쳤고 '전체'를 눌러도 renderRoutes 가 그 노선 하나만 그렸습니다.
+         둘은 동시에 걸리지 않으므로(각 setter 가 상대를 지웁니다) 하나만 부르면 됩니다. */
+      if (on && (S.map.getRouteFocus() || S.map.getCellFocus())) {
+        if (S.map.getRouteFocus()) S.map.setRouteFocus(null);
+        else S.map.setCellFocus(null);
         renderCellRoutes(null);
       }
       S.map.setShowRoutes(on);

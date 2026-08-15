@@ -700,7 +700,32 @@
       /* 격자를 찍어 놓은 동안에는 전체 토글이 꺼져 있어도 그 격자 것은 보여야 합니다 */
       gRoutes.style.display = (state.showRoutes || only) ? '' : 'none';
       _labStops = stops;
-      _labAlways = !!only;
+      /* 컬링 면제(always)는 **격자 초점에만** 줍니다. 격자는 정류장이 몇 개(786칸 중
+         최대 41개·중앙값 2개)고 focusCell 이 CELL_ZOOM_SPAN 만큼 당겨 놓은 상태라
+         전부 그려도 읽힙니다. 노선은 한 줄에 최대 241개(1000번)가 걸립니다.
+
+         ⚠️ 면제 기준을 개수로 바꾸고 싶어질 텐데("짧은 노선은 살려 주자"), 그럴
+            필요가 없습니다. 노선 초점 배율은 zoomToBox 가 노선 bbox×1.35 로 잡으므로
+            **정류장이 적은 노선일수록 배율이 저절로 높아져** 이미 zdetail 입니다.
+            실측(200개 노선, 1600×1000 화면, 이름표를 예전 방식대로 넣고 화면 겹침 측정):
+
+              똑버스01  3개 · 120.0배 · 겹침  0% · zdetail ✔ → 이름표 나옴
+              13-1      6개 ·  69.6배 · 겹침  0% · zdetail ✔ → 나옴
+              4403     13개 ·  12.2배 · 겹침 31% · zdetail ✔ → 나옴
+              M4130    17개 ·   4.5배 · 겹침 71% · zdetail ✘ → 안 나옴
+              45       26개 ·   5.5배 · 겹침 85% · zdetail ✘
+              400     152개 ·   1.8배 · 겹침 99% · zdetail ✘
+              1000    241개 ·   1.1배 · 겹침100% · zdetail ✘
+
+            zdetail 경계(10배)가 읽힘 경계(겹침 31%→71%)와 거의 그대로 겹칩니다.
+            즉 보통 경로에 맡기면 읽히는 노선은 나오고 안 읽히는 노선만 빠집니다.
+            개수 임계값(예 60개)을 두면 겹침 92% 짜리 화면을 도로 켜게 됩니다.
+
+         면제해 두면 안 되는 이유는 두 가지입니다 — (1) 위 표대로 못 읽고, (2) 노선
+         초점은 applyZoom 의 자동 해제 대상이 아니라(격자와 달리 손수 축소하는 것이
+         정상 조작이라 일부러 뺐습니다 — zoomReset 주석 참고) 오래 남는데, 그동안
+         모든 팬·휠이 그 <text> 들을 재레이아웃합니다. */
+      _labAlways = !!only && !rtOnly;
       renderStopLabels();
       _stopsDrawn = true;
       applyStopsInteractive();
@@ -885,8 +910,20 @@
         return;
       }
       var list = _labStops, key;
+      /* 키에는 '어떤 화면인가' 를 다 담아야 합니다. 개수만으로는 세 가지가 겹칩니다.
+           · 정류장 수가 같은 다른 격자로 이동 — 맞닿은 격자 쌍 2,847개 중 165쌍이
+             0 아닌 같은 개수입니다(다사5811·다사5812 둘 다 18개).
+           · 같은 격자 안에서 선택 정류장만 교체 — focusStopIds 가 selectedStopId 를
+             격자 밖이어도 집합에 넣으므로(아래 참고) 개수가 그대로입니다. 그런
+             정류장 129개·격자 30개, 실제로 부딪히는 키가 14개입니다.
+           · 뷰포트 가지도 마찬가지 — 창이 안 움직인 채 초점만 갈리는 순간이 있습니다.
+         겹치면 아래에서 조기 반환해, 점은 새 자리에 찍히는데 이름표는 옛 자리에
+         남습니다(§8.3 이 기록한 유령 이름표와 같은 증상). 그래서 두 가지 모두 앞에
+         무엇을 보고 있는지를 붙입니다. 팬·휠 중에는 이 셋이 상수라 캐시는 그대로 듭니다. */
+      var who = (state.cellFocus || '') + '/' + (state.routeFocus || '') + '/' +
+        (state.selectedStopId || '');
       if (_labAlways) {
-        key = 'always:' + list.length;
+        key = 'always:' + who + ':' + list.length;
       } else {
         var mx = zoom.w * 0.2, my = zoom.h * 0.2;
         var x0 = zoom.x - mx, x1 = zoom.x + zoom.w + mx;
@@ -896,7 +933,8 @@
           var q = C.xy(_labStops[i]);
           if (q.x >= x0 && q.x <= x1 && q.y >= y0 && q.y <= y1) list.push(_labStops[i]);
         }
-        key = x0.toFixed(0) + ',' + y0.toFixed(0) + ',' + x1.toFixed(0) + ',' + y1.toFixed(0) +
+        key = 'v:' + who + ':' +
+          x0.toFixed(0) + ',' + y0.toFixed(0) + ',' + x1.toFixed(0) + ',' + y1.toFixed(0) +
           ':' + list.length;
       }
       if (key === _labKey) return;
