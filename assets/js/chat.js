@@ -177,8 +177,13 @@
              '수치는 지금 불러온 데이터에서만 답합니다.',
       getBody: function () {
         var h = HW.chatActions || {};
-        return { period: h.period ? h.period() : 'am',
-                 context: h.context ? h.context() : {} };
+        var ctx = h.context ? h.context() : {};
+        /* 시뮬레이션 화면에는 chatActions 가 없어 액션이 조용히 무시됩니다.
+           그걸 모델에 알려 주지 않으면 "심야로 바꿨습니다" 라고 말해 놓고 화면은
+           그대로인 상태가 됩니다 — 그것이 거짓말이 되지 않게 미리 못박습니다. */
+        ctx.화면조작 = h.setPeriod ? '가능' : '불가 — 이 화면에서는 답변만 하고, '
+          + '화면 이동이 필요하면 대시보드로 가라고 안내하세요';
+        return { period: h.period ? h.period() : 'am', context: ctx };
       }
     });
     helpModal = m;
@@ -187,9 +192,77 @@
 
   function openHelp() {
     buildHelp().classList.add('open');
+    hideBubble(true);
+    if (launcher) launcher.classList.add('gone');   /* 모달 뒤에 겹쳐 보이지 않게 */
     if (helpChat) helpChat.focus();
   }
-  function closeHelp() { if (helpModal) helpModal.classList.remove('open'); }
+  function closeHelp() {
+    if (helpModal) helpModal.classList.remove('open');
+    if (launcher) launcher.classList.remove('gone');
+  }
+
+  /* ── 우측 하단 런처 ───────────────────────────────────────────────
+     다른 사이트의 상담 챗봇과 같은 자리·같은 동작입니다. 처음 오는 사람이
+     "여기 물어볼 데가 있다"를 배우지 않고도 알아보는 자리라, 서랍 안쪽보다
+     이쪽이 맞습니다.
+
+     아이콘은 화성시 마스코트 코리요(AI 코리요)입니다 — 시가 발행한 도구라는
+     이 화면의 세계관과 맞고, 일반 로봇 아이콘보다 화성시 것임이 분명해집니다. */
+  var launcher = null, bubbleEl = null, bubbleTimer = null;
+  var BUBBLE_KEY = 'hw.chatBubbleSeen';
+
+  function hideBubble(remember) {
+    if (bubbleTimer) { global.clearTimeout(bubbleTimer); bubbleTimer = null; }
+    if (bubbleEl) bubbleEl.classList.remove('show');
+    /* 한 번 보고 나면 이 탭에서는 다시 안 띄웁니다. localStorage 가 아니라
+       sessionStorage 인 이유 — 며칠 뒤 다시 온 사람에게는 한 번 더 알려 주는 편이
+       낫고, 같은 방문 중에 페이지를 오갈 때만 조용하면 됩니다. */
+    if (remember) { try { sessionStorage.setItem(BUBBLE_KEY, '1'); } catch (e) { /* 차단됨 */ } }
+  }
+
+  function mountLauncher() {
+    if (launcher || !global.document.body) return;
+    var wrap = C.el('div', { 'class': 'chat-launch', 'data-chat-launch': '' });
+    wrap.innerHTML =
+      '<div class="cl-bubble" data-bubble>' +
+      '<span>무엇을 도와드릴까요?</span>' +
+      '<button class="cl-x" type="button" data-bubble-x aria-label="말풍선 닫기">' +
+      C.icon('close', 12) + '</button></div>' +
+      '<button class="cl-btn" type="button" data-launch aria-label="AI 도우미 열기">' +
+      /* 이미지를 못 받으면(파일 누락·오프라인) 버튼이 빈 원으로 남지 않게
+         말풍선 아이콘으로 되돌립니다. */
+      '<img src="assets/img/koriyo.png" alt="" width="320" height="320" decoding="async" ' +
+      'onerror="this.remove();this.parentNode.classList.add(\'noimg\')">' +
+      '<span class="cl-fallback" aria-hidden="true">' + C.icon('chat', 24) + '</span>' +
+      '</button>';
+    global.document.body.appendChild(wrap);
+    launcher = wrap;
+    bubbleEl = $('[data-bubble]', wrap);
+
+    $('[data-launch]', wrap).addEventListener('click', openHelp);
+    $('[data-bubble-x]', wrap).addEventListener('click', function (e) {
+      e.stopPropagation();      /* 닫기가 곧 열기가 되면 안 됩니다 */
+      hideBubble(true);
+    });
+    /* 말풍선 자체를 누르면 대화를 여는 게 자연스럽습니다 */
+    bubbleEl.addEventListener('click', openHelp);
+
+    var seen = false;
+    try { seen = sessionStorage.getItem(BUBBLE_KEY) === '1'; } catch (e) { /* 차단됨 */ }
+    if (!seen) {
+      /* 곧바로 띄우면 첫 화면을 읽는 것을 방해합니다. 지도·KPI 가 자리를 잡은 뒤에. */
+      bubbleTimer = global.setTimeout(function () {
+        bubbleTimer = null;
+        if (bubbleEl) bubbleEl.classList.add('show');
+      }, 2500);
+    }
+  }
+
+  if (global.document.readyState === 'loading') {
+    global.document.addEventListener('DOMContentLoaded', mountLauncher);
+  } else {
+    mountLauncher();
+  }
 
   HW.chat = { create: create, openHelp: openHelp, closeHelp: closeHelp, runAction: runAction };
 })(window);

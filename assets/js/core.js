@@ -405,10 +405,8 @@
       }).join('') +
       '<button class="tn-item" data-guide-open type="button">' +
       icon('help') + '사용 안내</button>' +
-      /* 사용 안내 옆자리입니다 — 둘 다 "모르겠을 때 여는 것" 이라 성격이 같습니다.
-         chat.js 가 없는 화면(로드 실패 등)에서는 아래 배선이 그냥 건너뜁니다. */
-      '<button class="tn-item" data-chat-open type="button">' +
-      icon('chat') + 'AI 도우미</button>' +
+      /* AI 도우미는 여기 두지 않습니다 — 우측 하단 런처(chat.js)가 상시 떠 있어
+         서랍에 또 두면 같은 곳으로 가는 문이 둘이 됩니다. */
       '<div class="tn-cut" role="separator"></div>' +
       /* 서랍의 마지막 항목은 이동이 아니라 **문서를 발행하는 동작**입니다.
          화려하게 만들지 않습니다 — 이 화면의 세계에 그라디언트·글로우는 없습니다.
@@ -438,15 +436,6 @@
       if (e.target.closest('a, button')) setMenu(false);
     });
     $('[data-guide-open]', host).addEventListener('click', openGuide);
-    var chatBtn = $('[data-chat-open]', host);
-    if (chatBtn) {
-      chatBtn.addEventListener('click', function () {
-        /* chat.js 는 core.js 뒤에 로드됩니다. 누르는 시점에는 이미 있지만,
-           그 파일을 안 붙인 화면에서도 서랍이 깨지지 않게 확인하고 부릅니다. */
-        if (HW.chat && HW.chat.openHelp) HW.chat.openHelp();
-        else toast('AI 도우미를 불러오지 못했습니다.');
-      });
-    }
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && host.classList.contains('menu-open')) setMenu(false);
     });

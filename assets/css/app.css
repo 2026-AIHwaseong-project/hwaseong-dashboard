@@ -315,6 +315,58 @@ svg text{font-family:inherit}
 .tn-issue .ti-tx span{font-size:10px;font-weight:500;line-height:1.4;opacity:.74;
   word-break:keep-all}
 
+/* ── 우측 하단 AI 런처 (코리요) ────────────────────────────────────
+   다른 사이트의 상담 챗봇과 같은 자리·같은 동작입니다. 처음 오는 사람이 배우지
+   않고도 "여기 물어볼 데가 있다"를 알아보는 자리입니다.
+
+   z-index 50 — 상단바(30) 위, 서랍 스크림(60)·모달(80) 아래입니다. 서랍이나
+   모달이 열리면 그 뒤로 들어가야 하고, 실제로 모달을 열 때는 .gone 으로 뺍니다. */
+.chat-launch{position:fixed;right:20px;bottom:20px;z-index:50;
+  display:flex;align-items:center;gap:9px;pointer-events:none}
+.chat-launch>*{pointer-events:auto}
+.chat-launch.gone{opacity:0;visibility:hidden;transition:opacity .16s,visibility 0s .16s}
+/* 바탕이 테마와 무관하게 흰색입니다. 코리요 아트가 흰 배경 기준으로 그려져
+   있어(짙은 갈색 외곽선 + 노란 몸통) 어두운 판 위에 놓으면 외곽선이 묻힙니다.
+   DESIGN.md 가 공식 CI 에 대해 정해 둔 것과 같은 처리입니다 — 다크에서 로고 뒤에
+   흰 판을 깔되, 그림 자체는 고치지 않습니다(마스코트 변형이 되므로). */
+.cl-btn{width:58px;height:58px;flex:0 0 auto;border-radius:50%;cursor:pointer;
+  border:2px solid var(--brand);background:#fff;padding:0;overflow:hidden;
+  display:grid;place-items:center;
+  /* 이 화면에서 그림자를 쓰는 것은 실제로 떠 있어야 하는 것뿐입니다(DESIGN.md).
+     본문 위를 덮고 스크롤을 따라다니므로 여기가 그 경우입니다. */
+  box-shadow:0 4px 14px rgba(15,23,42,.22);
+  transition:transform .14s,box-shadow .14s}
+.cl-btn img{width:100%;height:100%;object-fit:cover;display:block}
+.cl-btn:hover{transform:translateY(-2px);box-shadow:0 7px 18px rgba(15,23,42,.28)}
+.cl-btn:active{transform:translateY(0);box-shadow:0 2px 8px rgba(15,23,42,.22)}
+.cl-btn:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+/* 이미지를 못 받았을 때만 보이는 대체 아이콘 */
+.cl-fallback{display:none;color:var(--brand)}
+.cl-btn.noimg .cl-fallback{display:grid}
+/* 말풍선 — 버튼 왼쪽. 꼬리를 오른쪽에 달아 버튼이 하는 말로 읽히게 합니다. */
+.cl-bubble{position:relative;display:flex;align-items:center;gap:7px;
+  background:var(--card);border:1px solid var(--line);border-radius:999px;
+  padding:8px 10px 8px 14px;font-size:12.5px;font-weight:600;color:var(--ink);
+  white-space:nowrap;box-shadow:0 3px 10px rgba(15,23,42,.14);cursor:pointer;
+  opacity:0;visibility:hidden;transform:translateX(6px);
+  transition:opacity .22s,transform .22s,visibility 0s .22s}
+.cl-bubble.show{opacity:1;visibility:visible;transform:none;transition:opacity .22s,transform .22s}
+.cl-bubble::after{content:'';position:absolute;right:-5px;top:50%;width:9px;height:9px;
+  margin-top:-4.5px;transform:rotate(45deg);background:var(--card);
+  border-right:1px solid var(--line);border-top:1px solid var(--line)}
+.cl-x{flex:0 0 auto;display:grid;place-items:center;width:19px;height:19px;padding:0;
+  border:0;border-radius:50%;background:none;color:var(--ink3);cursor:pointer}
+.cl-x:hover{background:var(--brand-soft);color:var(--brand-ink)}
+@media (prefers-reduced-motion:reduce){
+  .chat-launch.gone,.cl-btn,.cl-bubble{transition:none}
+  .cl-btn:hover{transform:none}
+}
+/* 좁은 화면에서는 말풍선이 자리를 많이 먹어 지도를 가립니다. 버튼만 남깁니다. */
+@media (max-width:640px){
+  .chat-launch{right:14px;bottom:14px}
+  .cl-bubble{display:none}
+  .cl-btn{width:52px;height:52px}
+}
 /* ── AI 채팅 (도움 모달 · 보고서 모달) ─────────────────────────────
    두 모드가 같은 생김새를 씁니다. 말풍선은 좌우로 갈라 누가 한 말인지 위치로
    구분하고, 색은 크롬 계열(브랜드)로 둡니다 — 지도·차트의 지표 색이 여기로
@@ -1008,7 +1060,11 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   background:var(--card);background:color-mix(in srgb,var(--bad) 8%,transparent);line-height:1.6}
 
 /* 토스트 */
-.toasts{position:fixed;right:16px;bottom:16px;z-index:90;display:flex;flex-direction:column;gap:8px}
+/* bottom 이 16 이 아니라 88 인 이유 — 우측 하단에 AI 런처(.chat-launch)가 상시
+   떠 있어 같은 구석에서 겹칩니다. 토스트는 잠깐 뜨는 것이라 런처 위로 쌓습니다.
+   (이 규칙을 §런처 쪽에 적었다가 파일 뒤인 여기에 밀렸습니다 — 같은 자리에 둡니다) */
+.toasts{position:fixed;right:16px;bottom:88px;z-index:90;display:flex;flex-direction:column;gap:8px}
+@media (max-width:640px){ .toasts{bottom:76px} }
 .toast{background:var(--card);border:1px solid var(--line);border-radius:9px;box-shadow:var(--shadow);
   padding:10px 14px;font-size:12px;color:var(--ink2);max-width:320px;line-height:1.5}
 .toast b{color:var(--ink)}
