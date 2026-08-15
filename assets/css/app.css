@@ -525,6 +525,27 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .kkmode.zdetail .rt{stroke-dasharray:calc(5px/var(--zk)) calc(4px/var(--zk));opacity:.3}
 .kkmode.zdetail .rt-casing{opacity:.25}
 
+/* ── 노선 하나를 골라 본 상태(.rtfocus) ────────────────────────────────
+   버스 번호로 찾아 들어온 노선은 맥락이 아니라 **주인공**입니다. 위 규칙은 노선을
+   배경으로 두려고 흐리게(opacity .38) 깔아 두는데, 그대로 두면 일부러 찾은 노선이
+   회색 실 한 가닥으로 보입니다.
+
+   가는 길과 오는 길을 색으로 가릅니다. 한 노선 기록에 두 방향이 이어 담겨 있어
+   (200개 중 185개가 기점=종점) 한 색으로 그리면 선이 제자리로 돌아와 겹칩니다.
+   색은 승차/하차에 쓰는 범주형 2색을 그대로 씁니다 — 색각 이상에서도 갈리는
+   조합이라 이미 검증돼 있습니다. 방향을 못 가른 노선(turnIdx=null, 18개)은
+   dir 클래스가 없어 아래 색이 안 걸리고 기본 색으로 굵게만 나옵니다. */
+.rtfocus .rt{opacity:1;stroke-width:calc(3.2px/var(--zk,1))}
+.rtfocus .rt-casing{opacity:.92;stroke-width:calc(6.4px/var(--zk,1))}
+.rtfocus .rt.dir0{stroke:var(--c-board)}
+.rtfocus .rt.dir1{stroke:var(--c-alight)}
+/* ⚠️ 확대해 실제 지도가 보이는 상태에서도 **점선은 그대로 둡니다.** 위 주석대로
+   이 선은 정류장을 순서대로 이은 모식도지 도로 형상이 아니라서, 실선으로 바꾸면
+   "버스가 이 길로 간다"는 틀린 주장이 됩니다. 굵기와 색으로 눈에 띄게 하되 그
+   주장은 건드리지 않습니다. (.kkmode.zdetail .rt 가 0,3,0 이라 여기는 0,4,0) */
+.rtfocus.kkmode.zdetail .rt{opacity:.95;stroke-width:calc(3.2px/var(--zk,1))}
+.rtfocus.kkmode.zdetail .rt-casing{opacity:.5}
+
 /* ── 끄는 동안만 노선을 싸게 그립니다 ─────────────────────────────────
    전체 배율에서 마우스로 끌 때 프레임 간격 중앙값이 200ms 였고, 그 비용은
    노선 층입니다(층을 통째로 끄면 66.6ms). 전체 뷰에서는 화면 밖이 없어
@@ -942,8 +963,39 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
   font-variant-numeric:tabular-nums;word-break:keep-all}
 /* 값이 없을 때. 숫자와 같은 무게로 쓰면 실측처럼 읽히므로 눌러 둡니다. */
 .rinfo .rv.none{font-weight:500;color:var(--ink3)}
+/* 번호는 같은데 아예 다른 노선(4쌍). 줄을 끊어 아래에 답니다. */
+.rinfo .rsib{flex:0 0 100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+  padding-top:8px;border-top:1px dashed var(--line)}
+.rinfo .rsib button{font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;
+  padding:3px 9px;border-radius:999px;border:1px solid var(--line);
+  background:var(--card);color:var(--ink2)}
+.rinfo .rsib button:hover{border-color:var(--brand);color:var(--brand-ink)}
 /* 노선 한 벌을 여러 열로 쪼갤 때 열마다 붙는 구간 표시(1–20, 21–40 …) */
 .rline .rseg{font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums}
+
+/* 격자 모드의 노선 머리는 버튼입니다 — 누르면 그 버스 전 구간으로 넘어갑니다.
+   button 기본 스타일을 걷어 .rhead 생김새를 그대로 유지합니다. */
+button.rhead{width:100%;border:0;background:var(--card);cursor:pointer;
+  font:inherit;color:inherit;text-align:left;padding:0 0 4px;border-radius:6px}
+button.rhead:hover .rno{color:var(--brand-ink);text-decoration:underline}
+button.rhead:hover .rkind{border-color:var(--brand)}
+
+/* 노선 모드에서만 줄을 감쌉니다 — 방향 머리가 줄을 끊어야 하기 때문입니다.
+   격자 모드는 종전대로 한 줄에 늘어놓고 가로 스크롤합니다. */
+.rstrip.routemode{flex-wrap:wrap}
+/* 방향 머리 — flex-basis 100% 로 줄을 끊습니다. 색 조각은 지도의 그 방향 선과
+   같은 색이라, 카드와 지도를 눈으로 이어 볼 수 있습니다. */
+.rstrip .rleg0,.rstrip .rleg1{flex:0 0 100%;display:flex;align-items:center;gap:7px;
+  font-size:11.5px;font-weight:700;color:var(--ink);margin:2px 0 -2px}
+.rstrip .rleg0 i,.rstrip .rleg1 i{width:14px;height:3px;border-radius:2px;flex:0 0 auto}
+.rstrip .rleg0 i{background:var(--c-board)}
+.rstrip .rleg1 i{background:var(--c-alight)}
+.rstrip .rleg0 b,.rstrip .rleg1 b{font-weight:600;font-size:10.5px;color:var(--ink3)}
+/* 정류장 점도 방향 색을 따릅니다 — 열이 어느 방향 것인지 머리까지 안 올라가도 압니다 */
+.rline.d0 .rstops li::after{border-color:var(--c-board)}
+.rline.d0 .rstops li.busy::after{background:var(--c-board)}
+.rline.d1 .rstops li::after{border-color:var(--c-alight)}
+.rline.d1 .rstops li.busy::after{background:var(--c-alight)}
 
 /* ------------------------------------------------------- 12. 반응형 */
 @media (max-width:1020px){

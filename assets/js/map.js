@@ -604,6 +604,7 @@
         _labStops = []; _labAlways = false;
         renderStopLabels();
         _stopsDrawn = false;
+        svg.classList.remove('rtfocus');
         return;
       }
       var stops = only ? state.stops.filter(function (s) { return only[s.id]; }) : state.stops;
@@ -620,8 +621,25 @@
           : state.routes;
 
       /* 노선 선은 좌표만 뽑아 두고, 그리는 일은 renderRouteLines 가 맡습니다
-         (화면에 드는 구간만 — 아래 설명). */
-      _rtGeom = routes.map(routeXY);
+         (화면에 드는 구간만 — 아래 설명).
+
+         노선 하나를 들여다볼 때는 **가는 길과 오는 길을 갈라** 둡니다. 한 노선
+         기록에 두 방향이 이어 담겨 있어서(200개 중 185개가 기점=종점) 그냥 그리면
+         선이 제자리로 돌아와 겹치고, 어느 쪽이 가는 길인지 알 수 없습니다.
+         가르는 자리는 백엔드가 넣어 준 turnIdx(경로 기하 추정)이고, 없으면
+         (편도·똑버스·예약제 18개) 예전처럼 한 줄로 그립니다.
+         아래 클리핑 루프는 조각 단위로 도므로, 여기서 둘로 나눠 넣기만 하면 됩니다. */
+      _rtGeom = [];
+      routes.forEach(function (rt) {
+        var g = routeXY(rt);
+        var t = rtOnly ? rt.turnIdx : null;   /* 초점일 때만 가릅니다 */
+        if (t != null && t > 0 && t < g.pts.length - 1) {
+          _rtGeom.push({ id: g.id, pts: g.pts.slice(0, t + 1), dir: 0 });
+          _rtGeom.push({ id: g.id, pts: g.pts.slice(t), dir: 1 });
+        } else {
+          _rtGeom.push(g);
+        }
+      });
       _rtBox = null;                 /* 목록이 바뀌었으니 이전 클립 창은 버립니다 */
       renderRouteLines();
 
@@ -674,6 +692,10 @@
         });
       }
       gRoutes.classList.toggle('fathit', fatHit);
+      /* 노선 하나만 보는 중임을 CSS 에 알립니다 — 그때는 선을 실선·진하게 그립니다.
+         기본(전체 표시)에서는 노선이 배경이라 흐리게 두는 게 맞지만, 일부러 찾아
+         들어온 노선은 주인공이라 같은 규칙을 쓰면 안 보입니다. */
+      svg.classList.toggle('rtfocus', !!rtOnly);
       gRtStop.innerHTML = h;
       /* 격자를 찍어 놓은 동안에는 전체 토글이 꺼져 있어도 그 격자 것은 보여야 합니다 */
       gRoutes.style.display = (state.showRoutes || only) ? '' : 'none';
@@ -788,9 +810,11 @@
                  x1: v.x + v.w + mx, y1: v.y + v.h + my };
       _rtW = v.w;
       _rtFull = routeBoxCoversAll(v);
-      var b = _rtBox, cas = '', main = '', i, j;
+      var b = _rtBox, cas = '', main = '', i, j, dir;
       for (i = 0; i < _rtGeom.length; i++) {
         var P = _rtGeom[i].pts, id = esc(_rtGeom[i].id), run = null, at = 0, off = 0;
+        /* 가는 길/오는 길 조각이면 그 표시를 선에 실어 색을 가릅니다(renderRoutes 참고) */
+        dir = _rtGeom[i].dir;
         for (j = 0; j < P.length - 1; j++) {
           var a = P[j], c = P[j + 1];
           /* 선분의 경계상자로 판정합니다 — 걸치지 않는 것을 확실히 버리기만 하면
@@ -801,17 +825,17 @@
             if (!run) { run = [a[0] + ',' + a[1]]; off = at; }
             run.push(c[0] + ',' + c[1]);
           } else if (run) {
-            emitRun(run, id, off);
+            emitRun(run, id, off, dir);
             run = null;
           }
           /* 노선 시작점부터의 거리. 아래 emitRun 이 점선 위상을 맞추는 데 씁니다. */
           at += Math.sqrt((c[0] - a[0]) * (c[0] - a[0]) + (c[1] - a[1]) * (c[1] - a[1]));
         }
-        if (run && run.length > 1) emitRun(run, id, off);
+        if (run && run.length > 1) emitRun(run, id, off, dir);
       }
       /* 1단계: 케이싱(바탕색 굵은 선) → 2단계: 본선. 케이싱을 먼저 다 깔아야
          격자 색 위에서도 선이 끊겨 보이지 않습니다. 그래서 두 문자열로 모읍니다. */
-      function emitRun(run, id, off) {
+      function emitRun(run, id, off, dir) {
         var s = run.join(' ');
         cas += '<polyline class="rt-casing" points="' + s + '"/>';
         /* stroke-dashoffset — 자른 조각은 그 자리에서 점선이 다시 시작하므로,
@@ -820,7 +844,8 @@
            노선 시작점부터의 거리를 위상으로 되돌려 주면 어디서 자르든 원래 자리에
            점선이 놓입니다 — 그래야 "자른 자리는 창 밖이라 화면은 그대로"가 참이 됩니다.
            (.kkmode.zdetail 이 아니면 stroke-dasharray 가 없어 이 값은 무시됩니다) */
-        main += '<polyline class="rt" data-route="' + id + '" stroke-dashoffset="' +
+        main += '<polyline class="rt' + (dir === 0 ? ' dir0' : dir === 1 ? ' dir1' : '') +
+          '" data-route="' + id + '" stroke-dashoffset="' +
           off.toFixed(1) + '" points="' + s + '"/>';
       }
       gRtLine.innerHTML = cas + main;

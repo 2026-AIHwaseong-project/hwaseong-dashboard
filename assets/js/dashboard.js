@@ -717,6 +717,7 @@
     var box = $('#routeStrip'), sub = $('#routeStripSub');
     if (!box) return;
     setRouteCardMode('이 격자를 지나는 노선');
+    box.classList.remove('routemode');
     if (!cellId) {
       box.innerHTML = '<div class="empty">지도에서 격자를 클릭하면 그 격자를 지나는 ' +
         '버스와 정류장 순서가 여기에 나옵니다.</div>';
@@ -748,6 +749,7 @@
       });
       if (!seq.length) return;
       lines.push({
+        id: rt.id,                       /* 머리를 누르면 이 노선 전 구간으로 갑니다 */
         name: rt.name || rt.id, n: seq.length, stops: seq,
         before: firstIdx > 0, after: lastIdx >= 0 && lastIdx < ids.length - 1
       });
@@ -785,9 +787,14 @@
       }).join('');
       var tail = L.after ? '<div class="rtail">↓ 격자 밖으로 계속</div>' : '';
       var head = L.before ? '<div class="rtail" style="padding-bottom:2px">↑ 격자 밖에서 진입</div>' : '';
+      /* 머리를 버튼으로 만듭니다 — 이 격자를 지나는 노선 중 하나를 골라 그 버스의
+         전 구간·운행정보로 넘어가는 통로입니다. div 가 아니라 button 이라야 키보드
+         Tab 으로도 닿고 Enter 로 눌립니다. */
       return '<div class="rline">' +
-        '<div class="rhead">' + BUS_SVG + '<span class="rno">' + esc(L.name) + '</span>' +
-        '<span class="rkind">' + L.n + '개 정차</span></div>' +
+        '<button class="rhead rgo" type="button" data-route-id="' + esc(L.id) + '" ' +
+        'title="' + esc(L.name) + '번 전 구간 보기">' +
+        BUS_SVG + '<span class="rno">' + esc(L.name) + '</span>' +
+        '<span class="rkind">' + L.n + '개 정차</span></button>' +
         head + '<ul class="rstops">' + items + '</ul>' + tail +
         '</div>';
     }).join('');
@@ -831,6 +838,8 @@
 
     setRouteCardMode(null);
     if ($('#routeStripTitle')) $('#routeStripTitle').textContent = rt.name + '번 전 구간';
+    /* 방향 머리가 줄을 끊어야 해서 이 모드에서만 flex 를 감쌉니다(app.css) */
+    box.classList.add('routemode');
 
     var ids = rt.stopIds || [];
     var byId = {};
@@ -854,6 +863,20 @@
         infoCell('출퇴근 배차', hw(rt.headwayPeak)) +
         infoCell('평시 배차', hw(rt.headwayOffpeak)) +
         infoCell('운수업체', rt.company);
+      /* 번호는 같은데 아예 다른 노선이 4쌍 있습니다(운수업체·기종점이 전부 다름 —
+         예: 9번이 제부여객 경진여객차고지→궁평항 과 오산교통 오산역→지곶동).
+         검색은 그중 하나만 잡으므로, 나머지가 있다는 사실과 가는 길을 여기 답니다.
+         없으면 아무것도 안 붙습니다. */
+      var sibs = (S.routes || []).filter(function (x) {
+        return x.name === rt.name && x.id !== rt.id;
+      });
+      if (sibs.length) {
+        info.innerHTML += '<div class="rsib"><span class="rk">번호가 같은 다른 노선</span>' +
+          sibs.map(function (x) {
+            return '<button type="button" data-route-id="' + esc(x.id) + '">' +
+              esc((x.startStop || '?') + ' → ' + (x.endStop || '?')) + '</button>';
+          }).join('') + '</div>';
+      }
       info.hidden = false;
     }
 
@@ -868,30 +891,52 @@
       .sort(function (a, b) { return b - a; });
     if (boards.length) busyCut = Math.max(1, boards[Math.floor(boards.length * 0.3)]);
 
-    /* 정류장을 SEG 개씩 끊어 열로 나눕니다. 한 열에 151개를 넣으면 카드가
-       세로로만 길어져 못 봅니다. 끊으면 .rstops 의 세로선도 열마다 깔끔하게
-       시작·끝나므로(:first-child/:last-child) 별도 스타일이 필요 없습니다. */
-    var cols = [];
-    for (var i = 0; i < seq.length; i += SEG) cols.push(seq.slice(i, i + SEG));
+    /* 가는 길 / 오는 길로 가릅니다. 한 노선 기록에 두 방향이 이어 담겨 있어서
+       (200개 중 185개가 기점=종점) 안 가르면 같은 정류장 이름이 두 번씩 나오고
+       지도에서도 선이 겹칩니다. 가르는 자리는 백엔드의 turnIdx.
+       null 이면(편도·똑버스·예약제 18개) 한 덩이로 둡니다. */
+    var t = rt.turnIdx;
+    var legs = (t != null && t > 0 && t < seq.length - 1)
+      ? [{ dir: 0, stops: seq.slice(0, t + 1), to: rt.endStop },
+         { dir: 1, stops: seq.slice(t), to: rt.startStop }]
+      : [{ dir: null, stops: seq, to: null }];
 
-    box.innerHTML = cols.map(function (chunk, ci) {
-      var from = ci * SEG + 1, to = ci * SEG + chunk.length;
-      var items = chunk.map(function (s) {
-        var b = (typeof s.boardingsPerDay === 'number' && isFinite(s.boardingsPerDay))
-          ? s.boardingsPerDay : null;
-        var busy = b !== null && busyCut > 0 && b >= busyCut;
-        return '<li' + (busy ? ' class="busy"' : '') + ' title="' + esc(s.name) +
-          ' · 일 승차 ' + (b === null ? '자료 없음' : fmt(Math.round(b)) + '명') + '">' +
-          '<span class="snm">' + esc(s.name) + '</span></li>';
-      }).join('');
-      /* 첫 열에만 버스 아이콘·번호를 답니다. 열마다 반복하면 같은 노선이
-         여러 개인 것처럼 보입니다(격자 모드가 실제로 그 뜻으로 쓰는 표시라). */
-      var head = ci === 0
-        ? '<div class="rhead">' + BUS_SVG + '<span class="rno">' + esc(rt.name) + '</span>' +
-          '<span class="rseg">' + from + '–' + to + '</span></div>'
-        : '<div class="rhead"><span class="rseg">' + from + '–' + to + '</span></div>';
-      return '<div class="rline">' + head + '<ul class="rstops">' + items + '</ul></div>';
-    }).join('');
+    var html = '';
+    legs.forEach(function (leg) {
+      /* 방향 머리 — 어디로 가는 구간인지. '상행/하행' 이라 쓰지 않습니다.
+         그 표기는 원본(route_station.updown)에 있지만 정류장 수가 소스마다 달라
+         우리 순서에 붙일 수 없었습니다. 기점·종점 이름은 실측이라 그걸 씁니다. */
+      if (leg.dir !== null) {
+        html += '<div class="rleg' + leg.dir + '">' +
+          '<i></i>' + esc(leg.to || '반대 방향') + ' 방향' +
+          '<b>' + leg.stops.length + '개</b></div>';
+      }
+      /* 정류장을 SEG 개씩 끊어 열로 나눕니다. 한 열에 151개를 넣으면 카드가
+         세로로만 길어져 못 봅니다. 끊으면 .rstops 의 세로선도 열마다 깔끔하게
+         시작·끝나므로(:first-child/:last-child) 별도 스타일이 필요 없습니다. */
+      for (var i = 0; i < leg.stops.length; i += SEG) {
+        var chunk = leg.stops.slice(i, i + SEG);
+        var from = i + 1, to = i + chunk.length;
+        var items = chunk.map(function (s) {
+          var b = (typeof s.boardingsPerDay === 'number' && isFinite(s.boardingsPerDay))
+            ? s.boardingsPerDay : null;
+          var busy = b !== null && busyCut > 0 && b >= busyCut;
+          return '<li' + (busy ? ' class="busy"' : '') + ' title="' + esc(s.name) +
+            ' · 일 승차 ' + (b === null ? '자료 없음' : fmt(Math.round(b)) + '명') + '">' +
+            '<span class="snm">' + esc(s.name) + '</span></li>';
+        }).join('');
+        /* 각 방향의 첫 열에만 버스 아이콘·번호를 답니다. 열마다 반복하면 같은
+           노선이 여러 개인 것처럼 보입니다(격자 모드가 실제로 그 뜻으로 쓰는 표시라). */
+        var head = i === 0
+          ? '<div class="rhead">' + BUS_SVG + '<span class="rno">' + esc(rt.name) + '</span>' +
+            '<span class="rseg">' + from + '–' + to + '</span></div>'
+          : '<div class="rhead"><span class="rseg">' + from + '–' + to + '</span></div>';
+        html += '<div class="rline' +
+          (leg.dir !== null ? ' d' + leg.dir : '') + '">' +
+          head + '<ul class="rstops">' + items + '</ul></div>';
+      }
+    });
+    box.innerHTML = html;
   }
 
   /** 격자 하나로 파고듭니다 — 확대 + 그 격자의 정류장·노선만 + 경유 순서 카드
@@ -922,6 +967,20 @@
   function enterRouteFocus(routeId) {
     S.map.setRouteFocus(routeId);
     renderRouteDetail(routeId);
+  }
+
+  /* 노선 머리(격자 모드)와 '번호가 같은 다른 노선' 버튼(노선 모드) 둘 다 여기서
+     받습니다. 카드는 통째로 다시 그려지므로 개별 버튼이 아니라 카드에 한 번만
+     겁니다(위임). #routeStrip 이 아니라 .routecard 에 거는 이유 — 운행정보(#routeInfo)
+     는 strip 밖에 있어서 strip 에 걸면 그쪽 버튼이 안 먹습니다. */
+  function wireRouteStripClicks() {
+    var box = document.querySelector('.routecard');
+    if (!box) return;
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-route-id]');
+      if (!b) return;
+      enterRouteFocus(b.getAttribute('data-route-id'));
+    });
   }
 
   function cellTip(c) {
@@ -1084,6 +1143,7 @@
       S.map.setShowLabels(on);
     });
     wireMapSearch();
+    wireRouteStripClicks();
 
     $('#regionTbl').addEventListener('click', function (e) {
       var th = e.target.closest('th[data-sort]');
