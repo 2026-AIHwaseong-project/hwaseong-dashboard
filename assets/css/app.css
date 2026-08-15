@@ -986,7 +986,15 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
    17. 읍면동 경계선
    실제 행정경계(SGIS)를 격자 위에 얹어, 어디까지가 어느 동인지 보이게 합니다.
    ======================================================================== */
-.dongline{fill:none;stroke:var(--ink2);stroke-width:calc(1.1px/var(--zk,1));stroke-opacity:.5;
+/* ⚠️ vector-effect:non-scaling-stroke 를 쓰면 stroke-width 가 **이미 화면 픽셀**입니다.
+   여기에 calc(1.1px/var(--zk)) 를 또 걸어 두면 두 번 나눠져, 확대할수록 선이
+   사라집니다 — 실측 화면 굵기 1배 1.100px · 3.8배 0.288 · 7.5배 0.148 ·
+   14.5배 0.076px 이고 여기에 stroke-opacity .5 까지 곱해집니다.
+   바로 위 설명("어디까지가 어느 동인지 보이게 합니다")과 정반대로, 들여다보려고
+   확대하면 그때 없어졌습니다. 굵기는 고정값으로 둡니다.
+   (전체 배율에서는 --zk 가 1 이라 예전과 같은 1.1px 이므로 첫 화면은 안 바뀝니다.
+    같은 함정: 아래 .area-box 는 non-scaling-stroke 에 stroke-width:1.5 로 올바릅니다.) */
+.dongline{fill:none;stroke:var(--ink2);stroke-width:1.1px;stroke-opacity:.5;
   stroke-linejoin:round;pointer-events:none;vector-effect:non-scaling-stroke}
 
 
