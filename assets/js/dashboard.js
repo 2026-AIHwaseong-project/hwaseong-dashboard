@@ -917,23 +917,26 @@
       for (var i = 0; i < leg.stops.length; i += SEG) {
         var chunk = leg.stops.slice(i, i + SEG);
         var from = i + 1, to = i + chunk.length;
-        var items = chunk.map(function (s) {
+        var items = chunk.map(function (s, k) {
           var b = (typeof s.boardingsPerDay === 'number' && isFinite(s.boardingsPerDay))
             ? s.boardingsPerDay : null;
           var busy = b !== null && busyCut > 0 && b >= busyCut;
+          /* 정류장마다 순번을 답니다. 열이 나뉘어도 20 다음이 21 로 이어지는 게
+             보이면 "다른 버스인가?" 라는 의문이 생기지 않습니다. 몇 번째 정류장
+             인지 자체도 쓸모가 있습니다. */
           return '<li' + (busy ? ' class="busy"' : '') + ' title="' + esc(s.name) +
             ' · 일 승차 ' + (b === null ? '자료 없음' : fmt(Math.round(b)) + '명') + '">' +
+            '<span class="sno">' + (i + k + 1) + '</span>' +
             '<span class="snm">' + esc(s.name) + '</span></li>';
         }).join('');
-        /* 각 방향의 첫 열에만 버스 아이콘·번호를 답니다. 열마다 반복하면 같은
-           노선이 여러 개인 것처럼 보입니다(격자 모드가 실제로 그 뜻으로 쓰는 표시라). */
-        var head = i === 0
-          ? '<div class="rhead">' + BUS_SVG + '<span class="rno">' + esc(rt.name) + '</span>' +
-            '<span class="rseg">' + from + '–' + to + '</span></div>'
-          : '<div class="rhead"><span class="rseg">' + from + '–' + to + '</span></div>';
-        html += '<div class="rline' +
+        /* ⚠️ 여기에는 버스 아이콘·번호를 달지 않습니다. 격자 모드에서는 열 하나가
+           노선 하나라서 그 표시가 '버스 한 대'를 뜻하는데, 같은 표시를 한 노선의
+           구간마다 붙였더니 "같은 버스인데 왜 여러 개냐"고 읽혔습니다.
+           노선 번호는 카드 제목이, 방향은 위 방향 머리가 이미 말하고 있습니다. */
+        html += '<div class="rline seg' +
           (leg.dir !== null ? ' d' + leg.dir : '') + '">' +
-          head + '<ul class="rstops">' + items + '</ul></div>';
+          '<div class="rhead"><span class="rseg">' + from + '–' + to + '번째</span></div>' +
+          '<ul class="rstops">' + items + '</ul></div>';
       }
     });
     box.innerHTML = html;

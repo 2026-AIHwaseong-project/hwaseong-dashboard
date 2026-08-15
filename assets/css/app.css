@@ -1087,8 +1087,16 @@ footer.pg .issuer:empty{display:none}
   padding:3px 9px;border-radius:999px;border:1px solid var(--line);
   background:var(--card);color:var(--ink2)}
 .rinfo .rsib button:hover{border-color:var(--brand);color:var(--brand-ink)}
-/* 노선 한 벌을 여러 열로 쪼갤 때 열마다 붙는 구간 표시(1–20, 21–40 …) */
+/* 노선 한 벌을 여러 열로 쪼갤 때 열마다 붙는 구간 표시(1–20번째, 21–40번째 …).
+   ⚠️ .seg 열은 '버스 한 대' 가 아니라 '한 노선의 이어지는 구간' 입니다. 격자
+   모드의 노선 열과 같은 무게로 두면 버스 목록처럼 읽혀서("같은 버스인데 왜
+   여러 개냐"는 실제 질문을 받았습니다) 머리를 눌러 앉힙니다. */
 .rline .rseg{font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums}
+.rline.seg .rhead{font-weight:500;padding-bottom:2px}
+/* 정류장 순번. 열이 갈려도 20 다음이 21 로 이어지는 것이 눈에 보여야 합니다. */
+.rstops .sno{flex:0 0 auto;min-width:2.1em;font-size:9.5px;color:var(--ink3);
+  font-variant-numeric:tabular-nums;text-align:right;margin-right:5px}
+.rstops li.busy .sno{color:var(--ink2)}
 
 /* 격자 모드의 노선 머리는 버튼입니다 — 누르면 그 버스 전 구간으로 넘어갑니다.
    button 기본 스타일을 걷어 .rhead 생김새를 그대로 유지합니다. */
