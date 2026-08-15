@@ -1615,8 +1615,8 @@
       zctl = global.document.createElement('div');
       zctl.className = 'zctl';
       zctl.innerHTML =
-        '<button type="button" data-z="in" aria-label="지도 확대">+</button>' +
-        '<button type="button" data-z="out" aria-label="지도 축소">−</button>' +
+        '<button type="button" data-z="in" aria-label="지도 확대">' + HW.icon('plus', 15) + '</button>' +
+        '<button type="button" data-z="out" aria-label="지도 축소">' + HW.icon('minus', 15) + '</button>' +
         '<button type="button" data-z="reset" aria-label="전체 보기">전체</button>' +
         /* 현재 배율. 화성시 전체가 보이는 상태가 100% 입니다. */
         '<div class="zpct" data-zpct aria-live="polite" title="현재 확대 비율 (화성시 전체 = 100%)">100%</div>';

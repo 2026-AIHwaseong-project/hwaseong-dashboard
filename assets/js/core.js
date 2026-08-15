@@ -406,8 +406,15 @@
       '<button class="tn-item" data-guide-open type="button">' +
       icon('help') + '사용 안내</button>' +
       '<div class="tn-cut" role="separator"></div>' +
-      '<button class="btn sm primary" data-report-open type="button">' +
-      icon('doc') + 'AI 보고서 생성</button>' +
+      /* 서랍의 마지막 항목은 이동이 아니라 **문서를 발행하는 동작**입니다.
+         화려하게 만들지 않습니다 — 이 화면의 세계에 그라디언트·글로우는 없습니다.
+         대신 관공서 서식의 발행 버튼이 그렇듯 무엇을 만드는지(주 라벨)와 무엇으로
+         나오는지(부제)를 두 줄로 밝힙니다. 부제 문구는 report.js 의 실제 출력과
+         맞춘 것입니다 — 클라이언트 방식에서 엑셀은 .xlsx, 한글은 .rtf 입니다. */
+      '<button class="btn primary tn-issue" data-report-open type="button">' +
+      icon('doc', 18) +
+      '<span class="ti-tx"><b>AI 보고서 생성</b>' +
+      '<span>초안 작성 · 한글 · 엑셀 저장</span></span></button>' +
       '</nav>';
 
     var mbtn = $('[data-menu-btn]', host);
@@ -429,6 +436,43 @@
     $('[data-guide-open]', host).addEventListener('click', openGuide);
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && host.classList.contains('menu-open')) setMenu(false);
+    });
+
+    mountIssuer();
+    mountIcons();
+  }
+
+  /** 정적 HTML 에 놓인 버튼에도 아이콘 한 벌을 붙입니다.
+   *  `data-ic="save"` 는 글자 앞, `data-ic-after="arrow"` 는 글자 뒤에 넣습니다.
+   *  JS 가 만드는 버튼은 icon() 을 직접 부르면 되지만, index.html·simulation.html
+   *  안에 그대로 적혀 있는 버튼([이 격자로 시뮬레이션 하기 →]·[시나리오 저장])은
+   *  그럴 자리가 없어 아이콘이 없거나 → 같은 글자로 때워져 있었습니다.
+   *  이미 아이콘을 들고 있으면 건너뛰므로 두 번 불러도 안전합니다. */
+  function mountIcons() {
+    $$('[data-ic],[data-ic-after]').forEach(function (b) {
+      if (b.querySelector('.ic')) return;
+      var pre = b.getAttribute('data-ic');
+      var post = b.getAttribute('data-ic-after');
+      if (pre) b.insertAdjacentHTML('afterbegin', icon(pre));
+      if (post) b.insertAdjacentHTML('beforeend', icon(post));
+    });
+  }
+
+  /** 푸터의 발행 주체 표기.
+   *  config.js 의 APP.org('화성특례시')·APP.dept('교통정책과')는 지금까지
+   *  보고서 파일 안에만 들어가고 화면에는 한 번도 안 나왔습니다. 관공서가
+   *  발행한 문서를 세계관으로 잡아 놓고 정작 화면에는 발행 부서가 없던 셈입니다.
+   *  화면을 캡처하거나 인쇄해 회의에 들고 갔을 때 출처가 문서 안에 남아야
+   *  하므로 푸터 말미에 한 줄로 답니다. 값은 새로 만들지 않고 그대로 읽습니다.
+   *  날짜는 데이터의 기준일자가 아니라 **화면을 띄운 날**이라 '출력' 으로
+   *  적습니다 — 기준일자는 대시보드 상단의 '최종 갱신' 이 따로 말합니다. */
+  function mountIssuer() {
+    var app = (CONFIG && CONFIG.APP) || {};
+    var who = [app.org, app.dept].filter(Boolean).join(' ');
+    if (!who) return;
+    $$('[data-issuer]').forEach(function (h) {
+      h.innerHTML = '<b>' + esc(who) + '</b><span class="is-sp"></span>' +
+        '<span>출력 ' + esc(todayISO()) + '</span>';
     });
   }
 
@@ -514,7 +558,7 @@
       '<header><h2>사용 안내</h2>' +
       '<span class="hs">붉은 격자를 찾아 → 눌러보고 → 시뮬레이션으로</span>' +
       '<span class="sp"></span>' +
-      '<button class="xbtn" data-guide-close type="button" aria-label="닫기">×</button></header>' +
+      '<button class="xbtn" data-guide-close type="button" aria-label="닫기">' + icon('close', 17) + '</button></header>' +
       '<div class="body">' + guideHero() +
       '<div class="gsteps">' +
       steps.map(function (s, i) {
@@ -556,7 +600,20 @@
     /* 물음표 동그라미 — 사용 안내 */
     help: '<circle cx="12" cy="12" r="8.5"/>' +
           '<path d="M9.7 9.5a2.35 2.35 0 1 1 3.4 2.1c-.75.4-1.1.9-1.1 1.7v.3"/>' +
-          '<path d="M12 16.4h.01"/>'
+          '<path d="M12 16.4h.01"/>',
+    /* ── 아래 넷은 그동안 유니코드 글자로 때우던 자리입니다 ────────────────
+       닫기 ×(U+00D7)·확대 +·축소 −(U+2212)·이동 →(U+2192) 를 그대로 썼는데,
+       DESIGN.md 가 "이모지·유니코드 글자를 아이콘 자리에" 를 금지 목록에 올려
+       둔 바로 그 경우입니다. 폰트마다 굵기·크기·광학 중심이 달라 옆의 SVG
+       아이콘과 한 벌로 보이지 않고, ×(곱셈 기호)는 폰트에 따라 눈에 띄게
+       작거나 위로 뜹니다. 같은 규칙(24격자·획 1.7·둥근 끝)으로 다시 그립니다. */
+    close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+    plus:  '<path d="M12 5.5v13M5.5 12h13"/>',
+    minus: '<path d="M5.5 12h13"/>',
+    arrow: '<path d="M4.5 12h14"/><path d="M12.5 6l6 6-6 6"/>',
+    /* 저장 — 시나리오 보관. 본체·라벨·문서 세 획으로 단순화했습니다 */
+    save:  '<path d="M4.5 6.5A2 2 0 0 1 6.5 4.5h9l4 4v9a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z"/>' +
+           '<path d="M8.5 4.5v4.5h6.5V4.5"/><path d="M8 19.5V14h8v5.5"/>'
   };
   /** 인라인 SVG 아이콘 한 개. size 는 픽셀(기본 16). */
   function icon(name, size) {

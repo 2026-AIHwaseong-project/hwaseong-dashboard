@@ -549,7 +549,7 @@
       '<label class="hs" style="display:flex;align-items:center;gap:5px">' +
       '<input type="checkbox" data-incl-sim> 시나리오·추천안 포함</label>' +
       '<button class="btn sm" data-regen type="button">다시 생성</button>' +
-      '<button class="xbtn" data-close type="button" aria-label="닫기">×</button>' +
+      '<button class="xbtn" data-close type="button" aria-label="닫기">' + HW.icon('close', 17) + '</button>' +
       '</header>' +
       '<div class="body" data-body></div>' +
       '<footer>' +
@@ -755,6 +755,10 @@
   /** 상단 내비게이션의 [AI 보고서 생성] 버튼을 연결합니다. */
   function mount() {
     C.$$('[data-report-open]').forEach(function (b) {
+      /* 시뮬레이션 사이드 패널의 [보고서]는 정적 HTML 이라 아이콘이 없었습니다.
+         서랍의 발행 버튼에는 문서 아이콘이 붙어 있어, 같은 동작인데 한쪽만
+         글자만 있는 상태였습니다. 이미 아이콘을 들고 있으면 건너뜁니다. */
+      if (!b.querySelector('.ic')) b.insertAdjacentHTML('afterbegin', HW.icon('doc'));
       b.addEventListener('click', open);
     });
   }

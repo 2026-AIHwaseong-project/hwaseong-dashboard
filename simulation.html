@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>정책 시뮬레이션 · 화성시 버스 미스매칭 대시보드</title>
 <meta name="description" content="정류장 신설·똑버스 배치·배차 증편을 지도에서 배치하고, 예산 대비 사각지대 해소 효과를 기준선과 비교하는 정책 시뮬레이션 화면">
+<!-- index.html 과 같은 이유로 여기서 부릅니다 — app.css 안의 @import 는
+     스타일 규칙 뒤에 있어 파서가 버립니다(그 파일의 주석 참고). -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="assets/css/app.css">
 </head>
 <body>
@@ -170,7 +174,9 @@
       <div id="placeList"></div>
 
       <div style="display:flex;gap:8px;padding:4px 14px 14px">
-        <button class="btn primary" id="btnSave" type="button" style="flex:1">시나리오 저장</button>
+        <!-- 옆의 [보고서]에는 문서 아이콘이 붙는데 이쪽만 글자뿐이라 한 쌍으로
+             안 보였습니다. data-ic 로 core.js 가 저장 아이콘을 넣습니다. -->
+        <button class="btn primary" id="btnSave" type="button" data-ic="save" style="flex:1">시나리오 저장</button>
         <button class="btn" data-report-open type="button">보고서</button>
       </div>
 
@@ -204,8 +210,12 @@
       <div class="ststats" style="padding-top:0">
         <span style="font-size:11px">적용 단가</span>
       </div>
+      <!-- 고정폭을 걸어 뒀었는데, 이 줄은 '정류장 4,200만 원' 처럼 한글과 숫자가
+           섞여 있어 Consolas 에 한글 글리프가 없는 탓에 한 줄 안에서 서체가
+           갈렸습니다. 자릿수는 body 의 tabular-nums 가 이미 잡아 줍니다.
+           10.5px 도 반올림 없는 11px 로 올립니다(단가는 근거 숫자입니다). -->
       <div class="fx" id="costNote"
-           style="font-family:Consolas,ui-monospace,monospace;font-size:10.5px;color:var(--ink3);
+           style="font-size:11px;color:var(--ink3);
                   display:flex;flex-wrap:wrap;gap:2px 16px;padding:0 16px 14px"></div>
     </section>
 
@@ -225,6 +235,8 @@
       <span>배치효과: 정류장=커버리지↑ · 똑버스=넓은 반경 얕은 공급↑ · 증편=근접 격자 공급↑</span>
       <span>해소 통행당 사업비 = 총 사업비 ÷ 전 시간대 해소 통행 합</span>
     </div>
+    <!-- 대시보드와 같은 발행 표기 (core.js) -->
+    <p class="issuer" data-issuer></p>
   </footer>
 </div>
 
