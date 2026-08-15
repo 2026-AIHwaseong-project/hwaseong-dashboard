@@ -32,7 +32,9 @@
     mi: { key: 'mi', prefix: 'm', varPrefix: 'mi', steps: 7, title: '미스매칭 지수 MI', unit: '(z)', kind: 'diverging' },
     demand: { key: 'demand', prefix: 'sb', steps: 5, title: '수요지수 D', unit: '5분위', kind: 'sequential' },
     supply: { key: 'supply', prefix: 'so', steps: 5, title: '공급지수 S', unit: '5분위', kind: 'sequential' },
-    flow: { key: 'flow', prefix: 'sb', steps: 5, title: '유동인구(잠재수요)', unit: '5분위', kind: 'sequential' }
+    /* 유동인구는 --fl(자주). 예전에는 수요와 같은 'sb'(파랑)를 써서, 두 층을
+       번갈아 켜도 지도가 똑같이 보였습니다 — 무엇을 보고 있는지 알 수 없었습니다. */
+    flow: { key: 'flow', prefix: 'fl', steps: 5, title: '유동인구(잠재수요)', unit: '5분위', kind: 'sequential' }
   };
   var QUINTILE_LABELS = ['하위 20%', '20–40%', '40–60%', '60–80%', '상위 20%'];
 

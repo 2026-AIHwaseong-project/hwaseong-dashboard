@@ -47,10 +47,15 @@
   --water:#DCE6F1; --land:#F4F1EA; --coast:#9AA9BC;
   /* 미스매칭 MI: 발산형(파랑 ← 중립 → 빨강). 중간값은 반드시 무채색. */
   --mi0:#1c5cab; --mi1:#5598e7; --mi2:#9ec5f4; --mi3:#e9e7e0; --mi4:#f3a68f; --mi5:#e2604f; --mi6:#a62b28;
-  /* 수요/유동인구: 단일 색상 순차형(파랑) */
+  /* 수요: 단일 색상 순차형(파랑) */
   --sb0:#dcebfb; --sb1:#9ec5f4; --sb2:#5598e7; --sb3:#2a78d6; --sb4:#184f95;
   /* 공급: 단일 색상 순차형(주황) */
   --so0:#fbe4d4; --so1:#f5b98f; --so2:#ec8c50; --so3:#d95926; --so4:#9c3a12;
+  /* 유동인구: 단일 색상 순차형(자주). 예전에는 수요와 --sb 를 같이 썼는데, 두 층을
+     번갈아 켜면 색이 똑같아 무엇을 보고 있는지 알 수 없었습니다. 자주를 고른 이유는
+     파랑(277°)·주황(52°) 어느 쪽과도 떨어져 있고, 초록과 달리 '좋다/나쁘다' 의미를
+     끌고 오지 않기 때문입니다 — 유동인구는 크기지 좋고 나쁨이 아닙니다. */
+  --fl0:#f3e7f5; --fl1:#d5badb; --fl2:#b78ec1; --fl3:#9963a8; --fl4:#7a388f;
   /* 범주형 2색(승차/하차) — 파랑·주황: 색각 이상에서도 분리되는 조합 */
   --c-board:#2a78d6; --c-alight:#eb6834;
   --tag-new-bg:#f9dfda; --tag-new-fg:#8f2422; --tag-add-bg:#fce4d5; --tag-add-fg:#93400f;
@@ -74,9 +79,21 @@
     --brand-2:#F36F21; --brand-2-ink:#FFA066; --brand-2-soft:#2C1B10;
     --sel:#5AA6EA; --selbg:rgba(90,166,234,.14);
     --water:#10151c; --land:#232a33; --coast:#3e4a58;
-    --mi0:#9fc4f7; --mi1:#5b93e0; --mi2:#3a68a8; --mi3:#2e3339; --mi4:#96453c; --mi5:#d15a4b; --mi6:#f0928a;
-    --sb0:#26364a; --sb1:#1f4f8a; --sb2:#2f77c9; --sb3:#5b9ce8; --sb4:#a4c9f5;
-    --so0:#3a2a21; --so1:#7c3f1c; --so2:#c25a24; --so3:#e98a4f; --so4:#f6c096;
+    /* ── 다크의 지표 색은 '심각할수록 진하게' 로 읽히게 만듭니다 ──────────────
+       예전에는 심각한 쪽이 파스텔로 빠졌습니다(--sb4 #a4c9f5 는 L* 80 에 채도 26,
+       --mi6 #f0928a 는 L* 70 에 채도 40). 옅어질수록 심하다는 뜻이 되어, 보는
+       사람의 직관과 반대였습니다.
+       이제 단계가 올라갈수록 **채도가 오릅니다**(8 → 52~64). L* 도 22 → 52 로
+       오르긴 하지만 폭이 작아, 눈에 먼저 들어오는 변화는 '짙어짐' 입니다.
+
+       ⚠️ 심각한 쪽을 라이트처럼 '더 어둡게' 는 못 합니다. 바탕(--land #232a33)이
+          이미 L* 16 이라, 그보다 어두우면 가장 중요한 칸이 배경에 잠깁니다.
+          그래서 어둡기가 아니라 짙기로 세기를 나릅니다. 최상단 대비는 3.46:1,
+          최하단은 1.18:1 로 빈 곳은 뒤로 물러납니다. 이웃 단계 색차는 ΔE 14 이상. */
+    --mi0:#357dd1; --mi1:#3164a5; --mi2:#334c74; --mi3:#333538; --mi4:#753b32; --mi5:#a54438; --mi6:#d64e40;
+    --sb0:#303540; --sb1:#364663; --sb2:#395887; --sb3:#376aad; --sb4:#2c7ed5;
+    --so0:#3f322c; --so1:#603d2c; --so2:#80492d; --so3:#a2542c; --so4:#c45f2a;
+    --fl0:#3a323c; --fl1:#543e5a; --fl2:#6e4a78; --fl3:#8a5599; --fl4:#a661ba;
     --c-board:#3987e5; --c-alight:#d95926;
     --tag-new-bg:rgba(230,103,103,.16); --tag-new-fg:#f0a29b; --tag-add-bg:rgba(217,89,38,.16); --tag-add-fg:#f0a86f;
     --tag-drt-bg:rgba(144,133,233,.16); --tag-drt-fg:#b3aaf2; --tag-eff-bg:rgba(57,135,229,.16); --tag-eff-fg:#86b6ef;
@@ -95,9 +112,12 @@
   --brand-2:#F36F21; --brand-2-ink:#FFA066; --brand-2-soft:#2C1B10;
   --sel:#5AA6EA; --selbg:rgba(90,166,234,.14);
   --water:#10151c; --land:#232a33; --coast:#3e4a58;
-  --mi0:#9fc4f7; --mi1:#5b93e0; --mi2:#3a68a8; --mi3:#2e3339; --mi4:#96453c; --mi5:#d15a4b; --mi6:#f0928a;
-  --sb0:#26364a; --sb1:#1f4f8a; --sb2:#2f77c9; --sb3:#5b9ce8; --sb4:#a4c9f5;
-  --so0:#3a2a21; --so1:#7c3f1c; --so2:#c25a24; --so3:#e98a4f; --so4:#f6c096;
+  /* 위 @media 블록과 **같은 값이어야 합니다** — 다르면 테마를 손으로 고른 사람과
+     시스템 설정을 따르는 사람이 서로 다른 색의 지도를 봅니다. 근거는 위 주석. */
+  --mi0:#357dd1; --mi1:#3164a5; --mi2:#334c74; --mi3:#333538; --mi4:#753b32; --mi5:#a54438; --mi6:#d64e40;
+  --sb0:#303540; --sb1:#364663; --sb2:#395887; --sb3:#376aad; --sb4:#2c7ed5;
+  --so0:#3f322c; --so1:#603d2c; --so2:#80492d; --so3:#a2542c; --so4:#c45f2a;
+  --fl0:#3a323c; --fl1:#543e5a; --fl2:#6e4a78; --fl3:#8a5599; --fl4:#a661ba;
   --c-board:#3987e5; --c-alight:#d95926;
   --tag-new-bg:rgba(230,103,103,.16); --tag-new-fg:#f0a29b; --tag-add-bg:rgba(217,89,38,.16); --tag-add-fg:#f0a86f;
   --tag-drt-bg:rgba(144,133,233,.16); --tag-drt-fg:#b3aaf2; --tag-eff-bg:rgba(57,135,229,.16); --tag-eff-fg:#86b6ef;
@@ -118,6 +138,7 @@
   --mi0:#1c5cab; --mi1:#5598e7; --mi2:#9ec5f4; --mi3:#e9e7e0; --mi4:#f3a68f; --mi5:#e2604f; --mi6:#a62b28;
   --sb0:#dcebfb; --sb1:#9ec5f4; --sb2:#5598e7; --sb3:#2a78d6; --sb4:#184f95;
   --so0:#fbe4d4; --so1:#f5b98f; --so2:#ec8c50; --so3:#d95926; --so4:#9c3a12;
+  --fl0:#f3e7f5; --fl1:#d5badb; --fl2:#b78ec1; --fl3:#9963a8; --fl4:#7a388f;
   --c-board:#2a78d6; --c-alight:#eb6834;
   --tag-new-bg:#f9dfda; --tag-new-fg:#8f2422; --tag-add-bg:#fce4d5; --tag-add-fg:#93400f;
   --tag-drt-bg:#e5e1f7; --tag-drt-fg:#3b3090; --tag-eff-bg:#ddeafc; --tag-eff-fg:#1c5cab;
@@ -481,6 +502,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .c.m4{fill:var(--mi4)}.c.m5{fill:var(--mi5)}.c.m6{fill:var(--mi6)}
 .c.sb0{fill:var(--sb0)}.c.sb1{fill:var(--sb1)}.c.sb2{fill:var(--sb2)}.c.sb3{fill:var(--sb3)}.c.sb4{fill:var(--sb4)}
 .c.so0{fill:var(--so0)}.c.so1{fill:var(--so1)}.c.so2{fill:var(--so2)}.c.so3{fill:var(--so3)}.c.so4{fill:var(--so4)}
+.c.fl0{fill:var(--fl0)}.c.fl1{fill:var(--fl1)}.c.fl2{fill:var(--fl2)}.c.fl3{fill:var(--fl3)}.c.fl4{fill:var(--fl4)}
 /* --zk 는 map.js 가 확대 배율을 넣어 주는 변수 — 나누면 확대해도 화면 크기가 유지됩니다.
    범례 미니 SVG 처럼 --zk 가 없는 곳은 폴백 1 로 원래 크기 그대로입니다. */
 .rlab{fill:var(--ink);font-size:calc(11.5px/var(--zk,1));font-weight:700;paint-order:stroke;stroke:var(--card);
@@ -681,8 +703,11 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
    존재 이유인 총 소요액이 카드 안에서 가장 작은 글자였습니다. 축소분을 되돌립니다. */
 #costChart .cmp-lab{font-size:12px}
 #costChart .cmp-name{font-size:13px}
-.cost-bar{fill:var(--sb3)}
-.cost-bar.dim{fill:var(--sb1)}
+/* 단색 막대는 순차 스케일의 **끝 단계**를 씁니다. 중간 단계(--sb3)를 쓰면 다크에서
+   카드 대비가 3.06:1 까지 떨어져 막대가 흐려집니다(--sb4 는 4.04:1). 지도처럼
+   여러 단계를 늘어놓는 자리가 아니라, 한 색으로 값을 읽는 자리이기 때문입니다. */
+.cost-bar{fill:var(--sb4)}
+.cost-bar.dim{fill:var(--sb2)}
 
 /* --------------------------------- 8. 시뮬레이터 · 시나리오 빌더 */
 .simbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 14px 10px;padding:8px 10px;
@@ -732,7 +757,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
    가로로만 늘어나는 막대라 transform:scaleX 로 같은 그림을 얻으면서
    합성 단계에서만 처리됩니다. JS 는 --p(0~1)만 넣습니다. */
 .budget .btrack i{position:absolute;inset:0 auto 0 0;width:100%;border-radius:4px;
-  background:var(--sb3);transform-origin:left center;transform:scaleX(0);
+  background:var(--sb4);transform-origin:left center;transform:scaleX(0);   /* 끝 단계 — .cost-bar 주석 참고 */
   transition:transform .3s}
 .budget .btrack i.over{background:var(--bad)}
 @media (prefers-reduced-motion:reduce){.budget .btrack i{transition:none}}
