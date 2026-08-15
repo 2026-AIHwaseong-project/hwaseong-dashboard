@@ -865,7 +865,8 @@
         '<span>' + esc(cell ? cell.name : '') + ' · ' + esc(p.cellId) + ' · 반경 ' + (e.radiusKm || '?') + 'km</span>' +
         (p.rationale ? '<span class="why">' + esc(p.rationale) + '</span>' : '') + '</span>' +
         '<span class="cost">' + won((e.unitKrw || 0) * p.count) + '</span>' +
-        '<button class="del" data-remove="' + i + '" type="button" aria-label="배치 삭제">×</button></li>';
+        '<button class="del" data-remove="' + i + '" type="button" aria-label="배치 삭제">' +
+        HW.icon('close', 14) + '</button></li>';
     }).join('') + '</ul>';
   }
 
@@ -1152,7 +1153,8 @@
         '<span>' + (su.needDelta < 0 ? '사각지대 −' + Math.abs(su.needDelta) + '개' : '변화 없음') + '</span>' +
         (su.krwPerTrip != null ? '<span>' + fmt(su.krwPerTrip) + '원/통행</span>' : '') +
         '</span></button>' +
-        '<button class="sdel" data-del="' + i + '" type="button" aria-label="시나리오 삭제">×</button>' +
+        '<button class="sdel" data-del="' + i + '" type="button" aria-label="시나리오 삭제">' +
+        HW.icon('close', 14) + '</button>' +
         '</div>';
     }).join('');
   }

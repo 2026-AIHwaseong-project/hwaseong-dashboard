@@ -67,6 +67,17 @@
   --warn:#a86612;
   --shadow:0 4px 14px rgba(0,0,0,.14);
   --shadow-lg:0 18px 48px rgba(0,0,0,.20);
+  /* 고정폭은 **한 벌만** 씁니다. 예전에는 .mono 가 "Cascadia Code" 로 시작하고
+     나머지 21곳은 Consolas 로 시작해, Windows 에서 서로 다른 고정폭 서체가
+     한 화면에 동시에 떴습니다.
+     쓰는 자리도 좁힙니다 — body 에 이미 font-variant-numeric:tabular-nums 가
+     걸려 있어 숫자 자릿수는 Pretendard 만으로 맞습니다. 고정폭을 덧씌우면
+     정렬이 나아지는 게 아니라 본문과 다른 x-height·회색도의 숫자가 박힐 뿐이고,
+     공식 CI 가 둥근 끝 모노라인 글자라 각진 고정폭과는 방향도 반대입니다.
+     게다가 Consolas 에는 한글 글리프가 없어서, 한글과 숫자가 섞인 줄
+     (배치 목록·시나리오 메타·푸터)은 이미 한 줄 안에서 서체가 갈리고 있었습니다.
+     그래서 지금은 **격자 ID 같은 식별 코드에만** 남깁니다. */
+  --font-mono:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",monospace;
 }
 @media (prefers-color-scheme:dark){
   :root:where(:not([data-theme="light"])){
@@ -152,17 +163,22 @@
 /* --------------------------------------------------- 2. 리셋 · 타이포 */
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-/* Pretendard 를 먼저 부릅니다. Windows 기본인 맑은 고딕은 자간·획이 낡아
-   같은 레이아웃도 오래된 화면처럼 보입니다. 망 차단·오프라인이면 조용히
-   기존 시스템 스택으로 떨어지므로 화면이 깨지지는 않습니다. */
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+/* Pretendard 는 여기서 부르지 않습니다 — index.html·simulation.html 의
+   <link> 가 부릅니다. 예전에는 이 자리에 @import 가 있었는데, @import 는
+   @charset·@layer 를 빼면 **모든 스타일 규칙보다 앞서야** 합니다. 바로 위
+   :root 토큰 블록들과 *{box-sizing} 뒤에 있어서 파서가 통째로 버렸고,
+   그래서 자간(h1 -.03em)·가변 굵기(650)를 Pretendard 기준으로 맞춰 둔
+   설정이 전부 맑은 고딕에서 그려지고 있었습니다 — 이 파일이 피하려던
+   바로 그 상태입니다. HTML 로 옮기면 순서 함정이 없고, app.css 를 다 받기
+   전에 폰트 요청이 시작되므로 대기도 한 단계 줄어듭니다.
+   (망 차단·오프라인이면 조용히 시스템 스택으로 떨어지는 것은 그대로입니다) */
 body{background:var(--bg);color:var(--ink);
   font-family:"Pretendard Variable",Pretendard,"Segoe UI Variable","Segoe UI",
     "Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
   /* 표·지표가 많은 화면이라 숫자 폭을 고정합니다 — 값이 바뀔 때 자릿수가 흔들리지 않습니다 */
   font-variant-numeric:tabular-nums}
-.mono{font-family:"Cascadia Code",Consolas,"D2Coding",ui-monospace,monospace}
+.mono{font-family:var(--font-mono)}
 a{color:inherit}
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
 :focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:4px}
@@ -177,7 +193,7 @@ svg text{font-family:inherit}
   scrollbar-color:var(--axis) transparent;scrollbar-width:thin}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--axis);border-radius:99px;
+::-webkit-scrollbar-thumb{background:var(--axis);border-radius:999px;   /* 칩과 같은 값 — 둘 다 완전 원형인데 값만 달랐습니다 */
   border:3px solid var(--bg);background-clip:content-box}
 ::-webkit-scrollbar-thumb:hover{background:var(--ink3);background-clip:content-box}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
@@ -198,12 +214,41 @@ svg text{font-family:inherit}
    지도가 깔리는데 backdrop-filter 로 비치면 격자 색이 왜곡돼 보입니다. */
 .topnav{position:sticky;top:0;z-index:30;background:var(--card);
   border-bottom:3px solid var(--brand)}
+
+/* ── 레일 두 색 ────────────────────────────────────────────────────────────
+   공식 CI 는 파랑과 주황 두 색으로 짜인 워드마크인데 레일은 파랑 단색이라, CI 안의
+   색 관계가 화면으로 이어지지 않았습니다. 레일 **왼쪽 끝에서 CI 오른쪽 끝까지**만
+   주황으로 덮으면 주황이 인장을 받치고 파랑이 나머지 문서를 끌고 가는 관계가 되어,
+   길이에 이유가 생깁니다(임의의 지점에서 색이 바뀌면 사고로 보입니다).
+
+   "주황을 글자에 쓰지 않는다"(흰 바탕 2.95:1)는 규칙은 그대로입니다 — 여기서도
+   선이지 글자가 아닙니다. 비텍스트 3:1 기준도 적용되지 않습니다. 이 선은 정보를
+   나르지 않는 장식이고, 정보를 나르는 '지금 여기' 표식은 여전히 활성 탭 밑줄
+   하나뿐입니다.
+
+   끊기는 지점은 눈대중이 아니라 계산입니다. .tn-in 이 .wrap 과 같은 1680px
+   중앙정렬이므로, 화면 왼쪽 끝에서 CI 오른쪽 끝까지는
+       바깥 여백  max(0px, (100% − 1680px) / 2)
+     + 좌측 패딩  --rail-pad (기본 18px · 560px 이하 12px)
+     + 햄버거 36px + 간격 16px = 52px
+     + CI 폭     --rail-ci  (height 30px × 512/151 ≈ 102px)
+     + 다크 보정  --rail-plate (다크에서 CI 뒤에 까는 흰 판의 좌우 패딩 9px×2)
+   입니다. 폭이 바뀌어도 CI 끝을 따라갑니다.
+
+   border-bottom 은 한 변에 한 색만 가질 수 있어 ::after 로 덮습니다. 테두리
+   자체는 그대로 두므로 상단 레일 높이는 1px 도 바뀌지 않습니다 — 스티키 기준선과
+   그 아래 모든 것의 위치가 지금과 같습니다. */
+.topnav{--rail-pad:18px;--rail-ci:102px;--rail-plate:0px}
+.topnav::after{content:"";position:absolute;left:0;bottom:-3px;height:3px;
+  width:calc(max(0px,(100% - 1680px) / 2) + var(--rail-pad) + 52px
+             + var(--rail-ci) + var(--rail-plate));
+  background:var(--brand-2);pointer-events:none}
 .topnav .tn-in{max-width:1680px;   /* .wrap 과 같은 값이어야 좌측 정렬이 맞습니다 */margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:11px;min-width:0}
 /* 공식 CI. 원본 BI 에서 가로형 시그니처를 투명 배경으로 뽑아 둔 것입니다. */
 .brand .ci{height:30px;width:auto;display:block;flex:0 0 auto}
 /* CI 옆 서비스명. CI 가 기관을 말하므로 여기는 이 도구의 이름만 답니다. */
-.brand .svc{font-size:13.5px;font-weight:700;letter-spacing:-.02em;color:var(--ink);
+.brand .svc{font-size:13px;font-weight:700;letter-spacing:-.02em;color:var(--ink);
   white-space:nowrap;padding-left:11px;border-left:1px solid var(--line);line-height:1.2}
 .tn-sp{flex:1}
 .tn-act{display:flex;gap:6px;align-items:center}
@@ -229,7 +274,7 @@ svg text{font-family:inherit}
 .topnav.menu-open .tn-drawer{transform:none;visibility:visible;transition:transform .28s ease}
 @media (prefers-reduced-motion:reduce){.tn-scrim,.tn-drawer{transition:none}}
 .tn-drawer a,.tn-drawer .tn-item{display:flex;align-items:center;gap:8px;
-  font-size:13.5px;font-weight:600;padding:10px 14px;border-radius:9px;
+  font-size:13px;font-weight:600;padding:10px 14px;border-radius:9px;
   color:var(--ink2);text-decoration:none;background:none;border:0;cursor:pointer;
   text-align:left;transition:background .12s,color .12s}
 .tn-drawer a:hover,.tn-drawer .tn-item:hover{background:var(--brand-soft);color:var(--brand-ink)}
@@ -239,9 +284,36 @@ svg text{font-family:inherit}
 /* ⚠️ .btn 을 셀렉터에 넣어 두세요. 이 버튼은 .btn.sm 이기도 한데, 그 규칙이 이
    블록보다 **뒤(§버튼)** 에 있습니다. `.tn-drawer [data-report-open]` 는 클래스 1 +
    속성 1 로 .btn.sm 과 특이도가 같아(0,2,0) 순서에서 밀렸고, 실제로 여기 적은 값이
-   아니라 .btn.sm 의 5px 11px / 11.5px 로 그려졌습니다. .btn 을 더해 (0,3,0) 으로
+   아니라 .btn.sm 의 5px 11px / 11px 로 그려졌습니다. .btn 을 더해 (0,3,0) 으로
    올리면 순서와 무관하게 이깁니다. */
-.tn-drawer .btn[data-report-open]{padding:9px 14px;justify-content:center;font-size:12.5px}
+/* ── 발행 버튼 ──────────────────────────────────────────────────────────────
+   서랍의 마지막 항목은 이동 링크가 아니라 문서를 만들어 내보내는 동작입니다.
+   '멋있게' 를 그라디언트·글로우로 풀지 않습니다 — 이 화면의 세계에 없는 재료이고,
+   공무원이 쓰는 도구에서 그 표면은 곧바로 가벼워 보입니다. 대신 관공서 서식의
+   발행 버튼이 실제로 갖는 것을 줍니다.
+     ① 두 줄 — 무엇을 만드는지(13px/700)와 무엇으로 나오는지(10px). 부제는 제목
+        **아래** 입니다. 위에 얹으면 DESIGN.md 가 금지한 eyebrow 가 됩니다.
+     ② 윗변 1px 하이라이트 — 빛을 받는 면의 경계지 그림자가 아니라, '그림자는
+        모달·툴팁에만' 이라는 규칙과 부딪히지 않습니다. 색을 흰색 반투명으로 두어
+        라이트(진한 파랑 바탕)·다크(밝은 파랑 바탕) 어느 쪽에서도 자연스럽습니다.
+     ③ 아이콘 18px — 서랍의 다른 아이콘(16px)보다 한 단계 커서 무게가 실립니다.
+   ⚠️ 셀렉터에 .btn 을 넣어 두세요. §버튼의 .btn 규칙이 이 블록보다 **뒤**에 있어
+      `.tn-drawer .tn-issue`(0,2,0)로는 padding·white-space 를 못 이깁니다.
+      .btn 을 더해 (0,3,0) 으로 올리면 순서와 무관하게 이깁니다. */
+.tn-drawer .btn.tn-issue{width:100%;justify-content:flex-start;align-items:center;
+  gap:10px;padding:11px 13px;border-radius:9px;text-align:left;white-space:normal;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+/* 같은 함정 하나 더 — §버스의 `.btn .ic{width:14px}` 가 (0,2,0) 이고 이 블록보다
+   뒤에 있어, `.tn-issue .ic`(0,2,0)로 쓰면 순서에서 밀려 14px 로 그려집니다.
+   svg 에 width="18" 을 찍어 둬도 CSS 가 presentation attribute 를 이깁니다.
+   .btn 을 붙여 (0,3,0) 으로 올립니다. */
+.btn.tn-issue .ic{width:18px;height:18px;margin-top:0}
+.tn-issue .ti-tx{display:flex;flex-direction:column;gap:1px;min-width:0}
+.tn-issue .ti-tx b{font-size:13px;font-weight:700;letter-spacing:-.01em;line-height:1.3}
+/* 부제는 색을 따로 주지 않고 물려받은 글자색을 흐립니다 — 라이트는 흰 글자,
+   다크는 어두운 글자(§22 보정)라 고정 색을 쓰면 한쪽에서 안 보입니다. */
+.tn-issue .ti-tx span{font-size:10px;font-weight:500;line-height:1.4;opacity:.74;
+  word-break:keep-all}
 
 /* 사용 안내 모달 — 화면 축소판 그림 + 번호 설명 */
 /* .sheet 를 함께 붙이는 이유는 바로 위와 같습니다 — .sheet{width:min(920px,100%)} 가
@@ -251,8 +323,8 @@ svg text{font-family:inherit}
   background:var(--card)}
 .ghero text{font-family:inherit}
 .gsteps{display:grid;grid-template-columns:repeat(2,1fr);gap:12px 18px;margin-top:14px}
-.gstep b{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink)}
-.gstep p{margin:5px 0 0 25px;font-size:11.5px;line-height:1.65;color:var(--ink2);word-break:keep-all}
+.gstep b{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink)}
+.gstep p{margin:5px 0 0 25px;font-size:11px;line-height:1.65;color:var(--ink2);word-break:keep-all}
 .gnum{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
   width:18px;height:18px;border-radius:50%;background:var(--brand);color:#fff;
   font-size:11px;font-weight:700}
@@ -261,7 +333,12 @@ svg text{font-family:inherit}
 @media (max-width:640px){.gsteps{grid-template-columns:1fr}}
 
 header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin:18px 0 14px}
-h1{font-size:23px;font-weight:800;margin:0;letter-spacing:-.03em;text-wrap:balance;line-height:1.25}
+/* KPI 값(.kpi .vl)이 clamp(19px,1.9vw,26px) 로 뷰포트를 따라 줄어드는데 제목이
+   23px 고정이면, 폭이 1,210px 아래로 내려가는 순간 화면의 주인공인 지표값이
+   제목보다 작아집니다(1,020px 에서 KPI 19 대 제목 23). 제목도 같은 방식으로
+   줄여 위계가 뒤집히지 않게 합니다. 데스크톱(≥1,590px)에서는 23px 그대로라
+   지금 보이는 화면은 바뀌지 않습니다. */
+h1{font-size:clamp(18px,1.45vw,23px);font-weight:800;margin:0;letter-spacing:-.03em;text-wrap:balance;line-height:1.25}
 .sub{margin:7px 0 0;color:var(--ink2);font-size:13px;max-width:70ch;line-height:1.65}
 
 /* 시간대 탭 — 이 화면의 주장이 "시간대를 바꾸면 답이 달라진다" 이므로
@@ -271,8 +348,8 @@ h1{font-size:23px;font-weight:800;margin:0;letter-spacing:-.03em;text-wrap:balan
 .periods{display:flex;gap:2px;border:1px solid var(--line);border-radius:11px;padding:3px;background:var(--card)}
 .pbtn{position:relative;border-radius:8px;padding:7px 15px 8px;text-align:center;color:var(--ink2);
   transition:background .12s,color .12s}
-.pbtn b{display:block;font-size:13.5px;font-weight:700;line-height:1.25;color:inherit;letter-spacing:-.01em}
-.pbtn span{display:block;font-size:10.5px;letter-spacing:.02em;margin-top:1px;opacity:.8}
+.pbtn b{display:block;font-size:13px;font-weight:700;line-height:1.25;color:inherit;letter-spacing:-.01em}
+.pbtn span{display:block;font-size:10px;letter-spacing:.02em;margin-top:1px;opacity:.8}
 .pbtn:hover{background:var(--brand-soft);color:var(--brand-ink)}
 .pbtn.on,.pbtn.on:hover{background:var(--brand);color:#fff}
 .pbtn.on::after{content:"";position:absolute;left:15px;right:15px;bottom:3px;height:2.5px;
@@ -347,11 +424,17 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   display:flex;align-items:center;gap:9px}
 .chead h2::before{content:"";width:3px;height:14px;border-radius:2px;
   background:var(--brand);flex:0 0 auto}
-.chead .hsub{font-size:11.5px;color:var(--ink3);line-height:1.5}
+.chead .hsub{font-size:11px;color:var(--ink3);line-height:1.5}
 /* 계산 중에만 글자가 들어가는데, 비어도 테두리 캡슐이 남아 로드 실패처럼 보입니다 */
 .pchip:empty{display:none}
-.pchip{font-size:11px;font-family:Consolas,ui-monospace,monospace;color:var(--ink3);
+.pchip{font-size:11px;color:var(--ink3);
   border:1px solid var(--line);border-radius:999px;padding:2px 8px;white-space:nowrap}
+/* 제목줄은 align-items:baseline 입니다. 제목(15px)과 설명글(11px)은 글자라
+   baseline 이 맞지만, 테두리 캡슐·셀렉트처럼 **상자**인 것들은 baseline 에
+   걸면 상자 아래쪽이 글자 밑선에 맞춰져 위로 떠 보입니다. 카드마다 제목줄
+   오른쪽 구성이 달라(설명글 4곳·캡슐·범례 키·정류장 셀렉트) 그 결과 카드
+   머리의 높이 리듬이 조금씩 어긋났습니다. 상자만 중앙에 앉힙니다. */
+.chead > .pchip,.chead > .stpick,.chead > .keys{align-self:center}
 .cbody{padding:0 14px 14px}
 
 /* --------------------------------------------------------- 4. KPI 타일
@@ -389,7 +472,11 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .lbtn:hover{background:var(--selbg)}
 .lbtn.on{background:var(--ink);border-color:var(--ink);color:var(--card)}
 .tset{display:flex;gap:4px}
-.tbtn{font-size:11px;padding:4px 10px;border:1px dashed var(--line);border-radius:999px;color:var(--ink3)}
+/* 캡슐 토글은 .tbtn 과 .simtool 이 같은 11px 인데 좌우 여백만 10 대 11 이었습니다.
+   시뮬레이션에서는 둘이 위아래 줄로 붙어 있어 차이가 그대로 보입니다. 11 로 맞춥니다.
+   지도 레이어(.lbtn 12px)는 주 컨트롤이라 크기 차이를 그대로 둡니다 — 실선/점선
+   테두리와 함께 주·보조를 가르는 의도된 위계입니다. */
+.tbtn{font-size:11px;padding:4px 11px;border:1px dashed var(--line);border-radius:999px;color:var(--ink3)}
 .tbtn.on{border-style:solid;color:var(--ink2);background:var(--selbg);border-color:var(--sel)}
 
 /* 지도 검색 — 읍면동 이름 또는 격자 ID */
@@ -443,14 +530,13 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   align-items:center;gap:12px;flex-wrap:wrap}
 .legendbar .lg-head{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
 .legendbar .lg-head b{font-size:11px;font-weight:650;color:var(--ink2)}
-.legendbar .lg-head span{font-size:10px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace}
+.legendbar .lg-head span{font-size:10px;color:var(--ink3);}
 .legendbar .lg-body{display:flex;align-items:center;gap:8px;flex:1;min-width:230px}
 .legendbar .lg-end{font-size:11px;color:var(--ink3);white-space:nowrap}
 .legendbar .lg-scale{flex:1;min-width:120px}
 .legendbar .lg-sw{display:flex;gap:2px}
 .legendbar .lg-sw i{display:block;height:11px;flex:1;border-radius:2px}
-.legendbar .lg-tick{display:flex;margin-top:3px;font-size:9px;color:var(--ink3);
-  font-family:Consolas,ui-monospace,monospace}
+.legendbar .lg-tick{display:flex;margin-top:3px;font-size:9px;color:var(--ink3)}
 /* 눈금은 색 칸의 경계에 오도록 반 칸씩 밀어 배치합니다 */
 .legendbar .lg-tick span{flex:1;text-align:right;transform:translateX(50%);white-space:nowrap}
 .legendbar .lg-tick span:last-child{flex:0}
@@ -621,7 +707,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .placed .pmk-more{fill:var(--sel);font-size:calc(9px/var(--zk,1));font-weight:700;paint-order:stroke;
   stroke:var(--card);stroke-width:calc(2.5px/var(--zk,1))}
 .compass{fill:none;stroke:var(--ink3);stroke-width:1.2}
-.compass-t{fill:var(--ink3);font-size:9px;font-family:Consolas,ui-monospace,monospace}
+.compass-t{fill:var(--ink3);font-size:9px;}
 .scalebar{stroke:var(--ink3);stroke-width:1.4}
 
 /* ------------------------------------------------- 6. 우선순위 리스트 */
@@ -632,16 +718,16 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   width:100%;text-align:left;padding:7px 8px;border-radius:8px}
 .trow:hover{background:var(--selbg)}
 .trow.sel{background:var(--selbg);box-shadow:inset 0 0 0 1.5px var(--sel)}
-.trow .rk{font-family:Consolas,ui-monospace,monospace;font-size:12px;color:var(--ink3);text-align:right}
+.trow .rk{font-size:12px;color:var(--ink3);text-align:right}
 .trow .nm{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.trow .nm span{font-family:Consolas,ui-monospace,monospace;font-weight:400;font-size:11px;color:var(--ink3);margin-left:6px}
+.trow .nm span{font-family:var(--font-mono);font-weight:400;font-size:11px;color:var(--ink3);margin-left:6px}
 /* 순위를 정한 값(1위=100 기준 상대 점수)이 주 숫자입니다. MI 는 sub2 로 내려
    보조가 됐습니다 — 어느 쪽이 정렬 근거인지 크기로 드러나야 합니다. */
-.trow .pscore{font-family:Consolas,ui-monospace,monospace;font-size:13px;font-weight:700;
+.trow .pscore{font-size:13px;font-weight:700;
   color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
 .trow .pscore small{font-size:10px;font-weight:400;color:var(--ink3);margin-left:1px}
-.trow .mi{font-family:Consolas,ui-monospace,monospace;font-size:11px;color:var(--ink2);text-align:right}
-.trow .sub2{grid-column:2;font-size:11px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace;
+.trow .mi{font-size:11px;color:var(--ink2);text-align:right}
+.trow .sub2{grid-column:2;font-size:11px;color:var(--ink3);
   display:flex;gap:9px;flex-wrap:wrap;margin-top:-1px}
 /* 고령 7% 와 22% 가 똑같이 진빨강이라 값과 무관한 위험 신호처럼 보였습니다.
    기본은 눌러 두고, 임계를 넘을 때만 JS 가 .hi 를 붙여 색을 씁니다. */
@@ -679,7 +765,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   stroke:var(--card);stroke-width:3px;stroke-linejoin:round}
 .qlab.hot{fill:var(--ink2);font-weight:600}
 .axlab{fill:var(--ink3);font-size:11px}
-.tick{fill:var(--ink3);font-size:10px;font-family:Consolas,ui-monospace,monospace}
+.tick{fill:var(--ink3);font-size:10px;}
 .gl{stroke:var(--grid);stroke-width:1}
 /* --axis(#c3c2b7)는 배경 대비 1.75:1 로 비텍스트 최소 3:1 에 못 미쳐
    4분면 구획 자체가 흐릿했습니다. 격자선이 아니라 '의미를 나누는 선' 입니다. */
@@ -690,7 +776,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .stbar-a{fill:var(--c-alight)}
 .pband{fill:var(--ink);opacity:.05;pointer-events:none}
 .colhit{fill:transparent;cursor:pointer}
-.dl2{fill:var(--ink2);font-size:10px;font-family:Consolas,ui-monospace,monospace}
+.dl2{fill:var(--ink2);font-size:10px;}
 .keys{display:flex;gap:12px;align-items:center;font-size:11px;color:var(--ink2);flex-wrap:wrap}
 .keys i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 .keys i.ghost{background:var(--bad);border-radius:2px}
@@ -716,7 +802,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .cmp-base{fill:var(--bad)}
 .cmp-sim{fill:var(--c-board)}
 .cmp-sim.worse{fill:var(--bad)}
-.cmp-lab{fill:var(--ink2);font-size:10px;font-family:Consolas,ui-monospace,monospace}
+.cmp-lab{fill:var(--ink2);font-size:10px;}
 .cmp-name{fill:var(--ink2);font-size:11px}
 /* 같은 클래스인데 실효 크기가 카드 폭에 따라 달라집니다 — .chart{width:100%} 인데
    viewBox 폭은 고정이라, 7칸 카드의 #cmpChart 는 1.18배로 커지고 5칸 카드의
@@ -740,7 +826,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .simtool.on{background:var(--sel);border-color:var(--sel);color:#fff;font-weight:600}
 .simtool i{font-style:normal;font-size:10px}
 .simbar .spacer{flex:1}
-.simbar .cnt{font-size:11px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace}
+.simbar .cnt{font-size:11px;color:var(--ink3);}
 .simhint{width:100%;font-size:11px;color:var(--ink3);margin-top:2px}
 
 .plist{list-style:none;margin:0;padding:0 14px 6px;display:flex;flex-direction:column;gap:6px;
@@ -750,8 +836,8 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .plist .ic{font-size:12px;color:var(--sel);text-align:center}
 .plist .tx{min-width:0}
 .plist .tx b{display:block;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.plist .tx span{font-size:11px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace}
-.plist .cost{font-size:11px;font-family:Consolas,ui-monospace,monospace;color:var(--ink2);
+.plist .tx span{font-size:11px;color:var(--ink3);}
+.plist .cost{font-size:11px;color:var(--ink2);
   font-variant-numeric:tabular-nums;white-space:nowrap}
 /* ── 최소 터치·클릭 면적 24x24 (WCAG 2.2 Target Size Minimum) ──────────────
    보이는 크기는 그대로 두고 누를 수 있는 면적만 넓힙니다. 레이아웃을 밀지
@@ -766,7 +852,10 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   min-width:24px;min-height:24px;width:100%;height:100%;
   transform:translate(-50%,-50%)}
 
-.plist .del{font-size:15px;line-height:1;color:var(--ink3);padding:2px 5px;border-radius:6px}
+/* .xbtn 과 같은 이유 — 글자 × 가 SVG 로 바뀌어 가운데 맞춤이 필요합니다.
+   ::after 로 만들어 둔 24px 판정 면적은 그대로 위에 얹힙니다. */
+.plist .del{display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;padding:0;color:var(--ink3);border-radius:6px}
 .plist .del:hover{background:var(--tag-new-bg);color:var(--tag-new-fg)}
 
 .budget{padding:2px 14px 12px}
@@ -791,9 +880,10 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .scen:hover{border-color:var(--sel)}
 .scen.on{border-color:var(--sel);box-shadow:inset 0 0 0 1px var(--sel);background:var(--selbg)}
 .scen .snm{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.scen .smeta{grid-column:1/-1;font-size:11px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace;
+.scen .smeta{grid-column:1/-1;font-size:11px;color:var(--ink3);
   display:flex;gap:10px;flex-wrap:wrap}
-.scen .sdel{font-size:15px;line-height:1;color:var(--ink3);padding:2px 5px;border-radius:6px}
+.scen .sdel{display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;padding:0;color:var(--ink3);border-radius:6px}
 .scen .sdel:hover{background:var(--tag-new-bg);color:var(--tag-new-fg)}
 
 .policy{padding:0 14px 14px;display:flex;flex-direction:column;gap:10px}
@@ -802,7 +892,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .pcard h3{font-size:14px;font-weight:650;margin:0 0 6px}
 .pcard p{margin:0;font-size:12px;color:var(--ink2);line-height:1.65}
 .pcard ul{margin:6px 0 0;padding-left:17px;font-size:12px;color:var(--ink2);line-height:1.7}
-.pcard .num{font-family:Consolas,ui-monospace,monospace;font-weight:600;color:var(--ink);
+.pcard .num{font-weight:600;color:var(--ink);
   font-variant-numeric:tabular-nums}
 
 /* ------------------------------------------------------- 9. 버튼 · 폼 */
@@ -810,19 +900,31 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   padding:6px 13px;border-radius:8px;border:1px solid var(--line);color:var(--ink2);background:var(--card);
   white-space:nowrap}
 .btn:hover:not(:disabled){background:var(--selbg);border-color:var(--sel)}
-.btn:disabled{opacity:.42;cursor:not-allowed}
+/* .btn 은 .42, .minib 은 .4 로 달랐습니다. 눈에 띄는 차이는 아니지만 같은
+   "못 누름" 을 두 값으로 말하고 있었습니다. .45 로 맞춥니다 — 시뮬레이션의
+   [되돌리기]·[초기화] 는 대부분의 시간을 비활성으로 보내는데, 그동안 글자가
+   무슨 버튼인지 읽기 어려울 만큼 흐렸습니다. */
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.primary{background:var(--sel);border-color:var(--sel);color:#fff}
-.btn.primary:hover:not(:disabled){filter:brightness(1.08);background:var(--sel)}
-.btn.sm{font-size:11.5px;padding:5px 11px;font-weight:600}
+/* 예전에는 filter:brightness(1.08) 이었습니다. 채도 높은 파랑을 밝기만 올리면
+   색이 바래 보이고(호버가 '비활성처럼' 읽힙니다), filter 는 그 버튼을 별도 페인트
+   서피스로 승격시킵니다. 이미 정의해 둔 --brand-ink 로 한 단계 옮깁니다 —
+   라이트에서는 더 진하게(#003C77), 다크에서는 더 밝게(#8CC4F5) 가는 값이라
+   두 테마 모두 '눌러지는 쪽' 으로 움직입니다. */
+.btn.primary:hover:not(:disabled){background:var(--brand-ink);border-color:var(--brand-ink)}
+/* 작은 상자 버튼은 .btn.sm 과 .minib 두 벌이었는데 글자 11.5 대 11, 여백 5·11 대
+   4·10, 라운드 8 대 7 로 세 값이 전부 조금씩 달랐습니다. 1px 차이는 위계로 읽히지
+   않고 안 맞아 보이기만 합니다. 한 치수(11px / 5·11 / 8)로 맞춥니다. */
+.btn.sm{font-size:11px;padding:5px 11px;font-weight:600}
 .btn i{font-style:normal;font-size:11px}
 /* 직접 그린 아이콘(core.js ICONS). currentColor 라 버튼 색을 따라가고,
    글자와 광학 중심을 맞추려고 살짝 올려 둡니다. */
 .ic{flex:0 0 auto;margin-top:-1px}
 .btn .ic{width:14px;height:14px}
 .btn.sm .ic{width:13px;height:13px}
-.minib{font-size:11px;padding:4px 10px;border:1px solid var(--line);border-radius:7px;color:var(--ink2);background:var(--card)}
+.minib{font-size:11px;padding:5px 11px;border:1px solid var(--line);border-radius:8px;color:var(--ink2);background:var(--card)}
 .minib:hover:not(:disabled){background:var(--selbg)}
-.minib:disabled{opacity:.4;cursor:not-allowed}
+.minib:disabled{opacity:.45;cursor:not-allowed}
 .fld{display:flex;flex-direction:column;gap:4px}
 .fld label{font-size:11px;color:var(--ink3)}
 .fld input,.fld select,.fld textarea{font:inherit;font-size:12px;color:var(--ink);background:var(--bg);
@@ -844,7 +946,11 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .sheet .body{overflow-y:auto;padding:16px 18px;min-height:120px}
 .sheet footer{display:flex;gap:8px;align-items:center;padding:12px 18px;border-top:1px solid var(--line);flex-wrap:wrap}
 .sheet footer .sp{flex:1}
-.xbtn{font-size:19px;line-height:1;color:var(--ink3);padding:3px 8px;border-radius:7px}
+/* 글자 ×(19px)를 담던 시절의 font-size/line-height 대신 SVG 를 가운데 맞춥니다.
+   보이는 크기는 그대로인데 누르는 면적이 25 → 30px 로 넓어져 WCAG 2.2 의
+   최소 목표 크기(24px)를 여유 있게 넘깁니다. */
+.xbtn{display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:30px;padding:0;color:var(--ink3);border-radius:7px}
 .xbtn:hover{background:var(--selbg);color:var(--ink)}
 
 .doc{font-size:13px;line-height:1.75;color:var(--ink2)}
@@ -855,7 +961,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .doc ul{margin:4px 0 10px;padding-left:19px}
 .doc li{margin-bottom:3px}
 .doc .dtitle{font-size:17px;font-weight:700;color:var(--ink);text-align:center;margin:0 0 4px}
-.doc .dmeta{text-align:center;font-size:11px;color:var(--ink3);font-family:Consolas,ui-monospace,monospace;
+.doc .dmeta{text-align:center;font-size:11px;color:var(--ink3);
   margin-bottom:16px}
 .doc .dnote{margin-top:16px;padding:9px 11px;border:1px dashed var(--line);border-radius:8px;
   font-size:11px;color:var(--ink3);line-height:1.65}
@@ -888,7 +994,7 @@ th:nth-child(1),th:nth-child(2){text-align:left}
 td{padding:3.5px 8px;text-align:right;border-bottom:1px solid var(--grid);color:var(--ink2);
   font-variant-numeric:tabular-nums;white-space:nowrap}
 td:nth-child(1),td:nth-child(2){text-align:left}
-td:first-child{font-family:Consolas,ui-monospace,monospace;color:var(--ink3)}
+td:first-child{font-family:var(--font-mono);color:var(--ink3)}
 
 .tt{position:fixed;z-index:70;pointer-events:none;background:var(--card);background:color-mix(in srgb,var(--card) 96%,transparent);
   border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:11px;color:var(--ink2);
@@ -897,7 +1003,7 @@ td:first-child{font-family:Consolas,ui-monospace,monospace;color:var(--ink3)}
 .tt .mono{font-size:11px;color:var(--ink3)}
 
 footer.pg{margin-top:16px;border-top:1px solid var(--line);padding-top:12px;color:var(--ink3);font-size:11px}
-footer.pg .fx{font-family:"Cascadia Code",Consolas,ui-monospace,monospace;font-size:11px;line-height:1.9;
+footer.pg .fx{font-size:11px;line-height:1.9;
   display:flex;flex-wrap:wrap;gap:0 22px}
 /* 한 항목이 줄 중간에서 끊기지 않게 nowrap 을 걸어 두었는데, 시뮬레이션
    푸터의 첫 항목이 441px 라 좁은 화면에서는 이게 문서를 통째로 넓혀
@@ -908,6 +1014,17 @@ footer.pg .fx span{white-space:nowrap}
 footer.pg .srcs{margin:7px 0 5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 footer.pg .srcs i{font-style:normal;border:1px solid var(--line);border-radius:999px;padding:2px 9px;font-size:11px}
 footer.pg .dis{margin-top:6px;line-height:1.7}
+/* 발행 표기 — 문서의 말미.
+   상단 레일이 브랜드 파랑 3px 로 화면의 머리를 열므로, 여기서 2px 로 닫아
+   페이지가 위아래로 묶인 한 장의 문서로 읽히게 합니다. 색은 이미 있는
+   --brand 하나뿐이고 새 색·새 장치를 만들지 않습니다.
+   내용은 core.js 의 mountIssuer() 가 config 값으로 채웁니다. */
+footer.pg .issuer{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  margin:14px 0 0;padding-top:9px;border-top:2px solid var(--brand);
+  font-size:11px;color:var(--ink3)}
+footer.pg .issuer b{font-weight:650;color:var(--ink2);letter-spacing:-.01em}
+footer.pg .issuer .is-sp{flex:1}
+footer.pg .issuer:empty{display:none}
 
 /* ------------------------------ 11-2. 노선 경유 순서 (선택한 격자)
    네이버 지도 노선 화면처럼, 노선마다 세로선 하나에 정류장을 순서대로 꿴다.
@@ -1026,6 +1143,7 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   .periods{width:100%;justify-content:space-between}
   .wrap{padding:12px 12px 24px}
   .topnav .tn-in{padding:8px 12px}
+  .topnav{--rail-pad:12px}   /* 위 패딩과 함께 — 주황 레일이 CI 끝에서 끊기도록 */
   .sheet{max-height:94vh}
 }
 
@@ -1045,7 +1163,13 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 .brief .brief-main b{color:var(--ink);font-weight:650}
 .brief .brief-act{margin-top:7px;padding-top:7px;border-top:1px dashed var(--line);
   font-size:12px;color:var(--ink2);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-.brief .brief-tag{font-size:11px;font-weight:600;letter-spacing:.03em;border-radius:999px;
+/* 배지 계열은 한 치수로 맞춥니다 — 10px / 2·8 / 999.
+   .tag · .rec-badge · .rec-edited 가 이미 이 값이고, 여기와 .ai-tag · .dq-badge ·
+   .rec-scope-tag 만 11px 이거나 여백이 1·7 / 2·7 이라 나란히 놓일 때 높이가
+   어긋났습니다. 굵기(600/700)는 건드리지 않습니다 — 색 위에 흰 글자를 얹는
+   배지(.rec-badge · .dq-badge)가 700 인 것은 10px 에서 흰 글자가 얇아 보이는 것을
+   막는 장치라, 크기 불일치와 달리 이유가 있습니다. */
+.brief .brief-tag{font-size:10px;font-weight:600;letter-spacing:.03em;border-radius:999px;
   padding:2px 8px;background:var(--tag-eff-bg);color:var(--tag-eff-fg)}
 .brief .brief-dim{color:var(--ink3);font-size:11px}
 
@@ -1097,7 +1221,7 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   width:14px;height:14px;margin-left:4px;vertical-align:1px;
   border:1px solid var(--line);border-radius:50%;
   font-size:9px;font-weight:700;line-height:1;color:var(--ink3);
-  font-family:Consolas,ui-monospace,monospace;flex:none}
+  flex:none}
 /* 보이는 원은 14px 그대로 두고 **누를 수 있는 면적만** 24px 로 넓힙니다.
    지표 이름 옆에 붙는 자리라 원 자체를 키우면 글줄이 밀립니다.
    WCAG 2.2 의 Target Size(Minimum)가 24×24 CSS px 인데, 14px 이면 마우스로도
@@ -1166,7 +1290,7 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 /* 배치 목록에서 추천 항목 구분 */
 .plist li.from-ai{border-color:var(--sel);background:var(--selbg);background:color-mix(in srgb,var(--selbg) 55%,var(--bg))}
 .plist .ai-tag{display:inline-block;margin-left:6px;font-size:10px;font-weight:600;
-  border-radius:999px;padding:1px 7px;background:var(--sel);color:#fff;vertical-align:1px}
+  border-radius:999px;padding:2px 8px;background:var(--sel);color:#fff;vertical-align:1px}
 .plist .why{display:block;margin-top:3px;font-size:11px;line-height:1.5;
   color:var(--ink3);font-family:inherit;white-space:normal}
 .plist li{align-items:start}
@@ -1179,7 +1303,7 @@ button.rhead:hover .rkind{border-color:var(--brand)}
    실측인 척 내보내면 검증 단계에서 그대로 지적당합니다.
    ======================================================================== */
 .dq-badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.03em;
-  border-radius:999px;padding:2px 7px;margin-right:5px;vertical-align:1px;
+  border-radius:999px;padding:2px 8px;margin-right:5px;vertical-align:1px;
   background:var(--tag-add-bg);color:var(--tag-add-fg)}
 .dq{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;
   margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
@@ -1241,10 +1365,15 @@ button.rhead:hover .rkind{border-color:var(--brand)}
    2.25:1 입니다(주황은 5.68:1 로 살아남지만 로고는 한 덩어리라 의미 없음).
    로고 자체를 밝게 고치는 것은 CI 변형이라 하면 안 되므로, 다크에서만
    흰 판을 깔아 규정대로 밝은 바탕 위에 얹습니다. */
+/* ⚠️ 아래 흰 판의 좌우 패딩(9px×2 = 18px)만큼 CI 가 넓어지므로, 주황 레일이
+   끊기는 지점(--rail-plate)도 같이 밀어야 합니다. 두 값은 반드시 함께 고칩니다 —
+   판만 넓히면 레일이 CI 중간에서 끊기고, 레일만 밀면 CI 밖으로 삐져나옵니다. */
 :root[data-theme="dark"] .brand .ci{background:#fff;padding:5px 9px;border-radius:7px;box-sizing:content-box}
+:root[data-theme="dark"] .topnav{--rail-plate:18px}
 @media (prefers-color-scheme:dark){
   :root:where(:not([data-theme="light"])) .brand .ci{
     background:#fff;padding:5px 9px;border-radius:7px;box-sizing:content-box}
+  :root:where(:not([data-theme="light"])) .topnav{--rail-plate:18px}
 }
 /* 추천 박스 안의 설명글은 10.5px 로 작습니다. --ink3 로는 다크에서 3.97:1 이라
    읽기 어렵습니다. 전역 토큰은 그대로 두고 이 박스 안에서만 한 단계 올립니다. */
@@ -1326,7 +1455,7 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 .rec-scope .rs-btn:hover{border-color:var(--sel);color:var(--ink)}
 .rec-scope-tag{display:inline-block;font-size:10px;font-weight:600;
   border:1px solid var(--sel);color:var(--sel);border-radius:999px;
-  padding:1px 7px;margin-left:6px;vertical-align:1px}
+  padding:2px 8px;margin-left:6px;vertical-align:1px}
 
 /* ===========================================================================
  * [26] 지도 확대·이동 컨트롤
@@ -1348,7 +1477,7 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 .zpct{min-width:26px;padding:2px 4px;border:1px solid var(--line);border-radius:6px;
   background:color-mix(in srgb,var(--card) 92%,transparent);color:var(--ink3);
   font-size:10px;line-height:1.5;text-align:center;font-variant-numeric:tabular-nums;
-  font-family:Consolas,ui-monospace,monospace;pointer-events:none;white-space:nowrap}
+  pointer-events:none;white-space:nowrap}
 .mapsvg.panning{cursor:grabbing}
 
 
@@ -1372,3 +1501,69 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 
 /* 영역을 고르는 중 — 고른 칸은 또렷하게(밖은 .outarea 로 물러납니다) */
 .cells rect.indraft{filter:saturate(1.45) brightness(1.05)}
+
+/* ===========================================================================
+ * [28] 버튼 상태 — 호버 · 눌림 · 포커스
+ *   이 화면의 버튼에는 그동안 :active 규칙이 **하나도 없었습니다**(0건).
+ *   눌러도 호버 그대로라 손이 "눌렸다"를 확인할 방법이 없었습니다. 세 상태를
+ *   다 갖추는 것이 도구가 완성돼 보이는 가장 값싼 조건이고, 반대로 눌림이 없는
+ *   것은 시제품의 대표적인 표시입니다.
+ *
+ *   방법은 두 가지뿐이고 새 색은 만들지 않습니다.
+ *     ① 바탕을 한 단계 더 앉힙니다 — --sel 에서 파생하므로 테마를 따라갑니다.
+ *     ② 윗변에 얇은 안쪽 그림자를 넣어 면이 들어간 것처럼 보이게 합니다.
+ *        띄우는 그림자가 아니라 눌린 면의 경계라 "그림자는 모달·툴팁에만"
+ *        이라는 규칙과 부딪히지 않습니다.
+ *
+ *   이 구획을 파일 맨 끝에 두는 이유: 위의 개별 규칙들과 특이도가 같은 것이
+ *   많아, 순서로 이기게 해서 계열 전체가 한 번에 같은 상태를 갖게 합니다.
+ *
+ *   .help(물음표)는 뺐습니다 — 호버가 이미 --sel 채움이라 눌림이 그보다 약해지고,
+ *   동작도 '누름' 이 아니라 설명을 띄우는 것이라 성격이 다릅니다.
+ * ======================================================================== */
+
+/* ── 윤곽·투명 버튼 ─────────────────────────────────────────────────────── */
+.btn:active:not(:disabled),.minib:active:not(:disabled),
+.lbtn:active,.tbtn:active,.simtool:active,.pbtn:active,.tn-menu:active,
+.xbtn:active,.zctl button:active,.plist .del:active,.scen .sdel:active,
+.legendbar .lg-clear:active,.rec-scope .rs-btn:active,
+.tn-drawer a:active,.tn-drawer .tn-item:active{
+  background:var(--selbg);
+  background:color-mix(in srgb,var(--sel) 20%,transparent);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.13)}
+
+/* ── 채워진 버튼 ────────────────────────────────────────────────────────────
+   바탕이 이미 --sel 이라 위 수법이 안 통합니다. 한 단계 앉은 --brand-ink 로
+   바꾸고 안쪽 그림자를 조금 더 줍니다. 발행 버튼의 윗변 하이라이트는 눌리는
+   동안 사라집니다 — 빛을 받던 면이 들어갔는데 하이라이트가 남으면 안 됩니다. */
+.btn.primary:active:not(:disabled),.pbtn.on:active,.simtool.on:active,
+.minib.on:active,.topnav.menu-open .tn-menu:active{
+  background:var(--brand-ink);border-color:var(--brand-ink);
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.22)}
+/* 지도 레이어의 활성 상태만 --ink 채움입니다(지도 범례의 파랑과 부딪히지 않게
+   일부러 브랜드색을 피한 자리라 그대로 둡니다). 색은 유지하고 눌림만 얹습니다. */
+.lbtn.on:active{background:var(--ink);box-shadow:inset 0 1px 3px rgba(0,0,0,.3)}
+
+/* ── 목록 행 ────────────────────────────────────────────────────────────────
+   우선순위 Top10 · 권역별 요약 · 저장된 시나리오는 버튼이 아니라 행이라
+   면이 들어가는 그림이 어울리지 않습니다. 바탕만 한 단계 앉힙니다. */
+.trow:active,.rgtbl tbody tr:active,.scen .sload:active{
+  background:var(--selbg);
+  background:color-mix(in srgb,var(--sel) 14%,transparent)}
+
+/* ── 상태 전환 ──────────────────────────────────────────────────────────────
+   호버·눌림이 즉시 튀지 않고 넘어가게 합니다. 0.12초는 "부드럽다"가 아니라
+   "끊기지 않는다" 를 만드는 값입니다 — 이보다 길면 도구가 굼떠 보입니다.
+   여기 나열한 것 중 일부(.tn-menu·.pbtn·.tn-drawer a)는 앞에서 이미 비슷한
+   전환을 갖고 있었는데, 값과 속성이 제각각이라 한 줄로 모읍니다. */
+.btn,.minib,.lbtn,.tbtn,.simtool,.pbtn,.tn-menu,.tn-drawer a,.tn-drawer .tn-item,
+.xbtn,.zctl button,.plist .del,.scen .sdel,.legendbar .lg-clear,
+.rec-scope .rs-btn,.rec-tab,.trow,.scen,.scen .sload,.rgtbl tbody tr,.rgtbl th{
+  transition:background-color .12s ease,border-color .12s ease,
+             color .12s ease,box-shadow .12s ease}
+@media (prefers-reduced-motion:reduce){
+  .btn,.minib,.lbtn,.tbtn,.simtool,.pbtn,.tn-menu,.tn-drawer a,.tn-drawer .tn-item,
+  .xbtn,.zctl button,.plist .del,.scen .sdel,.legendbar .lg-clear,
+  .rec-scope .rs-btn,.rec-tab,.trow,.scen,.scen .sload,.rgtbl tbody tr,.rgtbl th{
+    transition:none}
+}
