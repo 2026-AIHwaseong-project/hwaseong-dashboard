@@ -5,9 +5,35 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>화성시 버스 수요·공급 미스매칭 대시보드</title>
 <meta name="description" content="교통카드 실현수요와 거주인구 기반 잠재수요를 격자 단위로 대조해 대중교통 사각지대와 노선 조정 우선순위를 도출하는 분석 대시보드">
+<!-- Pretendard 를 app.css 보다 **먼저** 부릅니다.
+     예전에는 app.css 안의 @import 로 불렀는데, 그 @import 가 스타일 규칙
+     뒤에 있어 CSS 파서가 통째로 버렸습니다(@import 는 @charset·@layer 외
+     모든 규칙보다 앞서야 합니다). 그래서 자간(-.03em)·가변 굵기(650)를
+     Pretendard 기준으로 맞춰 둔 타이포가 전부 폴백 서체로 그려지고
+     있었습니다. 여기로 옮기면 app.css 를 다 받기 전에 폰트 요청이
+     시작되므로 대기도 한 단계 줄어듭니다. -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="assets/css/app.css">
 </head>
 <body>
+<!--
+  IMPECCABLE DIRECTION CONTRACT · seed 3b0d0c43 · scope direction · mode operate
+  THESIS: 화성특례시가 실제로 운영하는 행정 도구로 읽히는 격자 분석 콘솔.
+    대시보드의 카테고리 기본값(어두운 판에 네온 차트 타일을 흩는 배치)을 거부하고,
+    관공서 발행 문서의 규율 — 인장, 괘선, 조(條) 단위 구획 — 을 화면으로 옮긴다.
+  OWN-WORLD: 공식 CI 파랑 #0054A6 이 상단 레일(3px)로 화면 전체를 시가 발행한
+    문서처럼 묶는다. 주황 #F36F21 은 대비 2.95:1 이라 글자로 못 쓰므로 '지금 여기'
+    표식(활성 탭 밑줄)에만 쓴다. 카드는 그림자로 뜨지 않고 1px 괘선으로 나뉘며,
+    제목마다 파랑 3px 표식이 조의 머리를 연다. 아이콘은 24격자·획 1.7 SVG 한 벌.
+  STORY: 담당자가 시간대를 고르고 → 붉은 격자를 짚고 → 근거를 읽고 → 배치를 시험한다.
+  FIRST VIEWPORT: 흰 레터헤드(CI+서비스명+내비) → 제목과 시간대 탭 → KPI 한 줄 띠 →
+    지도(8칸)와 우선순위(4칸). 주 조작인 시간대 탭이 제목과 같은 높이에 선다.
+  FORM: 브리프 못박음. 롤은 challenger 5종을 냈으나 공무원용 공식 행정 화면이라는
+    제품 진실을 나를 수 없어, 사용자가 공식 CI 원본과 주최측 예시 출품작으로
+    못박은 관공서 포털을 짓는다("사용자·브리프가 못박은 방향이 롤을 이긴다").
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
 
 <header class="topnav" data-topnav></header>
 
@@ -17,7 +43,6 @@
 
   <header class="top">
     <div>
-      <p class="eyebrow">HWASEONG BUS GAP · 현황 분석</p>
       <h1>버스 수요·공급 미스매칭 대시보드</h1>
       <p class="sub">교통카드 실현수요 × 거주인구 기반 잠재수요를 같은 격자에서 대조해,
         어디에 버스가 부족한지와 노선 조정 우선순위를 산출합니다.
@@ -86,8 +111,8 @@
              사용자가 무엇인지 먼저 분류하게 만들 이유가 없습니다. -->
         <div class="msearch">
           <input id="regionSearch" class="msi" type="search" list="regionList" autocomplete="off"
-                 placeholder="지역 · 격자 · 정류장 검색"
-                 aria-label="읍면동 이름, 격자 ID, 정류장 이름으로 지도에서 찾기">
+                 placeholder="버스 · 지역 · 격자 · 정류장 검색"
+                 aria-label="버스 번호, 읍면동 이름, 격자 ID, 정류장 이름으로 지도에서 찾기">
           <!-- 돋보기. 입력칸 안에 겹쳐 두므로 글자를 쳐도 사라지지 않습니다
                (placeholder 에 넣으면 첫 글자를 치는 순간 없어집니다).
                색은 토큰을 쓰므로 다크 모드에서도 알아서 맞습니다. -->
@@ -105,12 +130,17 @@
       <div class="legendbar" id="legend"></div>
     </section>
 
-    <!-- ─────────── 선택한 격자의 노선 경유 순서 ─────────── -->
+    <!-- ─────────── 노선 경유 순서 ───────────
+         두 모드로 씁니다 — 격자를 클릭하면 그 격자를 지나는 노선들(기본),
+         버스 번호를 검색하면 그 노선 하나의 전 구간. 제목·부제는 dashboard.js 가
+         모드에 맞춰 갈아끼웁니다. -->
     <section class="card routecard">
       <div class="chead">
-        <h2>이 격자를 지나는 노선</h2>
+        <h2 id="routeStripTitle">이 격자를 지나는 노선</h2>
         <span class="hsub" id="routeStripSub">지도에서 격자를 클릭하면 그 격자를 지나는 버스와 정류장 순서가 나옵니다</span>
       </div>
+      <!-- 노선 모드에서만 채웁니다(기점·종점·첫차·막차·배차·업체) -->
+      <div class="rinfo" id="routeInfo" hidden></div>
       <div class="rstrip" id="routeStrip"></div>
     </section>
 
@@ -125,8 +155,11 @@
       <div class="t10" id="t10"></div>
       <div class="sidefoot">
         행을 클릭하면 지도·산점도의 해당 격자가 연동 표시되고, 가장 가까운 정류장 프로파일로 전환됩니다.
-        <a class="btn sm primary" id="simLink" href="simulation.html" style="display:none;margin-top:8px">
-          이 격자로 시뮬레이션 하기 →</a>
+        <!-- data-ic-after: core.js 가 글자 뒤에 화살표 아이콘을 넣습니다.
+             예전에는 유니코드 → 를 직접 적었는데, 폰트마다 굵기·길이가 달라
+             옆의 SVG 아이콘들과 한 벌로 보이지 않았습니다. -->
+        <a class="btn sm primary" id="simLink" href="simulation.html" data-ic-after="arrow"
+           style="display:none;margin-top:8px">이 격자로 시뮬레이션 하기</a>
       </div>
     </section>
 
@@ -190,6 +223,9 @@
 
   <footer class="pg">
     <div class="dq" id="dataQuality"></div>
+    <!-- 발행 주체 — core.js 가 config.js 의 APP.org/APP.dept 로 채웁니다.
+         상단 레일이 문서의 머리라면 이 줄이 말미의 발행 표기입니다. -->
+    <p class="issuer" data-issuer></p>
   </footer>
 </div>
 

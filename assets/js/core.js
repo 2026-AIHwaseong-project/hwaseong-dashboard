@@ -380,23 +380,254 @@
       { id: 'dashboard', href: pages.dashboard, label: '대시보드' },
       { id: 'simulation', href: pages.simulation, label: '정책 시뮬레이션' }
     ];
+    /* 화성특례시 공식 CI. 기관을 말하는 것은 이 이미지이고, 그 옆 서비스명이
+       이 도구의 이름입니다. alt 는 기관명으로 둡니다 — 스크린리더에게 이
+       이미지의 뜻은 '화성특례시' 이지 서비스 이름이 아닙니다. */
     host.innerHTML =
       '<div class="tn-in">' +
-      '<div class="brand"><i></i>' + esc(app.name || '') + '</div>' +
-      '<nav class="navlinks" aria-label="주요 화면">' +
-      links.map(function (l) {
-        return '<a href="' + l.href + '"' + (l.id === current ? ' aria-current="page"' : '') + '>' + esc(l.label) + '</a>';
-      }).join('') +
-      '</nav>' +
+      '<button class="tn-menu" data-menu-btn type="button" aria-label="메뉴 열기" ' +
+      'aria-expanded="false" aria-controls="tn-drawer">' + icon('menu', 20) + '</button>' +
+      '<div class="brand">' +
+      '<img class="ci" src="assets/img/hwaseong-ci.png" alt="화성특례시" ' +
+      'width="512" height="151" decoding="async">' +
+      '<span class="svc">' + esc(app.navName || app.name || '') + '</span></div>' +
       '<div class="tn-sp"></div>' +
       '<div class="tn-act">' +
       '<button class="btn sm" data-theme-btn type="button">테마 · 자동</button>' +
-      '<button class="btn sm primary" data-report-open type="button"><i>▤</i>AI 보고서 생성</button>' +
-      '</div></div>';
+      '</div></div>' +
+      /* 서랍 메뉴 — 화면 이동과 보고서 생성이 모두 여기로 들어왔습니다.
+         테마 버튼만 막대에 남는 이유: 테마는 "지금 이 화면"을 바꾸는 스위치라
+         숨기면 찾을 수 없고, 이동·생성은 목적지가 분명해 서랍 안이 맞습니다. */
+      '<div class="tn-scrim" data-menu-scrim></div>' +
+      '<nav class="tn-drawer" id="tn-drawer" aria-label="주요 화면">' +
+      links.map(function (l) {
+        return '<a href="' + l.href + '"' + (l.id === current ? ' aria-current="page"' : '') + '>' + esc(l.label) + '</a>';
+      }).join('') +
+      '<button class="tn-item" data-guide-open type="button">' +
+      icon('help') + '사용 안내</button>' +
+      '<div class="tn-cut" role="separator"></div>' +
+      /* 서랍의 마지막 항목은 이동이 아니라 **문서를 발행하는 동작**입니다.
+         화려하게 만들지 않습니다 — 이 화면의 세계에 그라디언트·글로우는 없습니다.
+         대신 관공서 서식의 발행 버튼이 그렇듯 무엇을 만드는지(주 라벨)와 무엇으로
+         나오는지(부제)를 두 줄로 밝힙니다. 부제 문구는 report.js 의 실제 출력과
+         맞춘 것입니다 — 클라이언트 방식에서 엑셀은 .xlsx, 한글은 .rtf 입니다. */
+      '<button class="btn primary tn-issue" data-report-open type="button">' +
+      icon('doc', 18) +
+      '<span class="ti-tx"><b>AI 보고서 생성</b>' +
+      '<span>초안 작성 · 한글 · 엑셀 저장</span></span></button>' +
+      '</nav>';
+
+    var mbtn = $('[data-menu-btn]', host);
+    var drawer = $('#tn-drawer', host);
+    function setMenu(open) {
+      host.classList.toggle('menu-open', open);
+      mbtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      mbtn.setAttribute('aria-label', open ? '메뉴 닫기' : '메뉴 열기');
+    }
+    mbtn.addEventListener('click', function () {
+      setMenu(!host.classList.contains('menu-open'));
+    });
+    $('[data-menu-scrim]', host).addEventListener('click', function () { setMenu(false); });
+    /* 보고서·안내 버튼은 모달을 띄우므로 서랍이 그대로 열려 있으면 모달
+       뒤에 서랍+스크림이 겹칩니다. 링크든 버튼이든 고르면 서랍은 임무 끝. */
+    drawer.addEventListener('click', function (e) {
+      if (e.target.closest('a, button')) setMenu(false);
+    });
+    $('[data-guide-open]', host).addEventListener('click', openGuide);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && host.classList.contains('menu-open')) setMenu(false);
+    });
+
+    mountIssuer();
+    mountIcons();
   }
 
+  /** 정적 HTML 에 놓인 버튼에도 아이콘 한 벌을 붙입니다.
+   *  `data-ic="save"` 는 글자 앞, `data-ic-after="arrow"` 는 글자 뒤에 넣습니다.
+   *  JS 가 만드는 버튼은 icon() 을 직접 부르면 되지만, index.html·simulation.html
+   *  안에 그대로 적혀 있는 버튼([이 격자로 시뮬레이션 하기 →]·[시나리오 저장])은
+   *  그럴 자리가 없어 아이콘이 없거나 → 같은 글자로 때워져 있었습니다.
+   *  이미 아이콘을 들고 있으면 건너뛰므로 두 번 불러도 안전합니다. */
+  function mountIcons() {
+    $$('[data-ic],[data-ic-after]').forEach(function (b) {
+      if (b.querySelector('.ic')) return;
+      var pre = b.getAttribute('data-ic');
+      var post = b.getAttribute('data-ic-after');
+      if (pre) b.insertAdjacentHTML('afterbegin', icon(pre));
+      if (post) b.insertAdjacentHTML('beforeend', icon(post));
+    });
+  }
+
+  /** 푸터의 발행 주체 표기.
+   *  config.js 의 APP.org('화성특례시')·APP.dept('교통정책과')는 지금까지
+   *  보고서 파일 안에만 들어가고 화면에는 한 번도 안 나왔습니다. 관공서가
+   *  발행한 문서를 세계관으로 잡아 놓고 정작 화면에는 발행 부서가 없던 셈입니다.
+   *  화면을 캡처하거나 인쇄해 회의에 들고 갔을 때 출처가 문서 안에 남아야
+   *  하므로 푸터 말미에 한 줄로 답니다. 값은 새로 만들지 않고 그대로 읽습니다.
+   *  날짜는 데이터의 기준일자가 아니라 **화면을 띄운 날**이라 '출력' 으로
+   *  적습니다 — 기준일자는 대시보드 상단의 '최종 갱신' 이 따로 말합니다. */
+  function mountIssuer() {
+    var app = (CONFIG && CONFIG.APP) || {};
+    var who = [app.org, app.dept].filter(Boolean).join(' ');
+    if (!who) return;
+    $$('[data-issuer]').forEach(function (h) {
+      h.innerHTML = '<b>' + esc(who) + '</b><span class="is-sp"></span>' +
+        '<span>출력 ' + esc(todayISO()) + '</span>';
+    });
+  }
+
+  /* ----------------------------------------------------------- 사용 안내
+     글 목록 대신 화면 축소판 그림에 번호를 얹어 설명합니다 — 처음 보는
+     사람(심사위원)이 3분 안에 "어디를 눌러야 하는지"를 눈으로 익히는 용도.
+     그림은 실제 대시보드 배치(시간대 탭 / 지도 / 우선순위)를 그대로 축소한
+     SVG 라, 테마 변수(currentColor 계열)를 따라 다크 모드에서도 맞습니다. */
+  var guideModal = null;
+
+  function guideHero() {
+    var tabs = ['출근', '낮', '퇴근', '심야'].map(function (t, i) {
+      var x = 40 + i * 68;
+      return i === 0
+        ? '<rect x="' + x + '" y="12" width="64" height="30" rx="8" fill="var(--brand)"/>' +
+          '<text x="' + (x + 32) + '" y="31" text-anchor="middle" fill="#fff" font-weight="700">' + t + '</text>' +
+          '<rect x="' + (x + 12) + '" y="37" width="40" height="2.5" rx="1.2" fill="var(--brand-2)"/>'
+        : '<rect x="' + x + '" y="12" width="64" height="30" rx="8" fill="var(--bg)" stroke="var(--line)"/>' +
+          '<text x="' + (x + 32) + '" y="31" text-anchor="middle" fill="var(--ink2)">' + t + '</text>';
+    }).join('');
+
+    /* 격자 8×4 — 대부분 옅은 파랑(공급 충분), 오른쪽 위로 갈수록 붉게(부족).
+       2행 5열이 "클릭해 볼 붉은 격자" 주인공입니다. */
+    var CELL = ['....odro', '...obrRo', '....oob.', '........'];
+    var FILL = { '.': 'var(--brand-soft)', b: 'var(--brand)', o: 'var(--brand-2)', d: 'var(--brand-2)', r: 'var(--bad)', R: 'var(--bad)' };
+    var cells = '';
+    CELL.forEach(function (row, r) {
+      row.split('').forEach(function (c, col) {
+        var x = 56 + col * 41, y = 92 + r * 41;
+        cells += '<rect x="' + x + '" y="' + y + '" width="35" height="35" rx="4" fill="' + FILL[c] + '"' +
+          (c === '.' ? '' : c === 'o' || c === 'd' ? ' opacity=".55"' : c === 'b' ? ' opacity=".45"' : '') + '/>';
+        if (c === 'R') {
+          cells += '<rect x="' + (x - 3) + '" y="' + (y - 3) + '" width="41" height="41" rx="6" ' +
+            'fill="none" stroke="var(--bad)" stroke-width="2.2"/>' +
+            /* 마우스 커서 */
+            '<path transform="translate(' + (x + 24) + ' ' + (y + 24) + ')" ' +
+            'd="M0 0l5.2 13.2 2.1-5.4 5.4-2.1z" fill="var(--ink)" stroke="var(--card)" stroke-width="1.4"/>';
+        }
+      });
+    });
+
+    /* 우선순위 Top 목록 — 순위 칩과 길이가 줄어드는 붉은 막대 */
+    var rows = [128, 104, 82, 62].map(function (w, i) {
+      var y = 96 + i * 30;
+      return '<rect x="450" y="' + y + '" width="20" height="20" rx="6" fill="var(--brand-soft)"/>' +
+        '<text x="460" y="' + (y + 14) + '" text-anchor="middle" fill="var(--brand-ink)" font-weight="700" font-size="11">' + (i + 1) + '</text>' +
+        '<rect x="478" y="' + (y + 5) + '" width="' + w + '" height="10" rx="5" fill="var(--bad)" opacity="' + (0.9 - i * 0.18) + '"/>';
+    }).join('');
+
+    function badge(n, cx, cy) {
+      return '<circle cx="' + cx + '" cy="' + cy + '" r="11" fill="var(--brand)" stroke="var(--card)" stroke-width="2"/>' +
+        '<text x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">' + n + '</text>';
+    }
+
+    return '<svg class="ghero" viewBox="0 0 660 286" role="img" aria-label="대시보드 화면 안내도">' +
+      '<g font-size="11">' + tabs +
+      /* 지도 카드 */
+      '<rect x="40" y="58" width="380" height="212" rx="10" fill="var(--bg)" stroke="var(--line)"/>' +
+      '<text x="56" y="80" fill="var(--ink3)" font-size="10">미스매칭 지도 — 붉을수록 공급 부족</text>' +
+      cells +
+      /* 우선순위 카드 */
+      '<rect x="436" y="58" width="186" height="212" rx="10" fill="var(--bg)" stroke="var(--line)"/>' +
+      '<text x="450" y="80" fill="var(--ink3)" font-size="10">노선 조정 우선순위 Top10</text>' + rows +
+      /* 시뮬레이션 버튼 */
+      '<rect x="450" y="228" width="158" height="28" rx="8" fill="var(--brand)"/>' +
+      '<text x="529" y="246" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="700">이 격자로 시뮬레이션 →</text>' +
+      badge(1, 28, 27) + badge(2, 300, 131) + badge(3, 622, 70) + badge(4, 622, 242) +
+      '</g></svg>';
+  }
+
+  function buildGuide() {
+    if (guideModal) return guideModal;
+    var steps = [
+      ['시간대를 바꿔보세요', '출근·낮·퇴근·심야마다 답이 달라집니다 — 심야에는 공급 부족 격자가 30개에서 39개로 늘어납니다.'],
+      ['붉은 격자를 클릭', '붉을수록 "수요는 있는데 버스가 없는 곳"입니다. 클릭하면 상세 수치와 경유 노선이 아래에 나타납니다.'],
+      ['우선순위에서 대상 선택', '오른쪽 Top10이 조정 후보 목록입니다. 항목을 고르면 해당 격자를 지도에서 바로 확인할 수 있습니다.'],
+      ['시뮬레이션 → 보고서', '정류장·똑버스·증편을 놓아 예산 안에서 효과를 비교하고, AI 보고서로 회의 자료를 만듭니다.']
+    ];
+    guideModal = el('div', { 'class': 'modal', id: 'guide-modal' });
+    guideModal.innerHTML =
+      '<div class="veil" data-guide-close></div>' +
+      '<div class="sheet guide-sheet" role="dialog" aria-modal="true" aria-label="사용 안내">' +
+      '<header><h2>사용 안내</h2>' +
+      '<span class="hs">붉은 격자를 찾아 → 눌러보고 → 시뮬레이션으로</span>' +
+      '<span class="sp"></span>' +
+      '<button class="xbtn" data-guide-close type="button" aria-label="닫기">' + icon('close', 17) + '</button></header>' +
+      '<div class="body">' + guideHero() +
+      '<div class="gsteps">' +
+      steps.map(function (s, i) {
+        return '<div class="gstep"><b><span class="gnum">' + (i + 1) + '</span>' +
+          esc(s[0]) + '</b><p>' + esc(s[1]) + '</p></div>';
+      }).join('') +
+      '</div>' +
+      '<p class="gfoot">786개 격자 × 4개 시간대 · 공공데이터 실측 · 승차 예측 회귀(공간 교차검증) 0.852</p>' +
+      '</div>';
+    document.body.appendChild(guideModal);
+    $$('[data-guide-close]', guideModal).forEach(function (b) {
+      b.addEventListener('click', closeGuide);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && guideModal.classList.contains('open')) closeGuide();
+    });
+    return guideModal;
+  }
+  function openGuide() { buildGuide().classList.add('open'); }
+  function closeGuide() { if (guideModal) guideModal.classList.remove('open'); }
+
+  /* ── 아이콘 ─────────────────────────────────────────────────────────
+     한 벌로 직접 그립니다. 예전에는 ▤ · ✦ 같은 글자 기호를 아이콘 자리에
+     썼는데, 그건 폰트마다 모양·굵기·정렬이 제각각이라 나란히 놓으면 한 벌로
+     안 보입니다(✦ 는 폰트에 따라 아예 네모로 뜹니다).
+     규칙: 24 격자 · 획 1.7 · 끝과 모서리는 둥글게 · 채움 없음.
+     currentColor 를 쓰므로 버튼 색이 바뀌면 아이콘도 따라갑니다. */
+  var ICONS = {
+    /* 문서 — 보고서 */
+    doc: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>' +
+         '<path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+    /* 반짝임 — AI 가 만들어 주는 것 */
+    spark: '<path d="M12 3.5 13.7 9l5.5 1.7-5.5 1.7L12 18l-1.7-5.6L4.8 10.7 10.3 9z"/>' +
+           '<path d="M18.5 3.5v3M20 5h-3"/>',
+    /* 돋보기 — 검색 */
+    search: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l4.5 4.5"/>',
+    /* 작대기 셋 — 메뉴 서랍 */
+    menu: '<path d="M4 6.5h16M4 12h16M4 17.5h16"/>',
+    /* 물음표 동그라미 — 사용 안내 */
+    help: '<circle cx="12" cy="12" r="8.5"/>' +
+          '<path d="M9.7 9.5a2.35 2.35 0 1 1 3.4 2.1c-.75.4-1.1.9-1.1 1.7v.3"/>' +
+          '<path d="M12 16.4h.01"/>',
+    /* ── 아래 넷은 그동안 유니코드 글자로 때우던 자리입니다 ────────────────
+       닫기 ×(U+00D7)·확대 +·축소 −(U+2212)·이동 →(U+2192) 를 그대로 썼는데,
+       DESIGN.md 가 "이모지·유니코드 글자를 아이콘 자리에" 를 금지 목록에 올려
+       둔 바로 그 경우입니다. 폰트마다 굵기·크기·광학 중심이 달라 옆의 SVG
+       아이콘과 한 벌로 보이지 않고, ×(곱셈 기호)는 폰트에 따라 눈에 띄게
+       작거나 위로 뜹니다. 같은 규칙(24격자·획 1.7·둥근 끝)으로 다시 그립니다. */
+    close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+    plus:  '<path d="M12 5.5v13M5.5 12h13"/>',
+    minus: '<path d="M5.5 12h13"/>',
+    arrow: '<path d="M4.5 12h14"/><path d="M12.5 6l6 6-6 6"/>',
+    /* 저장 — 시나리오 보관. 본체·라벨·문서 세 획으로 단순화했습니다 */
+    save:  '<path d="M4.5 6.5A2 2 0 0 1 6.5 4.5h9l4 4v9a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z"/>' +
+           '<path d="M8.5 4.5v4.5h6.5V4.5"/><path d="M8 19.5V14h8v5.5"/>'
+  };
+  /** 인라인 SVG 아이콘 한 개. size 는 픽셀(기본 16). */
+  function icon(name, size) {
+    var d = ICONS[name];
+    if (!d) return '';
+    var s = size || 16;
+    return '<svg class="ic" width="' + s + '" height="' + s + '" viewBox="0 0 24 24" ' +
+      'fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" ' +
+      'stroke-linejoin="round" aria-hidden="true" focusable="false">' + d + '</svg>';
+  }
+  HW.icon = icon;
+
   HW.core = {
-    $: $, $$: $$, el: el, esc: esc,
+    $: $, $$: $$, el: el, esc: esc, icon: icon,
     HELP: HELP, wireHelp: wireHelp,
     clamp: clamp, fmt: fmt, fmt1: fmt1, pct: pct, won: won, delta: delta,
     todayISO: todayISO, nowStamp: nowStamp, korDate: korDate,

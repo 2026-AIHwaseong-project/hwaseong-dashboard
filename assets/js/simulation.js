@@ -485,7 +485,7 @@
       if (!rec.placements.length) {
         /* 빈 추천으로 기존 작업을 덮지 않습니다 — 이전 상태를 그대로 복원 */
         btn.disabled = false;
-        btn.innerHTML = '<i>✦</i>' + (S.recommendation ? '추천 다시 받기' : 'AI 추천 배치안');
+        btn.innerHTML = HW.icon('spark') + (S.recommendation ? '추천 다시 받기' : 'AI 추천 배치안');
         paintRecBox();
         C.toast(rec.summary && rec.summary.stoppedBecause === 'budget_too_small'
           ? '예산이 최소 단가보다 작아 배치할 수 없습니다. 예산을 늘려 보세요.'
@@ -513,7 +513,7 @@
         };
       });
       btn.disabled = false;
-      btn.innerHTML = '<i>\u2726</i>추천 다시 받기';
+      btn.innerHTML = HW.icon('spark') + '추천 다시 받기';
       /* 동 범위 추천이면 그 동으로 확대해 어디에 뭘 놓았는지 바로 보이게 합니다 */
       if (rec.region) S.map.zoomToRegion(rec.region);
       else S.map.zoomReset();
@@ -522,7 +522,7 @@
       runSim();
     }).catch(function (err) {
       btn.disabled = false;
-      btn.innerHTML = '<i>\u2726</i>AI 추천 배치안';
+      btn.innerHTML = HW.icon('spark') + 'AI 추천 배치안';
       $('#recBox').innerHTML = '';
       C.toast('추천을 받지 못했습니다 — ' + esc(api.humanize(err)), 'err', 6000);
     });
@@ -694,7 +694,7 @@
     S.recommendation = null;
     S.recEdited = false;
     var btn = $('#btnRecommend');
-    if (btn) btn.innerHTML = '<i>\u2726</i>AI 추천 배치안';
+    if (btn) btn.innerHTML = HW.icon('spark') + 'AI 추천 배치안';
     runSim();
   }
 
@@ -865,7 +865,8 @@
         '<span>' + esc(cell ? cell.name : '') + ' · ' + esc(p.cellId) + ' · 반경 ' + (e.radiusKm || '?') + 'km</span>' +
         (p.rationale ? '<span class="why">' + esc(p.rationale) + '</span>' : '') + '</span>' +
         '<span class="cost">' + won((e.unitKrw || 0) * p.count) + '</span>' +
-        '<button class="del" data-remove="' + i + '" type="button" aria-label="배치 삭제">×</button></li>';
+        '<button class="del" data-remove="' + i + '" type="button" aria-label="배치 삭제">' +
+        HW.icon('close', 14) + '</button></li>';
     }).join('') + '</ul>';
   }
 
@@ -876,7 +877,9 @@
     $('#budUsed').textContent = won(total);
     $('#budTotal').textContent = won(S.budget);
     var bar = $('#budBar');
-    bar.style.width = Math.min(100, ratio * 100).toFixed(1) + '%';
+    /* 폭 대신 가로 배율로 그립니다 — 폭을 애니메이션하면 매 프레임 레이아웃을
+       다시 계산합니다. 값을 여기서 직접 넣습니다(CSS 변수를 거치지 않습니다). */
+    bar.style.transform = 'scaleX(' + Math.min(1, Math.max(0, ratio)).toFixed(4) + ')';
     bar.classList.toggle('over', over);
     var note = $('#budNote');
     note.classList.toggle('over', over);
@@ -1150,7 +1153,8 @@
         '<span>' + (su.needDelta < 0 ? '사각지대 −' + Math.abs(su.needDelta) + '개' : '변화 없음') + '</span>' +
         (su.krwPerTrip != null ? '<span>' + fmt(su.krwPerTrip) + '원/통행</span>' : '') +
         '</span></button>' +
-        '<button class="sdel" data-del="' + i + '" type="button" aria-label="시나리오 삭제">×</button>' +
+        '<button class="sdel" data-del="' + i + '" type="button" aria-label="시나리오 삭제">' +
+        HW.icon('close', 14) + '</button>' +
         '</div>';
     }).join('');
   }
@@ -1165,7 +1169,7 @@
     S.recommendation = null;
     S.recEdited = false;
     var rbtn = $('#btnRecommend');
-    if (rbtn) rbtn.innerHTML = '<i>✦</i>AI 추천 배치안';
+    if (rbtn) rbtn.innerHTML = HW.icon('spark') + 'AI 추천 배치안';
     S.name = s.name;
     S.period = s.period || S.period;
     S.budget = s.budgetKrw || S.budget;
