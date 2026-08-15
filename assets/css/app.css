@@ -315,6 +315,37 @@ svg text{font-family:inherit}
 .tn-issue .ti-tx span{font-size:10px;font-weight:500;line-height:1.4;opacity:.74;
   word-break:keep-all}
 
+/* ── AI 채팅 (도움 모달 · 보고서 모달) ─────────────────────────────
+   두 모드가 같은 생김새를 씁니다. 말풍선은 좌우로 갈라 누가 한 말인지 위치로
+   구분하고, 색은 크롬 계열(브랜드)로 둡니다 — 지도·차트의 지표 색이 여기로
+   넘어오면 "이 색이 값을 뜻하나?" 하는 오해가 생깁니다. */
+.cm{display:flex;flex-direction:column;min-height:0}
+.cm-log{flex:1;min-height:120px;max-height:340px;overflow-y:auto;
+  display:flex;flex-direction:column;gap:8px;padding:12px 2px}
+.cm-b{max-width:78%;font-size:12.5px;line-height:1.7;border-radius:12px;padding:8px 12px;
+  word-break:keep-all}
+/* 모델 응답은 textContent 로 넣으므로 줄바꿈은 여기서 살립니다 */
+.cm-b .cm-t{white-space:pre-wrap}
+.cm-b.me{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px}
+.cm-b.ai{align-self:flex-start;background:var(--bg);color:var(--ink);
+  border:1px solid var(--line);border-bottom-left-radius:4px}
+/* 화면을 옮겼을 때만 붙는 꼬리표 — 무엇이 바뀌었는지 알려 줍니다 */
+.cm-b .cm-n{margin-top:5px;font-size:10.5px;color:var(--brand-ink)}
+.cm-bar{display:flex;gap:7px;align-items:center;padding:10px 0 2px;
+  border-top:1px solid var(--line)}
+.cm-in{flex:1;min-width:0;font:inherit;font-size:12.5px;padding:8px 11px;
+  border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink)}
+.cm-in:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
+.cm-in:disabled{opacity:.6}
+/* 보고서 모달 안에 얹힐 때 — 본문과 푸터 사이라 좌우 여백을 본문에 맞춥니다 */
+.cm-report{padding:0 18px 4px;border-top:1px solid var(--line)}
+.cm-report .cm-log{max-height:190px}
+/* 도움 모달은 대화가 주인공이라 폭을 줄여 읽기 좋게 합니다.
+   .sheet 를 함께 붙이는 이유는 .guide-sheet 와 같습니다 — .sheet{width:min(920px,100%)}
+   가 §모달(파일 뒤)에 있어 그냥 .chat-sheet 로는 특이도가 같아(0,1,0) 밀립니다. */
+.sheet.chat-sheet{width:min(640px,100%)}
+.chat-sheet .body{padding-top:4px}
+
 /* 사용 안내 모달 — 화면 축소판 그림 + 번호 설명 */
 /* .sheet 를 함께 붙이는 이유는 바로 위와 같습니다 — .sheet{width:min(920px,100%)} 가
    §모달에 있어 그냥 .guide-sheet 로는 특이도가 같아(0,1,0) 밀립니다. */
@@ -1391,6 +1422,7 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 :root[data-theme="dark"] .plist .ai-tag,
 :root[data-theme="dark"] .btn.primary,
 :root[data-theme="dark"] .simtool.on,
+:root[data-theme="dark"] .cm-b.me,
 :root[data-theme="dark"] .help:hover{color:var(--bg)}
 /* 카카오 타일은 원래 밝은 지도라, 테마와 무관한 brightness(1.04)를 그대로 두면
    다크에서 확대했을 때 배경만 하얗게 뜹니다(육지·바다는 투명해진 상태라 더 심함). */
@@ -1401,6 +1433,7 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   :root:where(:not([data-theme="light"])) .plist .ai-tag,
   :root:where(:not([data-theme="light"])) .btn.primary,
   :root:where(:not([data-theme="light"])) .simtool.on,
+  :root:where(:not([data-theme="light"])) .cm-b.me,
   :root:where(:not([data-theme="light"])) .help:hover{color:var(--bg)}
   /* 위 명시 테마(:root[data-theme="dark"])와 같은 보정을 '자동' 에도 겁니다 */
   :root:where(:not([data-theme="light"])) .kkdetail .kakaomap{

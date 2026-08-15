@@ -31,7 +31,8 @@
     'simulations.get': { method: 'GET',  path: '/simulations/{id}' },
     'recommendations.run': { method: 'POST', path: '/recommendations', long: true },  // 최적화 계산
     'reports.draft':   { method: 'POST', path: '/reports/draft',  long: true }, // AI 호출 → 타임아웃 김
-    'reports.export':  { method: 'POST', path: '/reports/export', long: true, binary: true }
+    'reports.export':  { method: 'POST', path: '/reports/export', long: true, binary: true },
+    'chat.send':       { method: 'POST', path: '/chat', long: true }            // AI 호출 → 타임아웃 김
   };
 
   /* 경로의 {placeholder} 를 params 값으로 치환하고, 남은 params 는 쿼리스트링으로 */
@@ -395,6 +396,19 @@
      */
     exportReport: function (body) {
       return call('reports.export', null, body);
+    },
+
+    /**
+     * 챗봇. mode='help' 는 화면 질문에 답하고 화면 이동 액션을 돌려주며,
+     * mode='report' 는 draft 를 지시대로 고쳐 돌려줍니다.
+     * body = { mode, period, messages:[{role,content}], context:{}, draft? }
+     * 응답 = { reply, action:{type,…}, ok, provider, model, draft? }
+     *
+     * 이력(messages)은 서버가 아니라 **클라이언트가 들고 있습니다** — 서버를 무상태로
+     * 두면 새로고침·다중 탭에서 남의 대화가 섞일 일이 없습니다.
+     */
+    chat: function (body) {
+      return call('chat.send', null, body);
     }
   };
 
