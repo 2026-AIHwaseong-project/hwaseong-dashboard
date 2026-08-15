@@ -114,6 +114,7 @@
       showRoutes: opt.showRoutes === true,
       showLabels: true,
       cellFocus: null,         // 이 격자에 걸린 정류장·노선만 그린다 (null = 필터 없음)
+      routeFocus: null,        // 이 노선 하나만 그린다 (버스 번호 검색). cellFocus 보다 우선
       zdetail: false,          // 10배 이상 확대 — 이때만 정류장 이름을 DOM 에 만듭니다
       areaMode: false,         // 영역을 고르는 중인지
       areaDraft: null,         // 고르는 중인 격자 ID Set (확정 전)
@@ -538,8 +539,28 @@
       return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
     }
 
-    /** cellFocus 가 걸려 있으면 그 격자 안의 정류장 id 집합, 없으면 null */
+    /** routeFocus 가 가리키는 노선 객체. 없으면 null. */
+    function focusRouteObj() {
+      if (!state.routeFocus) return null;
+      var list = state.routes || [];
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id === state.routeFocus) return list[i];
+      }
+      return null;   /* 데이터가 갈린 경우 — 조용히 필터 없음으로 떨어집니다 */
+    }
+
+    /** 그릴 정류장 id 집합. 노선 초점 → 격자 초점 순으로 보고, 둘 다 없으면 null. */
     function focusStopIds() {
+      /* 노선 초점이 먼저입니다. 버스 번호로 찾아 들어온 상태에서는 그 노선이
+         지나는 정류장만 보여야 하고, 그때 격자 초점이 남아 있으면 노선이 그
+         격자 안에서 잘려 "전체 노선을 본다"가 깨집니다. */
+      var rt = focusRouteObj();
+      if (rt) {
+        var rset = {};
+        (rt.stopIds || []).forEach(function (id) { rset[id] = 1; });
+        if (state.selectedStopId) rset[state.selectedStopId] = 1;
+        return rset;
+      }
       if (!state.cellFocus) return null;
       var c = state.byId[state.cellFocus];
       if (!c) return null;
@@ -586,11 +607,17 @@
         return;
       }
       var stops = only ? state.stops.filter(function (s) { return only[s.id]; }) : state.stops;
-      var routes = only
-        ? state.routes.filter(function (rt) {
-            return (rt.stopIds || []).some(function (id) { return only[id]; });
-          })
-        : state.routes;
+      /* 노선 초점일 때 정류장 집합으로 노선을 거르면 안 됩니다 — 그 정류장들을 함께
+         지나는 다른 노선까지 걸려 들어와, 한 노선만 보려던 화면이 다시 다발이 됩니다.
+         그래서 노선 쪽은 id 로 딱 하나만 집습니다. */
+      var rtOnly = focusRouteObj();
+      var routes = rtOnly
+        ? [rtOnly]
+        : only
+          ? state.routes.filter(function (rt) {
+              return (rt.stopIds || []).some(function (id) { return only[id]; });
+            })
+          : state.routes;
 
       /* 노선 선은 좌표만 뽑아 두고, 그리는 일은 renderRouteLines 가 맡습니다
          (화면에 드는 구간만 — 아래 설명). */
@@ -1351,10 +1378,15 @@
     }
 
     /* 전체 보기로 돌아가면 격자 초점도 함께 풉니다. 화성시 전체를 보면서
-       한 격자의 정류장만 떠 있으면 그게 왜 거기 있는지 알 수 없습니다. */
+       한 격자의 정류장만 떠 있으면 그게 왜 거기 있는지 알 수 없습니다.
+       노선 초점도 여기서 풉니다 — 다만 위 applyZoom 의 자동 해제에는 넣지
+       않았습니다. 격자와 달리 **노선은 전체를 보려고 축소하는 것이 정상 조작**이라,
+       손으로 축소했다고 풀어 버리면 사용자와 싸우게 됩니다. 명시적으로 '전체'를
+       눌렀을 때만 풉니다. */
     function zoomReset() {
-      if (state.cellFocus) {
+      if (state.cellFocus || state.routeFocus) {
         state.cellFocus = null;
+        state.routeFocus = null;
         renderRoutes();
         if (opt.onExitCellFocus) opt.onExitCellFocus();
       }
@@ -1387,6 +1419,12 @@
     }
 
     /** 해당 읍면동의 격자들이 화면을 채우도록 확대합니다 */
+    /** 사각형이 화면에 담기게 확대합니다(사방 여유 35%). 읍면동·노선이 같이 씁니다. */
+    function zoomToBox(x0, y0, x1, y1) {
+      var w = Math.max((x1 - x0) * 1.35, (y1 - y0) * 1.35 * W / H, MIN_W);
+      animateTo(clampBox((x0 + x1) / 2 - w / 2, (y0 + y1) / 2 - (w * H / W) / 2, w));
+    }
+
     function zoomToRegion(regionName) {
       var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, n = 0;
       state.cells.forEach(function (c) {
@@ -1397,8 +1435,21 @@
         n++;
       });
       if (!n) return;
-      var w = Math.max((x1 - x0) * 1.35, (y1 - y0) * 1.35 * W / H, MIN_W);
-      animateTo(clampBox((x0 + x1) / 2 - w / 2, (y0 + y1) / 2 - (w * H / W) / 2, w));
+      zoomToBox(x0, y0, x1, y1);
+    }
+
+    /** 노선 전 구간이 담기게 확대합니다. 좌표는 routeXY 가 이미 투영해 둔 것을 씁니다. */
+    function zoomToRoute(rt) {
+      var pts = routeXY(rt).pts;
+      if (!pts.length) return;
+      var x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (var i = 0; i < pts.length; i++) {
+        if (pts[i][0] < x0) x0 = pts[i][0];
+        if (pts[i][0] > x1) x1 = pts[i][0];
+        if (pts[i][1] < y0) y0 = pts[i][1];
+        if (pts[i][1] > y1) y1 = pts[i][1];
+      }
+      zoomToBox(x0, y0, x1, y1);
     }
 
     /** factor 배 확대(>1)/축소(<1). (sx,sy)는 고정점(SVG 좌표) */
@@ -1669,9 +1720,23 @@
       /** 이 격자에 걸린 정류장·노선만 그립니다. null 이면 해제(전체 토글 상태로 복귀). */
       setCellFocus: function (cellId) {
         state.cellFocus = cellId || null;
+        /* 격자를 고르면 노선 초점은 끝납니다(그 반대는 setRouteFocus 가 합니다).
+           둘이 같이 걸려 있으면 focusStopIds 에서 노선이 이기므로, 격자를 눌러도
+           화면이 안 바뀌는 것처럼 보입니다. */
+        if (cellId) state.routeFocus = null;
         renderRoutes();
       },
       getCellFocus: function () { return state.cellFocus; },
+      /** 노선 하나만 그리고 그 전 구간이 담기게 확대합니다. null 이면 해제.
+       *  격자 초점은 같이 풀립니다 — 둘이 동시에 걸리면 노선이 격자 안에서 잘립니다. */
+      setRouteFocus: function (routeId) {
+        state.routeFocus = routeId || null;
+        if (routeId) state.cellFocus = null;
+        renderRoutes();
+        var rt = focusRouteObj();
+        if (rt) zoomToRoute(rt);
+      },
+      getRouteFocus: function () { return state.routeFocus; },
       /** 격자 안에 들어오는 정류장 목록 — 노선 경유 순서 다이어그램이 씁니다.
           지도에 그리는 집합(focusStopIds)과 같은 판정을 써야 카드와 지도가 어긋나지 않습니다. */
       stopsInCell: function (cellId) {

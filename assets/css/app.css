@@ -928,6 +928,23 @@ footer.pg .dis{margin-top:6px;line-height:1.7}
 /* 격자 밖으로 이어지는 구간임을 알리는 꼬리표 */
 .rline .rtail{font-size:10px;color:var(--ink3);padding:4px 0 0 16px}
 
+/* 노선 모드 운행정보 — 버스 번호로 검색했을 때만 (기점·종점·첫차·막차·배차·업체).
+   전부 routes.csv 실측이고, 없는 값은 0 이 아니라 '자료 없음' 으로 나옵니다. */
+/* 바탕은 --bg 입니다. --brand-soft 를 깔았더니 라이트에서 --ink3 라벨 대비가
+   4.49:1 로 AA(4.5) 를 아슬하게 못 넘었습니다 — --ink3 는 --bg(#EEF2F7) 위에서
+   4.6:1 이 되도록 고른 색이라 그 바탕으로 돌려놓으면 맞습니다. 게다가 이 띠는
+   지표를 나르는 캔버스지 크롬이 아니라 브랜드 틴트를 입을 자리도 아닙니다. */
+.rinfo{display:flex;flex-wrap:wrap;gap:8px 22px;padding:11px 14px;
+  border-bottom:1px solid var(--line);background:var(--bg)}
+.rinfo .ri{display:flex;flex-direction:column;gap:2px;min-width:0}
+.rinfo .rk{font-size:10px;color:var(--ink3);letter-spacing:.02em}
+.rinfo .rv{font-size:12.5px;font-weight:600;color:var(--ink);
+  font-variant-numeric:tabular-nums;word-break:keep-all}
+/* 값이 없을 때. 숫자와 같은 무게로 쓰면 실측처럼 읽히므로 눌러 둡니다. */
+.rinfo .rv.none{font-weight:500;color:var(--ink3)}
+/* 노선 한 벌을 여러 열로 쪼갤 때 열마다 붙는 구간 표시(1–20, 21–40 …) */
+.rline .rseg{font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums}
+
 /* ------------------------------------------------------- 12. 반응형 */
 @media (max-width:1020px){
   .mapcard,.routecard,.sidecard,.sc-card,.st-card,.span4,.span5,.span6,.span7,.span8{grid-column:span 12}

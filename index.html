@@ -102,8 +102,8 @@
              사용자가 무엇인지 먼저 분류하게 만들 이유가 없습니다. -->
         <div class="msearch">
           <input id="regionSearch" class="msi" type="search" list="regionList" autocomplete="off"
-                 placeholder="지역 · 격자 · 정류장 검색"
-                 aria-label="읍면동 이름, 격자 ID, 정류장 이름으로 지도에서 찾기">
+                 placeholder="버스 · 지역 · 격자 · 정류장 검색"
+                 aria-label="버스 번호, 읍면동 이름, 격자 ID, 정류장 이름으로 지도에서 찾기">
           <!-- 돋보기. 입력칸 안에 겹쳐 두므로 글자를 쳐도 사라지지 않습니다
                (placeholder 에 넣으면 첫 글자를 치는 순간 없어집니다).
                색은 토큰을 쓰므로 다크 모드에서도 알아서 맞습니다. -->
@@ -121,12 +121,17 @@
       <div class="legendbar" id="legend"></div>
     </section>
 
-    <!-- ─────────── 선택한 격자의 노선 경유 순서 ─────────── -->
+    <!-- ─────────── 노선 경유 순서 ───────────
+         두 모드로 씁니다 — 격자를 클릭하면 그 격자를 지나는 노선들(기본),
+         버스 번호를 검색하면 그 노선 하나의 전 구간. 제목·부제는 dashboard.js 가
+         모드에 맞춰 갈아끼웁니다. -->
     <section class="card routecard">
       <div class="chead">
-        <h2>이 격자를 지나는 노선</h2>
+        <h2 id="routeStripTitle">이 격자를 지나는 노선</h2>
         <span class="hsub" id="routeStripSub">지도에서 격자를 클릭하면 그 격자를 지나는 버스와 정류장 순서가 나옵니다</span>
       </div>
+      <!-- 노선 모드에서만 채웁니다(기점·종점·첫차·막차·배차·업체) -->
+      <div class="rinfo" id="routeInfo" hidden></div>
       <div class="rstrip" id="routeStrip"></div>
     </section>
 
