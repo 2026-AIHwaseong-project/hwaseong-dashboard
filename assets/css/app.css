@@ -319,17 +319,18 @@ svg text{font-family:inherit}
    다른 사이트의 상담 챗봇과 같은 자리·같은 동작입니다. 처음 오는 사람이 배우지
    않고도 "여기 물어볼 데가 있다"를 알아보는 자리입니다.
 
-   z-index 50 — 상단바(30) 위, 서랍 스크림(60)·모달(80) 아래입니다. 서랍이나
-   모달이 열리면 그 뒤로 들어가야 하고, 실제로 모달을 열 때는 .gone 으로 뺍니다. */
+   z-index 50 — 상단바(30) 위, 서랍 스크림(60) 아래입니다. 모달(80)보다도
+   아래라 실제 모달(보고서·안내)을 열면 그 뒤로 들어갑니다. 도움 패널(.chat-panel,
+   55)은 모달이 아니라 대시보드와 함께 쓰는 것이라 그 사이에 둡니다. */
 .chat-launch{position:fixed;right:20px;bottom:20px;z-index:50;
   display:flex;align-items:center;gap:9px;pointer-events:none}
 .chat-launch>*{pointer-events:auto}
-.chat-launch.gone{opacity:0;visibility:hidden;transition:opacity .16s,visibility 0s .16s}
+@media (prefers-reduced-motion:reduce){ .cl-btn,.cl-bubble{transition:none} .cl-btn:hover{transform:none} }
 /* 바탕이 테마와 무관하게 흰색입니다. 코리요 아트가 흰 배경 기준으로 그려져
    있어(짙은 갈색 외곽선 + 노란 몸통) 어두운 판 위에 놓으면 외곽선이 묻힙니다.
    DESIGN.md 가 공식 CI 에 대해 정해 둔 것과 같은 처리입니다 — 다크에서 로고 뒤에
    흰 판을 깔되, 그림 자체는 고치지 않습니다(마스코트 변형이 되므로). */
-.cl-btn{width:58px;height:58px;flex:0 0 auto;border-radius:50%;cursor:pointer;
+.cl-btn{width:72px;height:72px;flex:0 0 auto;border-radius:50%;cursor:pointer;
   border:2px solid var(--brand);background:#fff;padding:0;overflow:hidden;
   display:grid;place-items:center;
   /* 이 화면에서 그림자를 쓰는 것은 실제로 떠 있어야 하는 것뿐입니다(DESIGN.md).
@@ -343,10 +344,13 @@ svg text{font-family:inherit}
 /* 이미지를 못 받았을 때만 보이는 대체 아이콘 */
 .cl-fallback{display:none;color:var(--brand)}
 .cl-btn.noimg .cl-fallback{display:grid}
-/* 말풍선 — 버튼 왼쪽. 꼬리를 오른쪽에 달아 버튼이 하는 말로 읽히게 합니다. */
-.cl-bubble{position:relative;display:flex;align-items:center;gap:7px;
+/* 말풍선 — 버튼 왼쪽, 상시 표시입니다(패널이 열리면 잠깐 숨습니다 — chat.js 의
+   showBubble). 꼬리를 오른쪽에 달아 버튼이 하는 말로 읽히게 합니다. 이제
+   "닫기"가 없습니다 — 늘 떠 있는 것이 요구사항이라, 개별로 지울 수 있게 두면
+   그 뜻과 어긋납니다. */
+.cl-bubble{position:relative;display:flex;align-items:center;
   background:var(--card);border:1px solid var(--line);border-radius:999px;
-  padding:8px 10px 8px 14px;font-size:12.5px;font-weight:600;color:var(--ink);
+  padding:9px 15px;font-size:13px;font-weight:600;color:var(--ink);
   white-space:nowrap;box-shadow:0 3px 10px rgba(15,23,42,.14);cursor:pointer;
   opacity:0;visibility:hidden;transform:translateX(6px);
   transition:opacity .22s,transform .22s,visibility 0s .22s}
@@ -354,20 +358,51 @@ svg text{font-family:inherit}
 .cl-bubble::after{content:'';position:absolute;right:-5px;top:50%;width:9px;height:9px;
   margin-top:-4.5px;transform:rotate(45deg);background:var(--card);
   border-right:1px solid var(--line);border-top:1px solid var(--line)}
-.cl-x{flex:0 0 auto;display:grid;place-items:center;width:19px;height:19px;padding:0;
-  border:0;border-radius:50%;background:none;color:var(--ink3);cursor:pointer}
-.cl-x:hover{background:var(--brand-soft);color:var(--brand-ink)}
-@media (prefers-reduced-motion:reduce){
-  .chat-launch.gone,.cl-btn,.cl-bubble{transition:none}
-  .cl-btn:hover{transform:none}
-}
 /* 좁은 화면에서는 말풍선이 자리를 많이 먹어 지도를 가립니다. 버튼만 남깁니다. */
 @media (max-width:640px){
   .chat-launch{right:14px;bottom:14px}
   .cl-bubble{display:none}
-  .cl-btn{width:52px;height:52px}
+  .cl-btn{width:62px;height:62px}
 }
-/* ── AI 채팅 (도움 모달 · 보고서 모달) ─────────────────────────────
+
+/* ── AI 도움 패널 — 모달이 아니라 도킹된 창 ─────────────────────────
+   우측 하단, 런처 바로 위에 뜹니다. 배경을 덮는 것이 없어(.veil 없음) 열려
+   있는 동안에도 지도를 클릭하거나 시간대 탭을 누르는 등 대시보드를 그대로
+   씁니다 — 요구사항 원문 그대로 "챗봇 화면을 띄어놓고도 동시에 다른 화면
+   조작". 그래서 진짜 모달(§보고서·§안내)과 달리 여기는 스크림도, 포커스
+   가두기도 두지 않습니다. */
+.chat-panel{position:fixed;right:20px;bottom:100px;z-index:55;
+  width:min(380px,calc(100vw - 40px));
+  max-height:min(560px,calc(100vh - 132px));
+  display:flex;flex-direction:column;
+  background:var(--card);border:1px solid var(--line);border-radius:16px;
+  box-shadow:0 12px 34px rgba(15,23,42,.26);   /* 대시보드 위로 실제로 뜨는 창입니다 */
+  transform-origin:bottom right;
+  opacity:0;visibility:hidden;transform:translateY(10px) scale(.97);
+  transition:opacity .16s,transform .16s,visibility 0s .16s;
+  pointer-events:none}
+.chat-panel.open{opacity:1;visibility:visible;transform:none;
+  transition:opacity .16s,transform .16s;pointer-events:auto}
+@media (prefers-reduced-motion:reduce){ .chat-panel{transition:none} }
+@media (max-width:640px){
+  .chat-panel{right:12px;left:12px;bottom:84px;width:auto;
+    max-height:min(72vh,540px)}
+}
+.cp-head{display:flex;align-items:center;gap:9px;padding:12px 12px 12px 14px;
+  border-bottom:1px solid var(--line);flex:0 0 auto}
+.cp-head img{width:30px;height:30px;border-radius:50%;flex:0 0 auto;
+  background:#fff;border:1px solid var(--line)}
+.cp-head b{flex:1;min-width:0;font-size:13px;font-weight:700;color:var(--ink)}
+.cp-x{flex:0 0 auto;display:grid;place-items:center;width:26px;height:26px;padding:0;
+  border:0;border-radius:50%;background:none;color:var(--ink3);cursor:pointer}
+.cp-x:hover{background:var(--brand-soft);color:var(--brand-ink)}
+.cp-sub{padding:9px 14px 0;font-size:11px;color:var(--ink3);line-height:1.6;flex:0 0 auto}
+
+/* 토스트가 우측 하단에서 도움 패널과 같은 구석을 씁니다. 패널이 열려 있는
+   동안은 왼쪽으로 비켜서 겹치지 않게 합니다(body.chat-open — chat.js 가 겁니다). */
+body.chat-open .toasts{right:auto;left:16px}
+
+/* ── AI 채팅 (도움 패널 · 보고서 모달 공용) ────────────────────────
    두 모드가 같은 생김새를 씁니다. 말풍선은 좌우로 갈라 누가 한 말인지 위치로
    구분하고, 색은 크롬 계열(브랜드)로 둡니다 — 지도·차트의 지표 색이 여기로
    넘어오면 "이 색이 값을 뜻하나?" 하는 오해가 생깁니다. */
@@ -389,14 +424,14 @@ svg text{font-family:inherit}
   border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink)}
 .cm-in:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
 .cm-in:disabled{opacity:.6}
+/* 도움 패널 안에 얹힐 때 — 패널 자체가 높이를 제한하므로(.chat-panel 의
+   max-height) 로그는 남는 공간을 그대로 채웁니다. 고정 340px 을 두면 패널이
+   낮은 화면(모바일)에서 로그가 입력줄보다 아래로 밀려 잘립니다. */
+.chat-panel .cm{padding:0 14px 12px;flex:1;min-height:0}
+.chat-panel .cm-log{max-height:none}
 /* 보고서 모달 안에 얹힐 때 — 본문과 푸터 사이라 좌우 여백을 본문에 맞춥니다 */
 .cm-report{padding:0 18px 4px;border-top:1px solid var(--line)}
 .cm-report .cm-log{max-height:190px}
-/* 도움 모달은 대화가 주인공이라 폭을 줄여 읽기 좋게 합니다.
-   .sheet 를 함께 붙이는 이유는 .guide-sheet 와 같습니다 — .sheet{width:min(920px,100%)}
-   가 §모달(파일 뒤)에 있어 그냥 .chat-sheet 로는 특이도가 같아(0,1,0) 밀립니다. */
-.sheet.chat-sheet{width:min(640px,100%)}
-.chat-sheet .body{padding-top:4px}
 
 /* 사용 안내 모달 — 화면 축소판 그림 + 번호 설명 */
 /* .sheet 를 함께 붙이는 이유는 바로 위와 같습니다 — .sheet{width:min(920px,100%)} 가

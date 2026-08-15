@@ -143,37 +143,45 @@
     };
   }
 
-  /* ── 도움 모드 모달 ───────────────────────────────────────────────
-     사용 안내 모달과 같은 구조(.modal/.sheet)를 씁니다 — 서랍에서 나란히 열리는
-     항목이라 생김새가 같아야 합니다. */
-  var helpModal = null, helpChat = null;
+  /* ── 도움 모드 패널 ───────────────────────────────────────────────
+     모달이 아니라 **떠 있는 패널**입니다. 우측 하단에 도킹되고, 열려 있는
+     동안에도 지도를 클릭하거나 시간대를 바꾸는 등 대시보드를 그대로 조작할 수
+     있습니다 — 배경을 덮는 .veil 이 없고, pointer-events 도 패널 자신에게만
+     걸립니다. 그래서 role="dialog" aria-modal="true" 대신 role="region" 을
+     씁니다 — 포커스를 가두지 않고, 스크린 리더에도 '모달' 이라고 알리지 않습니다.
+     (실제 모달 — 보고서·안내 — 은 그대로 .modal/.sheet 를 씁니다. 그 둘은 초안
+     검토·설명처럼 한 가지에 집중해야 하는 화면이라 가리는 것이 맞습니다.) */
+  var helpPanel = null, helpChat = null;
 
   function buildHelp() {
-    if (helpModal) return helpModal;
-    var m = C.el('div', { 'class': 'modal', id: 'chat-modal' });
-    m.innerHTML =
-      '<div class="veil" data-chat-close></div>' +
-      '<div class="sheet chat-sheet" role="dialog" aria-modal="true" aria-label="AI 도우미">' +
-      '<header><h2>AI 도우미</h2>' +
-      '<span class="hs">화면·지표에 대해 묻거나, 보고 싶은 곳으로 옮겨 달라고 하세요</span>' +
-      '<span class="sp"></span>' +
-      '<button class="xbtn" data-chat-close type="button" aria-label="닫기">' +
-      C.icon('close', 17) + '</button></header>' +
-      '<div class="body"><div class="cm" data-chat-mount></div></div>' +
-      '</div>';
-    document.body.appendChild(m);
-    C.$$('[data-chat-close]', m).forEach(function (b) {
-      b.addEventListener('click', closeHelp);
+    if (helpPanel) return helpPanel;
+    var p = C.el('div', {
+      'class': 'chat-panel', id: 'chat-panel',
+      role: 'region', 'aria-label': 'AI 도우미 채팅'
     });
+    p.innerHTML =
+      '<div class="cp-head">' +
+      '<img src="assets/img/koriyo.png" alt="" width="56" height="56" decoding="async" ' +
+      'onerror="this.remove()">' +
+      '<b>AI 도우미</b>' +
+      '<button class="cp-x" type="button" data-chat-close aria-label="닫기">' +
+      C.icon('close', 16) + '</button></div>' +
+      '<div class="cp-sub">화면·지표에 대해 묻거나, 보고 싶은 곳으로 옮겨 달라고 하세요</div>' +
+      '<div class="cm" data-chat-mount></div>';
+    document.body.appendChild(p);
+    $('[data-chat-close]', p).addEventListener('click', closeHelp);
+    /* Esc 는 편의상 둡니다 — 포커스를 가두지 않으므로 실수로 다른 곳을 조작하다
+       닫힐 일은 없습니다(패널 안에 초점이 있을 때만 의미가 있는 키). */
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && m.classList.contains('open')) closeHelp();
+      if (e.key === 'Escape' && p.classList.contains('open')) closeHelp();
     });
 
     helpChat = create({
       mode: 'help',
-      mount: $('[data-chat-mount]', m),
+      mount: $('[data-chat-mount]', p),
       placeholder: '예: MI가 뭐야? · 심야로 바꿔줘 · 향남읍 보여줘',
       intro: '이 화면의 지표와 사용법을 묻거나, "심야로 바꿔줘"처럼 화면을 옮겨 달라고 하셔도 됩니다. ' +
+             '이 창을 열어 둔 채로 지도·시간대 탭 등 다른 화면도 그대로 쓰실 수 있습니다. ' +
              '수치는 지금 불러온 데이터에서만 답합니다.',
       getBody: function () {
         var h = HW.chatActions || {};
@@ -186,19 +194,24 @@
         return { period: h.period ? h.period() : 'am', context: ctx };
       }
     });
-    helpModal = m;
-    return m;
+    helpPanel = p;
+    return p;
   }
 
   function openHelp() {
     buildHelp().classList.add('open');
-    hideBubble(true);
-    if (launcher) launcher.classList.add('gone');   /* 모달 뒤에 겹쳐 보이지 않게 */
+    document.body.classList.add('chat-open');   /* 토스트가 패널과 안 겹치게(§CSS) */
+    showBubble(false);
     if (helpChat) helpChat.focus();
   }
   function closeHelp() {
-    if (helpModal) helpModal.classList.remove('open');
-    if (launcher) launcher.classList.remove('gone');
+    if (helpPanel) helpPanel.classList.remove('open');
+    document.body.classList.remove('chat-open');
+    showBubble(true);      /* 다시 대기 상태 — 말풍선이 돌아옵니다 */
+  }
+  function toggleHelp() {
+    if (helpPanel && helpPanel.classList.contains('open')) closeHelp();
+    else openHelp();
   }
 
   /* ── 우측 하단 런처 ───────────────────────────────────────────────
@@ -208,54 +221,40 @@
 
      아이콘은 화성시 마스코트 코리요(AI 코리요)입니다 — 시가 발행한 도구라는
      이 화면의 세계관과 맞고, 일반 로봇 아이콘보다 화성시 것임이 분명해집니다. */
-  var launcher = null, bubbleEl = null, bubbleTimer = null;
-  var BUBBLE_KEY = 'hw.chatBubbleSeen';
+  var launcher = null, bubbleEl = null;
 
-  function hideBubble(remember) {
-    if (bubbleTimer) { global.clearTimeout(bubbleTimer); bubbleTimer = null; }
-    if (bubbleEl) bubbleEl.classList.remove('show');
-    /* 한 번 보고 나면 이 탭에서는 다시 안 띄웁니다. localStorage 가 아니라
-       sessionStorage 인 이유 — 며칠 뒤 다시 온 사람에게는 한 번 더 알려 주는 편이
-       낫고, 같은 방문 중에 페이지를 오갈 때만 조용하면 됩니다. */
-    if (remember) { try { sessionStorage.setItem(BUBBLE_KEY, '1'); } catch (e) { /* 차단됨 */ } }
+  /** 말풍선은 상시 표시입니다 — 한 번 보고 마는 안내가 아니라, 패널이 닫혀
+   *  있는 동안은 늘 "무엇을 도와드릴까요?" 가 떠 있습니다. 그래서 세션에 한
+   *  번만 보여주고 마는 장치(예전의 sessionStorage 기억)를 두지 않습니다. */
+  function showBubble(v) {
+    if (bubbleEl) bubbleEl.classList.toggle('show', v);
   }
 
   function mountLauncher() {
     if (launcher || !global.document.body) return;
     var wrap = C.el('div', { 'class': 'chat-launch', 'data-chat-launch': '' });
     wrap.innerHTML =
-      '<div class="cl-bubble" data-bubble>' +
-      '<span>무엇을 도와드릴까요?</span>' +
-      '<button class="cl-x" type="button" data-bubble-x aria-label="말풍선 닫기">' +
-      C.icon('close', 12) + '</button></div>' +
-      '<button class="cl-btn" type="button" data-launch aria-label="AI 도우미 열기">' +
+      '<div class="cl-bubble" data-bubble><span>무엇을 도와드릴까요?</span></div>' +
+      '<button class="cl-btn" type="button" data-launch aria-label="AI 도우미 열기·닫기">' +
       /* 이미지를 못 받으면(파일 누락·오프라인) 버튼이 빈 원으로 남지 않게
          말풍선 아이콘으로 되돌립니다. */
       '<img src="assets/img/koriyo.png" alt="" width="320" height="320" decoding="async" ' +
       'onerror="this.remove();this.parentNode.classList.add(\'noimg\')">' +
-      '<span class="cl-fallback" aria-hidden="true">' + C.icon('chat', 24) + '</span>' +
+      '<span class="cl-fallback" aria-hidden="true">' + C.icon('chat', 28) + '</span>' +
       '</button>';
     global.document.body.appendChild(wrap);
     launcher = wrap;
     bubbleEl = $('[data-bubble]', wrap);
 
-    $('[data-launch]', wrap).addEventListener('click', openHelp);
-    $('[data-bubble-x]', wrap).addEventListener('click', function (e) {
-      e.stopPropagation();      /* 닫기가 곧 열기가 되면 안 됩니다 */
-      hideBubble(true);
-    });
-    /* 말풍선 자체를 누르면 대화를 여는 게 자연스럽습니다 */
+    /* 런처는 토글입니다 — 패널이 이제 화면을 다 안 가리므로, 열려 있는 상태에서
+       버튼을 또 누르면 닫는 게 자연스럽습니다(다시 열려면 한 번 더 누르면 됨). */
+    $('[data-launch]', wrap).addEventListener('click', toggleHelp);
+    /* 말풍선 자체를 누르면 대화를 엽니다(닫는 동작은 아이콘 버튼이 맡습니다) */
     bubbleEl.addEventListener('click', openHelp);
 
-    var seen = false;
-    try { seen = sessionStorage.getItem(BUBBLE_KEY) === '1'; } catch (e) { /* 차단됨 */ }
-    if (!seen) {
-      /* 곧바로 띄우면 첫 화면을 읽는 것을 방해합니다. 지도·KPI 가 자리를 잡은 뒤에. */
-      bubbleTimer = global.setTimeout(function () {
-        bubbleTimer = null;
-        if (bubbleEl) bubbleEl.classList.add('show');
-      }, 2500);
-    }
+    /* 첫 페인트(지도·KPI)가 자리 잡을 시간만 살짝 두고, 그 뒤로는 패널이 닫혀
+       있는 한 계속 보입니다 — openHelp/closeHelp 가 열고 닫을 때마다 토글합니다. */
+    global.setTimeout(function () { showBubble(true); }, 500);
   }
 
   if (global.document.readyState === 'loading') {
