@@ -595,6 +595,17 @@
     var m = ensureModal();
     var body = C.$('[data-body]', m);
     var h = '<div class="doc">';
+    /* 서버가 AI 를 못 불러 서식만 채워 보낸 초안이면 그렇다고 밝힙니다.
+       밝히지 않으면 문단이 두 개뿐인 폴백 초안을 AI 가 쓴 글로 읽게 되고, 이어서
+       채팅으로 고치려 해도 같은 이유로 안 되는데 그 까닭을 화면에서 알 수 없습니다.
+       (백엔드가 이 구분을 위해 isAiGenerated 를 실어 보냅니다 — _fallback_report) */
+    if (draft.isAiGenerated === false) {
+      h += '<div class="dwarn"><b>AI 가 쓴 초안이 아닙니다 — 서식 초안입니다.</b>' +
+        '서버에 AI 키가 없어 지표만 문장 틀에 채워 넣었습니다. 아래 채팅으로 고치는 것도 ' +
+        '같은 이유로 되지 않습니다. 백엔드 폴더의 <code>.env</code> 에 ' +
+        '<code>ANTHROPIC_API_KEY</code>(또는 OPENAI_API_KEY · GOOGLE_API_KEY) 를 넣고 ' +
+        '서버를 다시 켠 뒤 [다시 생성] 을 누르세요.</div>';
+    }
     h += '<p class="dtitle">' + esc(draft.title) + '</p>';
     if (draft.subtitle) h += '<p class="dmeta">' + esc(draft.subtitle) + '</p>';
     h += '<p class="dmeta">' + esc((draft.org || '') + ' ' + (draft.dept || '')) +

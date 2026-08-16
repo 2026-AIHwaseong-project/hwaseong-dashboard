@@ -407,6 +407,11 @@ body.chat-open .toasts{right:auto;left:16px}
    구분하고, 색은 크롬 계열(브랜드)로 둡니다 — 지도·차트의 지표 색이 여기로
    넘어오면 "이 색이 값을 뜻하나?" 하는 오해가 생깁니다. */
 .cm{display:flex;flex-direction:column;min-height:0}
+/* hidden 속성을 되살립니다. 브라우저 기본 규칙 [hidden]{display:none} 은 작성자
+   스타일시트의 .cm{display:flex} 에 밀립니다(출처 우선순위: 작성자 > 기본).
+   그래서 report.js 가 초안 전까지 hidden 으로 둔 채팅 칸이 그대로 보이고 있었고,
+   테두리 선 한 줄이 푸터 위에 떠 있었습니다. */
+.cm[hidden]{display:none}
 .cm-log{flex:1;min-height:120px;max-height:340px;overflow-y:auto;
   display:flex;flex-direction:column;gap:8px;padding:12px 2px}
 .cm-b{max-width:78%;font-size:12.5px;line-height:1.7;border-radius:12px;padding:8px 12px;
@@ -429,9 +434,22 @@ body.chat-open .toasts{right:auto;left:16px}
    낮은 화면(모바일)에서 로그가 입력줄보다 아래로 밀려 잘립니다. */
 .chat-panel .cm{padding:0 14px 12px;flex:1;min-height:0}
 .chat-panel .cm-log{max-height:none}
-/* 보고서 모달 안에 얹힐 때 — 본문과 푸터 사이라 좌우 여백을 본문에 맞춥니다 */
-.cm-report{padding:0 18px 4px;border-top:1px solid var(--line)}
-.cm-report .cm-log{max-height:190px}
+/* 보고서 모달 안에 얹힐 때 — 본문과 푸터 사이라 좌우 여백을 본문에 맞춥니다.
+
+   ⚠️ flex:0 0 auto 를 반드시 둡니다. .sheet 는 max-height:88vh 로 묶인 세로 flex
+      기둥이고, 그 안의 초안 본문(.body)은 화면보다 깁니다. 이 블록을 줄어들 수
+      있게 두면(flex-shrink 기본값 1 + .cm 의 min-height:0) 본문과 줄어듦을 비율로
+      나눠 갖습니다. 그런데 .cm-log 는 min-height:120px 에서 더는 안 줄어들어,
+      남은 몫이 전부 입력줄로 갑니다 — 입력줄이 블록 밖으로 밀려나 푸터에 덮입니다.
+      실측(1440×900): 채팅 블록 124px 인데 로그 120 + 입력줄 50 이 필요해
+      입력줄이 785~835px 에 놓이고 푸터가 788px 부터라, 입력창이 DOM 에는 있는데
+      화면에 없고 그 자리 클릭은 푸터가 받았습니다. */
+.cm-report{flex:0 0 auto;padding:0 18px 4px;border-top:1px solid var(--line)}
+/* 로그 높이를 고정합니다 — 대화가 길어져도 로그 안에서만 스크롤되므로, 메시지가
+   하나 늘 때마다 문서 미리보기가 다시 접히는 일이 없습니다. */
+.cm-report .cm-log{min-height:150px;max-height:150px}
+/* 낮은 화면에서는 한 단 줄여 본문에 자리를 넘깁니다 */
+@media (max-height:700px){ .cm-report .cm-log{min-height:96px;max-height:96px} }
 
 /* 사용 안내 모달 — 화면 축소판 그림 + 번호 설명 */
 /* .sheet 를 함께 붙이는 이유는 바로 위와 같습니다 — .sheet{width:min(920px,100%)} 가
@@ -1083,6 +1101,15 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   margin-bottom:16px}
 .doc .dnote{margin-top:16px;padding:9px 11px;border:1px dashed var(--line);border-radius:8px;
   font-size:11px;color:var(--ink3);line-height:1.65}
+/* 서버가 AI 없이 서식만 채워 보낸 초안일 때(isAiGenerated:false) 문서 맨 위에
+   붙습니다. 이 표시가 없으면 얇은 폴백 초안을 AI 가 쓴 글로 오해합니다 — 백엔드가
+   그 구분을 위해 플래그를 실어 보내는데(server/main.py _fallback_report) 화면이
+   쓰지 않고 있었습니다. */
+.doc .dwarn{margin:0 0 14px;padding:10px 12px;border:1px solid var(--warn);border-radius:8px;
+  background:color-mix(in srgb,var(--warn) 9%,transparent);
+  font-size:11.5px;color:var(--warn);line-height:1.7}
+.doc .dwarn b{display:block;margin-bottom:2px}
+.doc .dwarn code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
 .doc table{margin:2px 0 12px}
 .doc .dcap{font-size:11px;color:var(--ink3);margin:10px 0 3px;font-weight:600}
 
