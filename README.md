@@ -43,9 +43,41 @@ AI 는 선정된 결과를 문장으로 다듬는 일만 맡습니다.
 
 ---
 
+## 1. 실행
+
+백엔드가 데이터를 공급합니다. **백엔드를 먼저 켜세요** —
+기동 방법은 [백엔드 README §1](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend#1-빠른-실행)에 있습니다.
+기본 주소는 `http://localhost:8000` 입니다.
+
+화면을 여는 방법은 셋 중 아무거나 됩니다.
+
+```bash
+# a. 백엔드가 프론트를 직접 서빙 (두 리포가 같은 부모 폴더에 있을 때)
+#    → http://localhost:8000/app/          같은 원점이라 CORS 가 없습니다
+
+# b. 개발 서버 (프론트 리포에서)
+python3 tools/dev-server.py 5500          # → http://localhost:5500/
+
+# c. index.html 을 브라우저로 직접 열기 (file://)
+```
+
+`python3 -m http.server` 대신 `tools/dev-server.py` 를 쓰는 이유는 캐시입니다.
+전자는 캐시 헤더를 안 보내서 코드를 고쳐도 브라우저가 예전 `.js` 를 계속 씁니다.
+후자는 응답마다 `Cache-Control: no-store` 를 붙입니다.
+
+다른 PC·터널(ngrok)의 백엔드에 붙일 때는 **코드를 고치지 말고** 주소 뒤에 `?server=` 를 붙이세요.
+`config.js` 의 하드코딩값보다 우선합니다.
+
+```
+index.html?server=https://xxxx.ngrok-free.app   # 한 번 열면 브라우저에 기억됩니다
+index.html?server=                              # 기억된 주소 초기화
+```
+
+---
+
 # 심사·발표용
 
-## 1. 무엇을 하는가
+## 2. 무엇을 하는가
 
 | 화면 | 파일 | 하는 일 |
 |---|---|---|
@@ -67,10 +99,10 @@ AI 는 선정된 결과를 문장으로 다듬는 일만 맡습니다.
 지도는 SVG 로 직접 그리고 그 뒤에 카카오맵 배경을 한 겹 깝니다.
 확대하면 건물·지명이 드러나 "이 격자 안에 실제로 무엇이 있는지" 확인할 수 있습니다.
 
-## 2. 산출 로직
+## 3. 산출 로직
 
 수치는 전부 백엔드가 산출하고 화면은 표시만 합니다. 아래는 백엔드 실코드 기준이며,
-**정본은 [백엔드 README §2](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend#2-산출-로직)** 입니다
+**정본은 [백엔드 README §4](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend#4-산출-로직)** 입니다
 (감쇠항·절대 가드 등 배경 설명이 그쪽에 있습니다).
 
 ```
@@ -156,7 +188,7 @@ MI 미스매칭    = clip( (z(D) − z(S)) × clip(D / dRef, 0, 1)^0.65 , −2.6
 - **정규화 기준은 배치 없는 상태에서 한 번만 잡고 고정합니다.** 매번 다시 잡으면
   시뮬레이션 전후 KPI를 서로 다른 자로 재는 셈이 되어 비교가 무의미해집니다.
 
-## 3. 사용 데이터
+## 4. 사용 데이터
 
 | 데이터 | 출처 | 기준 시점 | 쓰임 |
 |---|---|---|---|
@@ -172,10 +204,10 @@ MI 미스매칭    = clip( (z(D) − z(S)) × clip(D / dRef, 0, 1)^0.65 , −2.6
 승하차와 유동인구 사이에 **약 2년 시차**가 있습니다. 그래서 유동인구는 총량이 아니라
 시간배율로만 씁니다.
 
-출처·시점의 정본은 [백엔드 README §3](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend#3-데이터와-시간축)이고,
+출처·시점의 정본은 [백엔드 README §5](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend#5-데이터와-시간축)이고,
 화면에 나오는 수치의 정본은 서버 응답(`/api/v1/meta` 의 `dataQuality`)입니다.
 
-## 4. 한계와 가정
+## 5. 한계와 가정
 
 무엇이 실측이고 무엇이 추정인지는 화면 푸터(데이터 품질)와 엑셀 보고서의
 "산출식·주석" 시트에 항목별로 표기됩니다. 실측이 아닌 것은 다음 세 가지입니다.
@@ -200,7 +232,7 @@ MI 미스매칭    = clip( (z(D) − z(S)) × clip(D / dRef, 0, 1)^0.65 , −2.6
 합니다(도움말 문구는 `assets/js/core.js` 의 `HELP.assumedCost`).
 
 모델이 실제로 맞는지에 대한 검증(승차 예측 회귀 · 공간 교차검증 · 공개자료 정성 대조)은
-[백엔드 README §4](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend#4-검증)에 있습니다.
+[백엔드 README §6](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend#6-검증)에 있습니다.
 
 시뮬레이션·추천 결과는 위 가정에 기반한 정책 검토용 참고 수치이며,
 실제 집행 전에는 실측 단가·현장 실사로 재검증이 필요합니다.
@@ -208,36 +240,6 @@ MI 미스매칭    = clip( (z(D) − z(S)) × clip(D / dRef, 0, 1)^0.65 , −2.6
 ---
 
 # 개발자용
-
-## 5. 실행
-
-백엔드가 데이터를 공급합니다. **백엔드를 먼저 켜세요** —
-기동 방법은 [백엔드 README §5](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend#5-빠른-실행)에 있습니다.
-기본 주소는 `http://localhost:8000` 입니다.
-
-화면을 여는 방법은 셋 중 아무거나 됩니다.
-
-```bash
-# a. 백엔드가 프론트를 직접 서빙 (두 리포가 같은 부모 폴더에 있을 때)
-#    → http://localhost:8000/app/          같은 원점이라 CORS 가 없습니다
-
-# b. 개발 서버 (프론트 리포에서)
-python3 tools/dev-server.py 5500          # → http://localhost:5500/
-
-# c. index.html 을 브라우저로 직접 열기 (file://)
-```
-
-`python3 -m http.server` 대신 `tools/dev-server.py` 를 쓰는 이유는 캐시입니다.
-전자는 캐시 헤더를 안 보내서 코드를 고쳐도 브라우저가 예전 `.js` 를 계속 씁니다.
-후자는 응답마다 `Cache-Control: no-store` 를 붙입니다.
-
-다른 PC·터널(ngrok)의 백엔드에 붙일 때는 **코드를 고치지 말고** 주소 뒤에 `?server=` 를 붙이세요.
-`config.js` 의 하드코딩값보다 우선합니다.
-
-```
-index.html?server=https://xxxx.ngrok-free.app   # 한 번 열면 브라우저에 기억됩니다
-index.html?server=                              # 기억된 주소 초기화
-```
 
 ## 6. 검증
 
