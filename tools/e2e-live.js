@@ -17,7 +17,10 @@ const F = path.join(__dirname, '..', 'assets', 'js') + path.sep;
 global.window = global;
 global.location = { protocol: 'http:', hostname: '127.0.0.1' };
 eval(fs.readFileSync(F + 'config.js', 'utf8'));
-window.HW.CONFIG.BASE_URL = BASE;
+/* 인자로 받은 서버만 봅니다 — 후보 탐색을 건너뛰고 고정합니다.
+   (useServer 가 없는 구버전 config.js 와도 돌아가게 대입도 남겨 둡니다) */
+if (typeof window.HW.CONFIG.useServer === 'function') window.HW.CONFIG.useServer(BASE);
+else window.HW.CONFIG.BASE_URL = BASE;
 eval(fs.readFileSync(F + 'api.js', 'utf8'));
 const api = window.HW.api;
 
