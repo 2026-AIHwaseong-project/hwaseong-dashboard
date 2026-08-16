@@ -1,0 +1,267 @@
+/* ============================================================================
+ *  chat.js — AI 채팅 (도움 · 보고서 수정)
+ * ----------------------------------------------------------------------------
+ *  모드 둘이 같은 UI 를 씁니다.
+ *    help   서랍 → "AI 도우미". 화면 질문에 답하고 화면을 옮겨 줍니다.
+ *    report 보고서 모달 안. 현재 초안을 지시대로 고쳐 씁니다.
+ *
+ *  이력은 **여기(클라이언트)가 들고 있습니다.** 서버는 무상태라 새로고침하면
+ *  대화가 사라지는 대신, 다중 탭에서 남의 대화가 섞일 일이 없습니다.
+ *
+ *  ⚠️ fetch 를 직접 부르지 않습니다 — api.js 를 거칩니다(그 파일 머리 주석의 규칙).
+ * ========================================================================= */
+(function (global) {
+  'use strict';
+  var HW = global.HW = global.HW || {};
+  var C = HW.core;
+  var $ = C.$, esc = C.esc;
+
+  var MAX_TURNS = 10;      // 서버로 보내는 이력 상한. 백엔드도 같은 값으로 자릅니다.
+  var MAX_CHARS = 2000;    // 입력 한 번의 상한
+
+  /* ── 화면 조작 액션 ────────────────────────────────────────────────
+     모델이 임의 코드를 실행하지 않습니다. 화이트리스트 3종이고 값도 여기서 검증합니다.
+     셋 다 화면 상태만 바꾸므로 되돌리기는 사용자가 클릭 한 번으로 합니다. */
+  var PERIODS = ['am', 'day', 'pm', 'night'];
+
+  function runAction(act) {
+    if (!act || act.type === 'none') return null;
+    var h = HW.chatActions || {};      /* dashboard.js 가 채웁니다 */
+    if (act.type === 'period') {
+      if (PERIODS.indexOf(act.value) < 0 || !h.setPeriod) return null;
+      h.setPeriod(act.value);
+      return '시간대를 바꿨습니다';
+    }
+    if (act.type === 'layer') {
+      if (!HW.MAP_LAYERS || !HW.MAP_LAYERS[act.value] || !h.setLayer) return null;
+      h.setLayer(act.value);
+      return '지도 기준을 바꿨습니다';
+    }
+    if (act.type === 'show') {
+      if (typeof act.query !== 'string' || !act.query.trim() || !h.search) return null;
+      h.search(act.query.trim());
+      return '지도를 옮겼습니다';
+    }
+    return null;
+  }
+
+  /* ── 채팅 한 벌 ──────────────────────────────────────────────────── */
+
+  /**
+   * @param opt.mode      'help' | 'report'
+   * @param opt.mount     말풍선·입력줄을 넣을 요소
+   * @param opt.getBody   () => 추가로 실어 보낼 것 { period, context, draft }
+   * @param opt.onDraft   (draft) => void — report 모드에서 초안이 바뀌었을 때
+   * @param opt.intro     첫 안내 문구
+   */
+  function create(opt) {
+    var msgs = [];               // [{role, content}] — 서버로 보내는 것
+    var busy = false;
+
+    opt.mount.innerHTML =
+      '<div class="cm-log" data-log role="log" aria-live="polite"></div>' +
+      '<form class="cm-bar" data-form>' +
+      '<input class="cm-in" data-in type="text" autocomplete="off" maxlength="' + MAX_CHARS + '" ' +
+      'placeholder="' + esc(opt.placeholder || '무엇이든 물어보세요') + '" ' +
+      'aria-label="' + esc(opt.placeholder || '메시지 입력') + '">' +
+      '<button class="btn sm primary" type="submit" data-send>보내기</button>' +
+      '</form>';
+
+    var log = $('[data-log]', opt.mount);
+    var input = $('[data-in]', opt.mount);
+    var form = $('[data-form]', opt.mount);
+    var sendBtn = $('[data-send]', opt.mount);
+
+    function bubble(role, text, note) {
+      var d = document.createElement('div');
+      d.className = 'cm-b ' + (role === 'user' ? 'me' : 'ai');
+      d.innerHTML = '<div class="cm-t"></div>' +
+        (note ? '<div class="cm-n">' + esc(note) + '</div>' : '');
+      /* 모델 응답은 textContent 로만 넣습니다 — innerHTML 로 넣으면 응답에 섞인
+         태그가 그대로 실행됩니다. 줄바꿈은 CSS 의 white-space 가 살립니다. */
+      $('.cm-t', d).textContent = text;
+      log.appendChild(d);
+      log.scrollTop = log.scrollHeight;
+      return d;
+    }
+
+    if (opt.intro) bubble('ai', opt.intro);
+
+    function setBusy(v) {
+      busy = v;
+      input.disabled = v;
+      sendBtn.disabled = v;
+      sendBtn.textContent = v ? '생각 중…' : '보내기';
+    }
+
+    function send(text) {
+      if (busy || !text) return;
+      bubble('user', text);
+      msgs.push({ role: 'user', content: text.slice(0, MAX_CHARS) });
+      /* 최근 N턴만 보냅니다(백엔드도 같은 값으로 자릅니다). 화면의 말풍선은 남깁니다. */
+      if (msgs.length > MAX_TURNS * 2) msgs = msgs.slice(-MAX_TURNS * 2);
+      setBusy(true);
+
+      var extra = (opt.getBody && opt.getBody()) || {};
+      var body = {
+        mode: opt.mode,
+        period: extra.period || 'am',
+        messages: msgs,
+        context: extra.context || {}
+      };
+      if (opt.mode === 'report') body.draft = extra.draft || null;
+
+      HW.api.chat(body).then(function (res) {
+        setBusy(false);
+        var note = '';
+        if (res.action) {
+          var done = runAction(res.action);
+          if (done) note = done;
+        }
+        bubble('ai', res.reply || '(빈 응답)', note);
+        /* 이력에는 답변만 남깁니다 — 액션은 이미 실행됐고, 다시 보내면 모델이
+           같은 조작을 또 하려 들 수 있습니다. */
+        msgs.push({ role: 'assistant', content: String(res.reply || '') });
+        if (opt.mode === 'report' && res.draft && opt.onDraft) opt.onDraft(res.draft);
+      }).catch(function (e) {
+        setBusy(false);
+        bubble('ai', '요청에 실패했습니다: ' + (e && e.message ? e.message : e));
+      });
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var v = input.value.trim();
+      input.value = '';
+      send(v);
+    });
+
+    return {
+      send: send,
+      focus: function () { try { input.focus(); } catch (err) { /* 화면 밖 */ } },
+      reset: function () { msgs = []; log.innerHTML = ''; if (opt.intro) bubble('ai', opt.intro); }
+    };
+  }
+
+  /* ── 도움 모드 패널 ───────────────────────────────────────────────
+     모달이 아니라 **떠 있는 패널**입니다. 우측 하단에 도킹되고, 열려 있는
+     동안에도 지도를 클릭하거나 시간대를 바꾸는 등 대시보드를 그대로 조작할 수
+     있습니다 — 배경을 덮는 .veil 이 없고, pointer-events 도 패널 자신에게만
+     걸립니다. 그래서 role="dialog" aria-modal="true" 대신 role="region" 을
+     씁니다 — 포커스를 가두지 않고, 스크린 리더에도 '모달' 이라고 알리지 않습니다.
+     (실제 모달 — 보고서·안내 — 은 그대로 .modal/.sheet 를 씁니다. 그 둘은 초안
+     검토·설명처럼 한 가지에 집중해야 하는 화면이라 가리는 것이 맞습니다.) */
+  var helpPanel = null, helpChat = null;
+
+  function buildHelp() {
+    if (helpPanel) return helpPanel;
+    var p = C.el('div', {
+      'class': 'chat-panel', id: 'chat-panel',
+      role: 'region', 'aria-label': 'AI 도우미 채팅'
+    });
+    p.innerHTML =
+      '<div class="cp-head">' +
+      '<img src="assets/img/koriyo.png" alt="" width="56" height="56" decoding="async" ' +
+      'onerror="this.remove()">' +
+      '<b>AI 도우미</b>' +
+      '<button class="cp-x" type="button" data-chat-close aria-label="닫기">' +
+      C.icon('close', 16) + '</button></div>' +
+      '<div class="cp-sub">화면·지표에 대해 묻거나, 보고 싶은 곳으로 옮겨 달라고 하세요</div>' +
+      '<div class="cm" data-chat-mount></div>';
+    document.body.appendChild(p);
+    $('[data-chat-close]', p).addEventListener('click', closeHelp);
+    /* Esc 는 편의상 둡니다 — 포커스를 가두지 않으므로 실수로 다른 곳을 조작하다
+       닫힐 일은 없습니다(패널 안에 초점이 있을 때만 의미가 있는 키). */
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && p.classList.contains('open')) closeHelp();
+    });
+
+    helpChat = create({
+      mode: 'help',
+      mount: $('[data-chat-mount]', p),
+      placeholder: '예: MI가 뭐야? · 심야로 바꿔줘 · 향남읍 보여줘',
+      intro: '이 화면의 지표와 사용법을 묻거나, "심야로 바꿔줘"처럼 화면을 옮겨 달라고 하셔도 됩니다. ' +
+             '이 창을 열어 둔 채로 지도·시간대 탭 등 다른 화면도 그대로 쓰실 수 있습니다. ' +
+             '수치는 지금 불러온 데이터에서만 답합니다.',
+      getBody: function () {
+        var h = HW.chatActions || {};
+        var ctx = h.context ? h.context() : {};
+        /* 시뮬레이션 화면에는 chatActions 가 없어 액션이 조용히 무시됩니다.
+           그걸 모델에 알려 주지 않으면 "심야로 바꿨습니다" 라고 말해 놓고 화면은
+           그대로인 상태가 됩니다 — 그것이 거짓말이 되지 않게 미리 못박습니다. */
+        ctx.화면조작 = h.setPeriod ? '가능' : '불가 — 이 화면에서는 답변만 하고, '
+          + '화면 이동이 필요하면 대시보드로 가라고 안내하세요';
+        return { period: h.period ? h.period() : 'am', context: ctx };
+      }
+    });
+    helpPanel = p;
+    return p;
+  }
+
+  function openHelp() {
+    buildHelp().classList.add('open');
+    document.body.classList.add('chat-open');   /* 토스트가 패널과 안 겹치게(§CSS) */
+    showBubble(false);
+    if (helpChat) helpChat.focus();
+  }
+  function closeHelp() {
+    if (helpPanel) helpPanel.classList.remove('open');
+    document.body.classList.remove('chat-open');
+    showBubble(true);      /* 다시 대기 상태 — 말풍선이 돌아옵니다 */
+  }
+  function toggleHelp() {
+    if (helpPanel && helpPanel.classList.contains('open')) closeHelp();
+    else openHelp();
+  }
+
+  /* ── 우측 하단 런처 ───────────────────────────────────────────────
+     다른 사이트의 상담 챗봇과 같은 자리·같은 동작입니다. 처음 오는 사람이
+     "여기 물어볼 데가 있다"를 배우지 않고도 알아보는 자리라, 서랍 안쪽보다
+     이쪽이 맞습니다.
+
+     아이콘은 화성시 마스코트 코리요(AI 코리요)입니다 — 시가 발행한 도구라는
+     이 화면의 세계관과 맞고, 일반 로봇 아이콘보다 화성시 것임이 분명해집니다. */
+  var launcher = null, bubbleEl = null;
+
+  /** 말풍선은 상시 표시입니다 — 한 번 보고 마는 안내가 아니라, 패널이 닫혀
+   *  있는 동안은 늘 "무엇을 도와드릴까요?" 가 떠 있습니다. 그래서 세션에 한
+   *  번만 보여주고 마는 장치(예전의 sessionStorage 기억)를 두지 않습니다. */
+  function showBubble(v) {
+    if (bubbleEl) bubbleEl.classList.toggle('show', v);
+  }
+
+  function mountLauncher() {
+    if (launcher || !global.document.body) return;
+    var wrap = C.el('div', { 'class': 'chat-launch', 'data-chat-launch': '' });
+    wrap.innerHTML =
+      '<div class="cl-bubble" data-bubble><span>무엇을 도와드릴까요?</span></div>' +
+      '<button class="cl-btn" type="button" data-launch aria-label="AI 도우미 열기·닫기">' +
+      /* 이미지를 못 받으면(파일 누락·오프라인) 버튼이 빈 원으로 남지 않게
+         말풍선 아이콘으로 되돌립니다. */
+      '<img src="assets/img/koriyo.png" alt="" width="320" height="320" decoding="async" ' +
+      'onerror="this.remove();this.parentNode.classList.add(\'noimg\')">' +
+      '<span class="cl-fallback" aria-hidden="true">' + C.icon('chat', 28) + '</span>' +
+      '</button>';
+    global.document.body.appendChild(wrap);
+    launcher = wrap;
+    bubbleEl = $('[data-bubble]', wrap);
+
+    /* 런처는 토글입니다 — 패널이 이제 화면을 다 안 가리므로, 열려 있는 상태에서
+       버튼을 또 누르면 닫는 게 자연스럽습니다(다시 열려면 한 번 더 누르면 됨). */
+    $('[data-launch]', wrap).addEventListener('click', toggleHelp);
+    /* 말풍선 자체를 누르면 대화를 엽니다(닫는 동작은 아이콘 버튼이 맡습니다) */
+    bubbleEl.addEventListener('click', openHelp);
+
+    /* 첫 페인트(지도·KPI)가 자리 잡을 시간만 살짝 두고, 그 뒤로는 패널이 닫혀
+       있는 한 계속 보입니다 — openHelp/closeHelp 가 열고 닫을 때마다 토글합니다. */
+    global.setTimeout(function () { showBubble(true); }, 500);
+  }
+
+  if (global.document.readyState === 'loading') {
+    global.document.addEventListener('DOMContentLoaded', mountLauncher);
+  } else {
+    mountLauncher();
+  }
+
+  HW.chat = { create: create, openHelp: openHelp, closeHelp: closeHelp, runAction: runAction };
+})(window);

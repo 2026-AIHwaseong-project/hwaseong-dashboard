@@ -1127,6 +1127,49 @@
   }
 
   /* =====================================================================
+   * 8-3. 챗봇이 화면을 옮길 때 쓰는 통로
+   *
+   * chat.js 는 이 네 개만 부릅니다. 액션 종류가 셋뿐이라(period·layer·show)
+   * 여기 노출하는 것도 그만큼입니다 — 모델에게 화면 전체를 열어 주지 않습니다.
+   *
+   * search 가 핵심입니다. 검색창의 go() 를 그대로 쓰므로 격자ID·버스번호·읍면동·
+   * 정류장 5단 우선순위가 공짜로 따라옵니다. 못 찾으면 기존 토스트가 뜹니다.
+   * =================================================================== */
+  function wireChatActions() {
+    HW.chatActions = {
+      period: function () { return S.period; },
+      setPeriod: loadPeriod,
+      setLayer: function (k) {
+        S.map.setLayer(k);
+        /* 지도만 바꾸면 층 버튼이 이전 상태로 남아 화면이 서로 다른 말을 합니다 */
+        $$('#layers [data-layer]').forEach(function (b) {
+          b.classList.toggle('on', b.getAttribute('data-layer') === k);
+        });
+      },
+      search: function (q) {
+        var inp = $('#regionSearch');
+        if (!inp) return;
+        inp.value = q;
+        var go = $('#regionGo');
+        if (go) go.click();
+      },
+      /* 모델이 "지금 무엇을 보고 있는지" 알아야 "이 격자는 왜 빨간가" 에 답합니다 */
+      context: function () {
+        var c = S.selectedCellId ? cellById(S.selectedCellId) : null;
+        return {
+          시간대: S.periodName,
+          지도기준: S.map ? S.map.getLayer() : null,
+          선택한격자: c ? { id: c.id, name: c.name, region: c.region, mi: c.mi,
+                            demand: c.demand, supply: c.supply, coverage: c.coverage,
+                            수단: c.actionLabel } : null,
+          선택한정류장: S.selectedStopId || null,
+          보고있는노선: S.map && S.map.getRouteFocus ? S.map.getRouteFocus() : null
+        };
+      }
+    };
+  }
+
+  /* =====================================================================
    * 9. 컨트롤 배선
    * =================================================================== */
   function wireControls() {
@@ -1161,6 +1204,7 @@
     });
     wireMapSearch();
     wireRouteStripClicks();
+    wireChatActions();
 
     $('#regionTbl').addEventListener('click', function (e) {
       var th = e.target.closest('th[data-sort]');

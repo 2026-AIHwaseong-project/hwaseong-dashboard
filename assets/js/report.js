@@ -552,6 +552,10 @@
       '<button class="xbtn" data-close type="button" aria-label="닫기">' + HW.icon('close', 17) + '</button>' +
       '</header>' +
       '<div class="body" data-body></div>' +
+      /* 초안을 말로 고치는 줄. 본문과 내려받기 사이에 둡니다 — 읽고(본문) → 고치고
+         (여기) → 내보내는(푸터) 순서가 그대로 화면 순서가 됩니다.
+         초안이 없을 때는 아래 setChatEnabled 가 잠급니다. */
+      '<div class="cm cm-report" data-chat hidden></div>' +
       '<footer>' +
       '<span class="hs" data-foot></span>' +
       '<span class="sp"></span>' +
@@ -719,6 +723,7 @@
       }
       currentDraft = draft;
       renderDraft(draft);
+      mountChat();                 /* 초안이 생긴 뒤에야 고칠 것이 있습니다 */
       setBusy(false, '');
       C.$('[data-foot]', m).innerHTML =
         (CONFIG.EXPORT_MODE === 'client'
@@ -729,6 +734,38 @@
       setBusy(false, '');
       body.innerHTML = '<div class="errbox"><b>보고서 초안을 생성하지 못했습니다.</b><br>' +
         esc(HW.api.humanize(err)) + '</div>';
+    });
+  }
+
+  /* ── 초안을 말로 고치기 ───────────────────────────────────────────
+     chat.js 의 같은 모듈을 mode='report' 로 씁니다. 응답의 draft 로 currentDraft 를
+     갈아끼우고 기존 renderDraft 를 다시 부르면 본문·표·내려받기가 모두 새 초안을
+     씁니다(내려받기는 currentDraft 를 읽으므로 따로 손댈 것이 없습니다). */
+  var reportChat = null;
+
+  function mountChat() {
+    var box = modal && C.$('[data-chat]', modal);
+    if (!box || !HW.chat) return;
+    box.hidden = false;
+    if (reportChat) return;        /* 한 번만 만들고 이후엔 이력만 이어집니다 */
+    reportChat = HW.chat.create({
+      mode: 'report',
+      mount: box,
+      placeholder: '예: 고령층 관점을 더 강조해줘 · 개요를 3문장으로 줄여줘',
+      intro: '초안을 어떻게 고칠지 말로 지시하세요. 수치는 바꾸지 않고 강조·순서·어조·분량만 고칩니다.',
+      getBody: function () {
+        return {
+          period: (HW.chatActions && HW.chatActions.period && HW.chatActions.period()) || 'am',
+          context: {},
+          draft: currentDraft
+        };
+      },
+      onDraft: function (d) {
+        /* 모델이 sections 만 돌려주므로 나머지(제목·표·meta)는 지금 것을 지킵니다 */
+        if (!currentDraft || !d || !Array.isArray(d.sections)) return;
+        currentDraft.sections = d.sections;
+        renderDraft(currentDraft);
+      }
     });
   }
 
