@@ -429,6 +429,10 @@ body.chat-open .toasts{right:auto;left:16px}
   border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink)}
 .cm-in:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
 .cm-in:disabled{opacity:.6}
+/* 보내기 버튼 높이를 입력칸에 맞춘다 — .btn.sm 은 다른 화면에서도 쓰는 공용
+   버튼이라 거기는 그대로 두고(패딩 5px 대 입력칸 8px 라 버튼이 눈에 띄게 낮았다)
+   이 자리에서만 입력칸 높이에 맞춰 늘린다. */
+.cm-bar .btn{align-self:stretch}
 /* 도움 패널 안에 얹힐 때 — 패널 자체가 높이를 제한하므로(.chat-panel 의
    max-height) 로그는 남는 공간을 그대로 채웁니다. 고정 340px 을 두면 패널이
    낮은 화면(모바일)에서 로그가 입력줄보다 아래로 밀려 잘립니다. */
