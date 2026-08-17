@@ -28,46 +28,88 @@
    *      index.html?server=https://xxxx.ngrok-free.app
    *   한 번 열면 브라우저에 기억되고, ?server= 만 붙이면 지워집니다.
    * ================================================================== */
-  var SERVER_URL = 'https://15-165-83-80.sslip.io';
+  /* ────────────────────────────────────────────────────────────────
+     후보 목록 — 위에서부터 순서대로 두드려 보고 **먼저 응답하는 곳**에 붙습니다.
+
+     한 줄만 두던 때는 그 한 곳이 죽으면 화면 전체가 죽었습니다. 배포된 EC2 를
+     박아 두면 로컬에서 백엔드를 띄워 놓고도 EC2 로 나가고, 반대로 localhost 를
+     박아 두면 배포본이 죽습니다. 그래서 순서만 정해 두고 실제 연결은 탐색으로
+     정합니다.
+
+     '' 는 **자동 결정**입니다(아래 autoBase 규칙 — 대개 같은 원점).
+     이 항목을 맨 위에 두는 이유:
+       · python main.py 로 띄워 /app/ 을 열면 같은 원점이 곧 백엔드라 즉시 맞습니다.
+       · Cloudflare Pages 배포본에서는 같은 원점에 API 가 없어 빠르게 404 로
+         떨어지고 다음 후보(EC2)로 넘어갑니다. 실패 비용이 한 번, 그것도 짧습니다.
+     즉 로컬이 항상 옳게 붙고, 배포본은 한 번 헛다리를 짚는 대신 항상 붙습니다.
+
+     ⚠️ 터널 주소(ngrok 등)는 여기에 적어 커밋하지 마세요. 재시작마다 바뀝니다.
+        시연 때는 코드를 고치지 말고 ?server= 를 쓰세요(아래).
+     ──────────────────────────────────────────────────────────────── */
+  var SERVER_URLS = [
+    '',                                 // 자동 — 백엔드가 /app/ 으로 직접 서빙 중일 때
+    'https://15-165-83-80.sslip.io',    // 배포된 EC2 (Cloudflare Pages 연동용 HTTPS)
+    'http://localhost:8000'             // 로컬 백엔드
+  ];
+
+  /* 하위 호환 — 예전처럼 한 곳만 쓰고 싶으면 여기에 적습니다.
+     값이 있으면 탐색을 건너뛰고 그 주소로 고정합니다. */
+  var SERVER_URL = '';
 
   /* URL 쿼리(?server=)로 덮어쓰기. 코드를 안 고치고 시연 대상을 바꾸기 위한 것.
      값이 있으면 localStorage 에 기억하고, 빈 값(?server=)이면 지웁니다.
      우선순위: ?server=(저장된 주소) → 위의 SERVER_URL → 자동 결정.
      사용자가 명시한 주소가 하드코딩보다 우선입니다 — 예전엔 순서가 반대라
      SERVER_URL 이 채워져 있으면 ?server= 가 조용히 무시됐습니다. */
+  /* 명시적으로 고정된 주소인가 — ?server= · localStorage · 위의 SERVER_URL.
+     고정이면 탐색하지 않습니다. 사용자가 "이 서버를 봐라"라고 말한 것을
+     탐색이 뒤집으면 안 됩니다. */
+  var PINNED = '';
   try {
     var _q = new URLSearchParams(location.search).get('server');
     if (_q !== null) {
       if (_q) { localStorage.setItem('hw.serverUrl', _q); }
       else { localStorage.removeItem('hw.serverUrl'); }
     }
-    SERVER_URL = localStorage.getItem('hw.serverUrl') || SERVER_URL || '';
-  } catch (e) { /* file:// 등에서 localStorage 가 막히면 자동 결정으로 간다 */ }
+    PINNED = localStorage.getItem('hw.serverUrl') || SERVER_URL || '';
+  } catch (e) { PINNED = SERVER_URL || ''; }
+
+  /* 자동 결정 규칙. 후보 목록의 '' 항목이 이 값으로 바뀝니다. */
+  function autoBase() {
+    try {
+      if (location.protocol === 'file:') return 'http://localhost:8000';
+      /* 8000 이거나 포트 표기가 없으면(80/443 — 터널·배포) 백엔드가 직접
+         서빙 중인 것으로 보고 같은 원점을 씁니다. 그 외(개발 서버)는 :8000. */
+      if (location.port === '8000' || !location.port) return '';
+      return location.protocol + '//' + location.hostname + ':8000';
+    } catch (e) { return 'http://localhost:8000'; }
+  }
+
+  /* ngrok 무료 터널은 브라우저 요청 앞에 경고 페이지(HTML)를 끼워 넣어 JSON
+     파싱이 깨집니다. 이 헤더가 있으면 경고 없이 통과합니다. 주소가 탐색으로
+     정해지므로 고른 뒤에 다시 계산합니다. */
+  function headersFor(url) {
+    return /ngrok/.test(url || '') ? { 'ngrok-skip-browser-warning': 'true' } : {};
+  }
 
   var CONFIG = {
 
     /* ------------------------------------------------------------------
      * [1] 서버 주소
-     *   위의 SERVER_URL 이 우선합니다. 비워 두면 자동 결정.
+     *   고정 주소가 있으면 그것, 없으면 일단 자동 결정값으로 시작합니다.
+     *   실제 연결 대상은 CONFIG.ready() 가 후보를 두드려 정한 뒤 갈아끼웁니다.
+     *   (CONFIG.url 이 호출 시점에 이 값을 읽으므로 갈아끼우면 즉시 반영됩니다.)
      * ---------------------------------------------------------------- */
-    BASE_URL: SERVER_URL || (function () {
-      try {
-        if (location.protocol === 'file:') return 'http://localhost:8000';
-        /* 8000 이거나 포트 표기가 없으면(80/443 — 터널·배포) 백엔드가 직접
-           서빙 중인 것으로 보고 같은 원점을 씁니다. 그 외(개발 서버)는 :8000. */
-        if (location.port === '8000' || !location.port) return '';
-        return location.protocol + '//' + location.hostname + ':8000';
-      } catch (e) { return 'http://localhost:8000'; }
-    })(),
+    BASE_URL: PINNED || autoBase(),
+
+    /* 후보 목록과 고정 여부 — 화면에서 상태를 보여줄 때 씁니다 */
+    SERVER_URLS: SERVER_URLS,
+    SERVER_PINNED: !!PINNED,
 
     /* ------------------------------------------------------------------
-     * [1-2] 추가 요청 헤더
-     *   ngrok 무료 터널은 브라우저 요청 앞에 경고 페이지(HTML)를 끼워 넣어
-     *   JSON 파싱이 깨집니다. 이 헤더가 있으면 경고 없이 바로 통과합니다.
+     * [1-2] 추가 요청 헤더 (탐색 후 재계산됩니다)
      * ---------------------------------------------------------------- */
-    EXTRA_HEADERS: /ngrok/.test(SERVER_URL)
-      ? { 'ngrok-skip-browser-warning': 'true' }
-      : {},
+    EXTRA_HEADERS: headersFor(PINNED),
 
     /* API 경로 접두사. 백엔드 라우팅에 맞춰 바꾸세요. */
     API_PREFIX: '/api/v1',
@@ -261,6 +303,102 @@
     var pre = (CONFIG.API_PREFIX || '').replace(/\/+$/, '');
     var p = path.charAt(0) === '/' ? path : '/' + path;
     return base + pre + p;
+  };
+
+  /* ====================================================================
+   * 서버 후보 탐색 — 위에서부터 두드려 먼저 응답하는 곳에 붙습니다.
+   *
+   *   CONFIG.ready()      → Promise<선택된 주소>. api.js 가 첫 호출 전에 기다립니다.
+   *   CONFIG.useServer(u) → 탐색을 건너뛰고 u 로 고정 (도구·테스트용)
+   *
+   * 판정은 "200 이 왔다"로는 부족합니다. 정적 호스팅은 없는 경로에도 index.html
+   * 을 200 으로 돌려주는 일이 흔해서, 그걸 서버로 착각하면 그 뒤 모든 호출이
+   * 이상한 데로 나갑니다. 그래서 **우리 meta 응답의 모양까지** 확인합니다.
+   * ================================================================== */
+  var PROBE_PATH = '/meta';        // API_PREFIX 뒤에 붙습니다
+  var PROBE_TIMEOUT_MS = 2500;     // 죽은 후보에서 오래 붙들리지 않게
+
+  function probe(base) {
+    var pre = (CONFIG.API_PREFIX || '').replace(/\/+$/, '');
+    var url = (base || '').replace(/\/+$/, '') + pre + PROBE_PATH;
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, PROBE_TIMEOUT_MS) : null;
+    return fetch(url, {
+      headers: headersFor(base),
+      signal: ctrl ? ctrl.signal : undefined,
+      credentials: 'same-origin'
+    }).then(function (res) {
+      if (timer) clearTimeout(timer);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).then(function (j) {
+      /* 우리 백엔드가 맞는지 — meta 는 반드시 periods 배열을 답니다 */
+      if (!j || !Array.isArray(j.periods)) throw new Error('meta 모양이 아님');
+      return base;
+    })['catch'](function (e) {
+      if (timer) clearTimeout(timer);
+      throw e;
+    });
+  }
+
+  var _ready = null;
+
+  /** 탐색을 건너뛰고 주소를 고정합니다(도구·테스트). */
+  CONFIG.useServer = function (url) {
+    CONFIG.BASE_URL = url || '';
+    CONFIG.EXTRA_HEADERS = headersFor(url);
+    CONFIG.SERVER_PINNED = true;
+    _ready = Promise.resolve(CONFIG.BASE_URL);
+    return _ready;
+  };
+
+  /** 후보를 순서대로 두드려 첫 성공에 붙습니다. 여러 번 불러도 한 번만 돕니다. */
+  CONFIG.ready = function () {
+    if (_ready) return _ready;
+
+    /* 고정 주소가 있거나 fetch 가 없으면 탐색하지 않습니다 */
+    if (CONFIG.SERVER_PINNED || typeof fetch !== 'function') {
+      _ready = Promise.resolve(CONFIG.BASE_URL);
+      return _ready;
+    }
+
+    /* '' 는 자동 결정값으로 바꾸고, 같은 주소가 겹치면 한 번만 둡니다 */
+    var seen = {}, list = [];
+    for (var i = 0; i < SERVER_URLS.length; i++) {
+      var u = SERVER_URLS[i] === '' ? autoBase() : SERVER_URLS[i];
+      if (seen[u] === undefined) { seen[u] = 1; list.push(u); }
+    }
+
+    var tried = [];
+    _ready = list.reduce(function (chain, base) {
+      return chain['catch'](function () {
+        return probe(base)['catch'](function (e) {
+          tried.push((base || '(같은 원점)') + ' — ' + (e && e.message || e));
+          throw e;
+        });
+      });
+    }, Promise.reject())
+      .then(function (base) {
+        CONFIG.BASE_URL = base;
+        CONFIG.EXTRA_HEADERS = headersFor(base);
+        if (tried.length) {
+          /* 어디를 건너뛰고 어디에 붙었는지 남깁니다 — 붙긴 붙었는데 엉뚱한
+             서버인 상황을 콘솔만 보고도 알 수 있어야 합니다. */
+          console.info('[config] 서버 후보 ' + tried.length + '곳 실패 후 연결: ' +
+            (base || '(같은 원점)') + '\n  건너뜀: ' + tried.join('\n         '));
+        }
+        return base;
+      })['catch'](function () {
+        /* 전부 실패 — 첫 후보를 그대로 두고 진행합니다. api.js 가 평소의
+           "서버에 연결하지 못했습니다" 오류를 내도록 두는 편이, 여기서
+           조용히 삼키는 것보다 낫습니다. */
+        console.warn('[config] 서버 후보를 모두 두드렸지만 응답이 없습니다.\n  ' +
+          tried.join('\n  '));
+        CONFIG.BASE_URL = list[0];
+        CONFIG.EXTRA_HEADERS = headersFor(list[0]);
+        return CONFIG.BASE_URL;
+      });
+    return _ready;
   };
 
   global.HW = global.HW || {};

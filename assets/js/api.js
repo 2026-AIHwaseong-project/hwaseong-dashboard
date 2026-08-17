@@ -121,6 +121,16 @@
   function call(opId, params, body, opts) {
     var op = OPS[opId];
     if (!op) return Promise.reject(ApiError('정의되지 않은 오퍼레이션: ' + opId, 0, opId));
+    /* 서버 주소가 정해진 뒤에 나갑니다. config.js 가 후보를 순서대로 두드려
+       첫 응답에 붙이고, 그 결과를 CONFIG.BASE_URL 에 씁니다(CONFIG.url 이
+       호출 시점에 읽으므로 여기서 기다리기만 하면 됩니다).
+       ready() 는 한 번만 실제로 돌고 이후에는 같은 Promise 를 돌려줍니다.
+       구버전 config.js 와 섞여도 죽지 않게 존재 여부를 봅니다. */
+    if (typeof CONFIG.ready === 'function') {
+      return CONFIG.ready().then(function () {
+        return httpCall(op, opId, params, body, opts);
+      });
+    }
     return httpCall(op, opId, params, body, opts);
   }
 
