@@ -1111,7 +1111,13 @@
       savedAt: C.nowStamp(),
       period: S.period,
       budgetKrw: S.budget,
-      placements: S.placements.map(function (p) { return { type: p.type, cellId: p.cellId, count: p.count }; }),
+      placements: S.placements.map(function (p) {
+        return { type: p.type, cellId: p.cellId, count: p.count,
+          fromAI: p.fromAI, rank: p.rank, rationale: p.rationale };
+      }),
+      /* AI 추천으로 짠 시나리오면 그 설명(rec-box)도 함께 저장합니다 — 수동
+         배치였으면 애초에 S.recommendation 이 null 이라 그대로 null 로 남습니다. */
+      recommendation: S.recommendation || null,
       summary: {
         costKrw: S.result.cost.totalKrw,
         resolvedTrips: (S.result.effectiveness || {}).resolvedTripsPerDay,
@@ -1165,11 +1171,12 @@
     if (!s) return;
     if (S.placements.length &&
         !confirm('불러오면 현재 배치 ' + S.placements.length + '건이 교체됩니다. 계속할까요?')) return;
-    /* 이전 추천 박스가 남으면 배치 목록과 안 맞습니다 — 추천 상태를 접습니다 */
-    S.recommendation = null;
+    /* 저장된 추천 설명(rec-box)을 함께 복원합니다 — 수동 배치로 저장한
+       시나리오는 애초에 recommendation 이 없어 null 그대로 남습니다. */
+    S.recommendation = s.recommendation || null;
     S.recEdited = false;
     var rbtn = $('#btnRecommend');
-    if (rbtn) rbtn.innerHTML = HW.icon('spark') + 'AI 추천 배치안';
+    if (rbtn) rbtn.innerHTML = HW.icon('spark') + (S.recommendation ? '추천 다시 받기' : 'AI 추천 배치안');
     S.name = s.name;
     S.period = s.period || S.period;
     S.budget = s.budgetKrw || S.budget;
@@ -1178,7 +1185,10 @@
        기준 KPI 변화는 0 인 상태가 됩니다. */
     S.placements = (s.placements || [])
       .filter(function (p) { return !S.area || S.area.has(p.cellId); })
-      .map(function (p) { return { type: p.type, cellId: p.cellId, count: p.count }; });
+      .map(function (p) {
+        return { type: p.type, cellId: p.cellId, count: p.count,
+          fromAI: p.fromAI, rank: p.rank, rationale: p.rationale };
+      });
     if (S.area && (s.placements || []).length !== S.placements.length) {
       C.toast('영역 밖 배치 ' + ((s.placements || []).length - S.placements.length) +
         '건은 불러오지 않았습니다.', 'err', 5000);
