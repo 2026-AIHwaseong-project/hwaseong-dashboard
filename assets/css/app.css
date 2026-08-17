@@ -1422,6 +1422,9 @@ button.rhead:hover .rkind{border-color:var(--brand)}
     같은 함정: 아래 .area-box 는 non-scaling-stroke 에 stroke-width:1.5 로 올바릅니다.) */
 .dongline{fill:none;stroke:var(--ink2);stroke-width:1.1px;stroke-opacity:.5;
   stroke-linejoin:round;pointer-events:none;vector-effect:non-scaling-stroke}
+/* 권역 요약에서 고른 읍면동 — 격자별 테두리 대신 이미 있는 경계선 하나를
+   굵게 세운다. --ink 라 라이트에선 검게, 다크에선 밝게 자동으로 맞는다. */
+.dongline.active{stroke:var(--ink);stroke-width:2.6px;stroke-opacity:.9}
 
 
 /* ===========================================================================

@@ -146,7 +146,7 @@
       /* 2단계: 읍면동 경계선. 격자 위에 얹어 어디까지가 어느 동인지 보이게 합니다. */
       h += '<g data-dongline>';
       regions.forEach(function (r) {
-        h += '<path class="dongline" data-dong="' + esc(r.code) + '" d="' + ringsPath(r.rings) + '"/>';
+        h += '<path class="dongline" data-dong="' + esc(r.code) + '" data-name="' + esc(r.name) + '" d="' + ringsPath(r.rings) + '"/>';
       });
       h += '</g>';
 
@@ -1771,6 +1771,13 @@
         state.eligible = idSet || null;
         state.eligibleNote = note || '';
         paint();
+      },
+      /** 권역 요약에서 고른 읍면동의 경계선만 굵게 — 격자별 테두리 대신
+       *  이미 있는 읍면동 경계선 하나를 강조해 선 체계를 늘리지 않는다. */
+      setFocusRegion: function (name) {
+        Array.prototype.forEach.call(gDongLine.children, function (p) {
+          p.classList.toggle('active', !!name && p.getAttribute('data-name') === name);
+        });
       },
       /** false 로 두면 정류장이 격자 클릭을 가로채지 않습니다 */
       setStopsInteractive: function (v) { state.stopsInteractive = !!v; applyStopsInteractive(); },

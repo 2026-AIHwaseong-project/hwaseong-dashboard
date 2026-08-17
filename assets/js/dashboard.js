@@ -373,6 +373,7 @@
   /** 권역 행을 누르면 그 권역 격자만 지도에서 진하게 표시합니다 */
   function focusRegion(name) {
     S.focusRegion = (S.focusRegion === name) ? null : name;
+    S.map.setFocusRegion(S.focusRegion);
     if (!S.focusRegion) {
       S.map.setEligible(null);
     } else {
