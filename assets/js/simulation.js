@@ -1218,7 +1218,57 @@
   /* =====================================================================
    * 7. 배선
    * =================================================================== */
+  /* 도움 챗봇(chat.js)이 "지금 화면" 을 읽는 자리 — dashboard.js 와 같은 계약입니다.
+     이게 없으면 chat.js 의 getBody() 가 빈 컨텍스트만 보내서, 시나리오를 짜 놓고
+     "설명해줘" 라고 물어도 모델은 배치·예산·효과를 하나도 못 봅니다. */
+  function wireChatActions() {
+    HW.chatActions = {
+      period: function () { return S.period; },
+      setPeriod: function (pid) {
+        S.period = pid;
+        $$('#periods [data-period]').forEach(function (x) {
+          var on = x.getAttribute('data-period') === S.period;
+          x.classList.toggle('on', on);
+          x.setAttribute('aria-selected', String(on));
+        });
+        paintAll();
+      },
+      setLayer: function (k) {
+        S.map.setLayer(k);
+        $$('#layers [data-layer]').forEach(function (b) {
+          b.classList.toggle('on', b.getAttribute('data-layer') === k);
+        });
+      },
+      /* 모델이 지금 짠 시나리오를 봐야 "이 배치 설명해줘" 에 답합니다.
+         S.result 전체(격자별 배열)는 안 싣습니다 — 크기도 크고, 필요한 건
+         요약 수치뿐입니다(saveCurrent 가 저장하는 summary 와 같은 선택). */
+      context: function () {
+        var b = currentPeriodBlock();
+        var eff = (S.result && S.result.effectiveness) || {};
+        return {
+          시나리오이름: S.name,
+          시간대: periodName(S.period),
+          예산한도: S.budget,
+          배치목록: S.placements.map(function (p) {
+            return { 수단: TYPE_KO[p.type] || p.type, 격자: p.cellName || p.cellId, 수량: p.count };
+          }),
+          AI추천기준: S.recommendation ? (S.recommendation.methodLabel || null) : null,
+          AI추천설명: S.recommendation ? (S.recommendation.methodNote || null) : null,
+          효과: S.result ? {
+            집행예정액: S.result.cost && S.result.cost.totalKrw,
+            일해소통행: eff.resolvedTripsPerDay,
+            통행당사업비: eff.krwPerTripPerDay,
+            이시간대_사각지대_기준선: b ? b.baseline.needCells : null,
+            이시간대_사각지대_배치후: b ? b.kpi.needCells : null
+          } : null,
+          선택한격자: S.selectedCellId
+        };
+      }
+    };
+  }
+
   function wireControls() {
+    wireChatActions();
     $('#tools').addEventListener('click', function (e) {
       var b = e.target.closest('[data-tool]');
       if (!b) return;
