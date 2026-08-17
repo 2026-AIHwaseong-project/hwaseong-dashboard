@@ -5,8 +5,9 @@
  *    help   서랍 → "AI 도우미". 화면 질문에 답하고 화면을 옮겨 줍니다.
  *    report 보고서 모달 안. 현재 초안을 지시대로 고쳐 씁니다.
  *
- *  이력은 **여기(클라이언트)가 들고 있습니다.** 서버는 무상태라 새로고침하면
- *  대화가 사라지는 대신, 다중 탭에서 남의 대화가 섞일 일이 없습니다.
+ *  이력은 **여기(클라이언트)가 들고 있습니다.** 서버는 무상태입니다. 도움 모드는
+ *  sessionStorage 에도 남겨 둡니다 — 그래서 새로고침·화면 이동에도 이어지지만,
+ *  탭을 닫으면 사라지고 다른 탭과도 안 섞입니다(sessionStorage 는 탭 전용).
  *
  *  ⚠️ fetch 를 직접 부르지 않습니다 — api.js 를 거칩니다(그 파일 머리 주석의 규칙).
  * ========================================================================= */
@@ -18,15 +19,18 @@
 
   var MAX_TURNS = 10;      // 서버로 보내는 이력 상한. 백엔드도 같은 값으로 자릅니다.
   var MAX_CHARS = 2000;    // 입력 한 번의 상한
+  var HIST_KEY = 'hw.chatHist.help';     // 도움 모드 대화 이력
+  var OPEN_KEY = 'hw.chatOpen';          // 패널 열림 상태
+  var PENDING_KEY = 'hw.chatPending';    // 화면 이동 뒤 이어서 실행할 액션 1개
 
   /* ── 화면 조작 액션 ────────────────────────────────────────────────
-     모델이 임의 코드를 실행하지 않습니다. 화이트리스트 3종이고 값도 여기서 검증합니다.
-     셋 다 화면 상태만 바꾸므로 되돌리기는 사용자가 클릭 한 번으로 합니다. */
+     모델이 임의 코드를 실행하지 않습니다. 화이트리스트고 값도 여기서 검증합니다.
+     전부 화면 상태만 바꾸므로 되돌리기는 사용자가 클릭 한 번으로 합니다. */
   var PERIODS = ['am', 'day', 'pm', 'night'];
 
   function runAction(act) {
     if (!act || act.type === 'none') return null;
-    var h = HW.chatActions || {};      /* dashboard.js 가 채웁니다 */
+    var h = HW.chatActions || {};      /* dashboard.js · simulation.js 가 채웁니다 */
     if (act.type === 'period') {
       if (PERIODS.indexOf(act.value) < 0 || !h.setPeriod) return null;
       h.setPeriod(act.value);
@@ -42,7 +46,43 @@
       h.search(act.query.trim());
       return '지도를 옮겼습니다';
     }
+    if (act.type === 'recommend') {
+      if (!h.recommend) return null;
+      h.recommend();
+      return 'AI 추천 배치안을 계산합니다';
+    }
+    /* 다른 화면(대시보드 ↔ 시뮬레이션)으로 실제 이동합니다. 이 사이트는 페이지
+       두 장이라 SPA 처럼 그 자리에서 바꿔치기할 수 없습니다 — 진짜 새로고침입니다.
+       page 는 CONFIG.PAGES 의 키(dashboard|simulation)만 허용되므로 임의 주소로는
+       못 갑니다. after 는 도착한 화면에서 이어서 실행할 액션 1개(예: recommend) —
+       이 함수를 그대로 재사용해 검증합니다(따로 검증 코드를 안 둡니다). */
+    if (act.type === 'nav') {
+      var pages = (HW.CONFIG && HW.CONFIG.PAGES) || {};
+      var url = pages[act.page];
+      if (!url) return null;
+      if (global.location.pathname.split('/').pop() === url) return null;   /* 이미 그 화면 */
+      var param = act.page === 'simulation' ? 'cell' : 'focus';
+      var qs = (typeof act.query === 'string' && act.query.trim())
+        ? ('?' + param + '=' + encodeURIComponent(act.query.trim())) : '';
+      if (act.after && typeof act.after === 'object') {
+        try { global.sessionStorage.setItem(PENDING_KEY, JSON.stringify(act.after)); } catch (e) { /* 무시 */ }
+      }
+      global.location.href = url + qs;
+      return '화면을 옮깁니다';
+    }
     return null;
+  }
+
+  /** 화면 이동 직전에 nav 가 남겨 둔 액션을 한 번만 꺼내 씁니다.
+   *  각 화면의 부팅 코드가 자기 HW.chatActions 가 준비된 뒤 불러야 합니다 —
+   *  여기서 타이밍을 맞추려 하지 않습니다(그 화면이 언제 준비되는지는 그 화면이 압니다). */
+  function consumePending() {
+    try {
+      var raw = global.sessionStorage.getItem(PENDING_KEY);
+      if (!raw) return null;
+      global.sessionStorage.removeItem(PENDING_KEY);
+      return JSON.parse(raw);
+    } catch (e) { return null; }
   }
 
   /* ── 채팅 한 벌 ──────────────────────────────────────────────────── */
@@ -53,10 +93,18 @@
    * @param opt.getBody   () => 추가로 실어 보낼 것 { period, context, draft }
    * @param opt.onDraft   (draft) => void — report 모드에서 초안이 바뀌었을 때
    * @param opt.intro     첫 안내 문구
+   * @param opt.persist   true 면 sessionStorage 에 이력을 남겨 새로고침·화면
+   *                      이동 뒤에도 이어집니다(도움 모드만 — report 는 초안 자체가
+   *                      화면을 나가면 사라지므로 이력만 남아 봤자 뭘 고쳤는지 안 맞습니다).
    */
   function create(opt) {
     var msgs = [];               // [{role, content}] — 서버로 보내는 것
     var busy = false;
+
+    function persist() {
+      if (!opt.persist) return;
+      try { global.sessionStorage.setItem(HIST_KEY, JSON.stringify(msgs)); } catch (e) { /* 용량 초과 등 */ }
+    }
 
     opt.mount.innerHTML =
       '<div class="cm-log" data-log role="log" aria-live="polite"></div>' +
@@ -85,7 +133,20 @@
       return d;
     }
 
-    if (opt.intro) bubble('ai', opt.intro);
+    /* 이어갈 이력이 있으면 그걸 그리고, 없으면(처음 왔거나 이력이 비었으면) 안내문. */
+    (function () {
+      if (opt.persist) {
+        try {
+          var saved = JSON.parse(global.sessionStorage.getItem(HIST_KEY) || 'null');
+          if (Array.isArray(saved) && saved.length) {
+            msgs = saved;
+            saved.forEach(function (m) { bubble(m.role === 'user' ? 'user' : 'ai', m.content); });
+            return;
+          }
+        } catch (e) { /* 저장된 값이 깨졌으면 안내문으로 폴백 */ }
+      }
+      if (opt.intro) bubble('ai', opt.intro);
+    })();
 
     function setBusy(v) {
       busy = v;
@@ -100,6 +161,7 @@
       msgs.push({ role: 'user', content: text.slice(0, MAX_CHARS) });
       /* 최근 N턴만 보냅니다(백엔드도 같은 값으로 자릅니다). 화면의 말풍선은 남깁니다. */
       if (msgs.length > MAX_TURNS * 2) msgs = msgs.slice(-MAX_TURNS * 2);
+      persist();
       setBusy(true);
 
       var extra = (opt.getBody && opt.getBody()) || {};
@@ -113,15 +175,19 @@
 
       HW.api.chat(body).then(function (res) {
         setBusy(false);
+        var reply = res.reply || '(빈 응답)';
+        /* 이력에는 답변만 남깁니다 — 액션은 이미 실행됐고, 다시 보내면 모델이
+           같은 조작을 또 하려 들 수 있습니다.
+           runAction 보다 먼저 push+persist 하는 이유 — nav 액션은 화면을 실제로
+           이동시킵니다. 그 뒤에 저장하면 이동이 이미 시작돼 저장이 못 끝날 수 있습니다. */
+        msgs.push({ role: 'assistant', content: String(res.reply || '') });
+        persist();
         var note = '';
         if (res.action) {
           var done = runAction(res.action);
           if (done) note = done;
         }
-        bubble('ai', res.reply || '(빈 응답)', note);
-        /* 이력에는 답변만 남깁니다 — 액션은 이미 실행됐고, 다시 보내면 모델이
-           같은 조작을 또 하려 들 수 있습니다. */
-        msgs.push({ role: 'assistant', content: String(res.reply || '') });
+        bubble('ai', reply, note);
         if (opt.mode === 'report' && res.draft && opt.onDraft) opt.onDraft(res.draft);
       }).catch(function (e) {
         setBusy(false);
@@ -139,7 +205,11 @@
     return {
       send: send,
       focus: function () { try { input.focus(); } catch (err) { /* 화면 밖 */ } },
-      reset: function () { msgs = []; log.innerHTML = ''; if (opt.intro) bubble('ai', opt.intro); }
+      reset: function () {
+        msgs = []; log.innerHTML = '';
+        if (opt.persist) { try { global.sessionStorage.removeItem(HIST_KEY); } catch (e) { /* 무시 */ } }
+        if (opt.intro) bubble('ai', opt.intro);
+      }
     };
   }
 
@@ -179,6 +249,7 @@
     helpChat = create({
       mode: 'help',
       mount: $('[data-chat-mount]', p),
+      persist: true,     /* 새로고침·화면 이동에도 이 대화는 이어집니다 */
       placeholder: '예: MI가 뭐야? · 심야로 바꿔줘 · 향남읍 보여줘',
       intro: '이 화면의 지표와 사용법을 묻거나, "심야로 바꿔줘"처럼 화면을 옮겨 달라고 하셔도 됩니다. ' +
              '이 창을 열어 둔 채로 지도·시간대 탭 등 다른 화면도 그대로 쓰실 수 있습니다. ' +
@@ -186,13 +257,17 @@
       getBody: function () {
         var h = HW.chatActions || {};
         var ctx = h.context ? h.context() : {};
-        /* 화면마다 지원하는 조작이 다릅니다(시뮬레이션엔 지역 검색창이 없음).
-           있는 것만 골라 알려주지 않으면, 없는 조작을 "했다"고 말해 놓고
-           화면은 그대로인 거짓 응답이 됩니다. */
-        ctx.화면조작 = h.setPeriod
-          ? '시간대·지도색 전환 가능' + (h.search ? ', 지역·정류장·노선 검색 이동도 가능'
-              : ' (지역 검색 이동은 이 화면엔 없음 — 필요하면 대시보드로 가라고 안내)')
-          : '불가 — 이 화면에서는 답변만 하고, 화면 이동이 필요하면 대시보드로 가라고 안내하세요';
+        /* 화면마다 지원하는 조작이 다릅니다(예: 시뮬레이션엔 지역 검색창이 없고,
+           대시보드엔 AI 추천이 없습니다). 있는 것만 골라 알려주지 않으면, 없는
+           조작을 "했다"고 말해 놓고 화면은 그대로인 거짓 응답이 됩니다.
+           지금 화면에 없는 기능은 nav 로 그 화면부터 옮기라고 안내합니다 —
+           대시보드 ↔ 시뮬레이션은 완전히 다른 페이지라 그렇게만 옮겨집니다. */
+        ctx.이화면에서_가능 = [
+          h.setPeriod && '시간대 전환', h.setLayer && '지도색 전환',
+          h.search && '지역·정류장·노선 검색 이동', h.recommend && 'AI 추천 배치안 계산'
+        ].filter(Boolean).join(' · ') || '없음 — 답변만 하세요';
+        ctx.다른화면_이동 = 'nav 액션 가능 — 지금 화면에 없는 기능을 물으면 이걸로 그 화면에 옮겨 놓고, ' +
+          '필요하면 도착해서 이어 할 액션(after)도 같이 실으세요';
         return { period: h.period ? h.period() : 'am', context: ctx };
       }
     });
@@ -205,11 +280,13 @@
     document.body.classList.add('chat-open');   /* 토스트가 패널과 안 겹치게(§CSS) */
     showBubble(false);
     if (helpChat) helpChat.focus();
+    try { global.sessionStorage.setItem(OPEN_KEY, '1'); } catch (e) { /* 무시 */ }
   }
   function closeHelp() {
     if (helpPanel) helpPanel.classList.remove('open');
     document.body.classList.remove('chat-open');
     showBubble(true);      /* 다시 대기 상태 — 말풍선이 돌아옵니다 */
+    try { global.sessionStorage.removeItem(OPEN_KEY); } catch (e) { /* 무시 */ }
   }
   function toggleHelp() {
     if (helpPanel && helpPanel.classList.contains('open')) closeHelp();
@@ -254,6 +331,12 @@
     /* 말풍선 자체를 누르면 대화를 엽니다(닫는 동작은 아이콘 버튼이 맡습니다) */
     bubbleEl.addEventListener('click', openHelp);
 
+    /* 열어 둔 채로 새로고침·화면 이동을 했으면 그대로 열린 채 이어집니다.
+       showBubble(true) 로 지나가지 않게 먼저 확인합니다. */
+    var wasOpen = false;
+    try { wasOpen = global.sessionStorage.getItem(OPEN_KEY) === '1'; } catch (e) { /* 무시 */ }
+    if (wasOpen) { openHelp(); return; }
+
     /* 첫 페인트(지도·KPI)가 자리 잡을 시간만 살짝 두고, 그 뒤로는 패널이 닫혀
        있는 한 계속 보입니다 — openHelp/closeHelp 가 열고 닫을 때마다 토글합니다. */
     global.setTimeout(function () { showBubble(true); }, 500);
@@ -265,5 +348,5 @@
     mountLauncher();
   }
 
-  HW.chat = { create: create, openHelp: openHelp, closeHelp: closeHelp, runAction: runAction };
+  HW.chat = { create: create, openHelp: openHelp, closeHelp: closeHelp, runAction: runAction, consumePending: consumePending };
 })(window);

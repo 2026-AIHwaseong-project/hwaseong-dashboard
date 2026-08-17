@@ -200,6 +200,10 @@
         }
       }
       paintRecScope();
+      /* 챗봇의 nav 액션이 이어서 할 일(예: recommend)을 남겨 놨으면 여기서 소비합니다.
+         wireChatActions() 뒤라 HW.chatActions.recommend 가 준비돼 있습니다. */
+      var pending = HW.chat && HW.chat.consumePending && HW.chat.consumePending();
+      if (pending) HW.chat.runAction(pending);
       return runSim();
     }).catch(fail);
   }
@@ -1239,6 +1243,9 @@
           b.classList.toggle('on', b.getAttribute('data-layer') === k);
         });
       },
+      /* 버튼과 똑같은 함수를 그대로 재사용 — 전략 인자 없이 부르면 지금
+         S.recStrategy(기본값)로 계산해, 버튼을 누른 것과 동일하게 동작합니다. */
+      recommend: requestRecommendation,
       /* 모델이 지금 짠 시나리오를 봐야 "이 배치 설명해줘" 에 답합니다.
          S.result 전체(격자별 배열)는 안 싣습니다 — 크기도 크고, 필요한 건
          요약 수치뿐입니다(saveCurrent 가 저장하는 summary 와 같은 선택). */
@@ -1246,6 +1253,7 @@
         var b = currentPeriodBlock();
         var eff = (S.result && S.result.effectiveness) || {};
         return {
+          현재화면: '시뮬레이션',
           시나리오이름: S.name,
           시간대: periodName(S.period),
           예산한도: S.budget,

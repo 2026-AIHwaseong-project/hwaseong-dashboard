@@ -117,6 +117,13 @@
         renderCellRoutes(null);
         selectStop(S.stops[0] && S.stops[0].id);
       }
+      /* 챗봇의 nav 액션으로 이 화면에 왔으면(?focus=), 기본 선택 대신 그걸 보여줍니다.
+         이어서 할 액션(after)이 있으면 — 지금은 이 화면엔 해당 사례가 없지만
+         앞으로 생길 수 있으니 — 같은 방식으로 소비합니다. */
+      var focus = new URLSearchParams(location.search).get('focus');
+      if (focus && HW.chatActions.search) HW.chatActions.search(focus);
+      var pending = HW.chat && HW.chat.consumePending && HW.chat.consumePending();
+      if (pending) HW.chat.runAction(pending);
     }).catch(fail);
   }
 
@@ -1158,6 +1165,7 @@
       context: function () {
         var c = S.selectedCellId ? cellById(S.selectedCellId) : null;
         return {
+          현재화면: '대시보드',
           시간대: S.periodName,
           지도기준: S.map ? S.map.getLayer() : null,
           선택한격자: c ? { id: c.id, name: c.name, region: c.region, mi: c.mi,
