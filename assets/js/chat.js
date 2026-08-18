@@ -173,25 +173,55 @@
       };
       if (opt.mode === 'report') body.draft = extra.draft || null;
 
-      HW.api.chat(body).then(function (res) {
+      /* 조각이 오는 대로 말풍선을 채웁니다. 첫 조각이 올 때 만들어야 빈 말풍선이
+         먼저 떠 있다가 늦게 차는 어색함이 없습니다. 스트리밍을 못 하는 환경에서는
+         onDelta 가 한 번도 안 불리고 아래 then 만 도므로 예전과 똑같이 동작합니다. */
+      var aiB = null, acc = '';
+      function onDelta(t) {
+        acc += t;
+        if (!aiB) { aiB = bubble('ai', ''); sendBtn.textContent = '쓰는 중…'; }
+        $('.cm-t', aiB).textContent = acc;
+        log.scrollTop = log.scrollHeight;
+      }
+      function addNote(el, text) {
+        var n = document.createElement('div');
+        n.className = 'cm-n';
+        n.textContent = text;          /* 모델이 준 값이 섞일 수 있어 textContent */
+        el.appendChild(n);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      HW.api.chatStream(body, onDelta).then(function (res) {
         setBusy(false);
-        var reply = res.reply || '(빈 응답)';
+        res = res || {};
+        /* 최종 reply 를 기준으로 다시 씁니다 — 스트림이 done 을 못 준 채 끊겼으면
+           그때까지 받은 글자(acc)라도 살립니다. */
+        var reply = res.reply || acc || '(빈 응답)';
         /* 이력에는 답변만 남깁니다 — 액션은 이미 실행됐고, 다시 보내면 모델이
            같은 조작을 또 하려 들 수 있습니다.
            runAction 보다 먼저 push+persist 하는 이유 — nav 액션은 화면을 실제로
            이동시킵니다. 그 뒤에 저장하면 이동이 이미 시작돼 저장이 못 끝날 수 있습니다. */
-        msgs.push({ role: 'assistant', content: String(res.reply || '') });
+        msgs.push({ role: 'assistant', content: String(res.reply || acc || '') });
         persist();
         var note = '';
         if (res.action) {
           var done = runAction(res.action);
           if (done) note = done;
         }
-        bubble('ai', reply, note);
+        if (aiB) {
+          $('.cm-t', aiB).textContent = reply;
+          if (note) addNote(aiB, note);
+        } else {
+          bubble('ai', reply, note);
+        }
         if (opt.mode === 'report' && res.draft && opt.onDraft) opt.onDraft(res.draft);
       }).catch(function (e) {
         setBusy(false);
-        bubble('ai', '요청에 실패했습니다: ' + (e && e.message ? e.message : e));
+        var why = (e && e.message) ? e.message : String(e);
+        /* 흘러오던 중 끊겼으면 받은 데까지 남기고 사유만 덧붙입니다 —
+           화면에 떠 있던 글자를 지워 버리면 무슨 일이 났는지 알 수 없습니다. */
+        if (aiB && acc) addNote(aiB, '중간에 끊겼습니다: ' + why);
+        else bubble('ai', '요청에 실패했습니다: ' + why);
       });
     }
 

@@ -72,10 +72,11 @@
     return err.message || '요청을 처리하지 못했습니다.';
   }
 
-  /* --------------------------------------------------------- 실제 호출 */
-  function httpCall(op, opId, params, body, opts) {
-    var url = CONFIG.url(buildPath(op.path, params));
-    var headers = { 'Accept': op.binary ? 'application/octet-stream, application/json' : 'application/json' };
+  /* 헤더 구성 — 일반 호출과 스트리밍 호출이 같이 씁니다. 두 곳에 복붙해 두면
+     ngrok 우회 헤더나 토큰 규칙이 바뀔 때 한쪽만 고치는 사고가 납니다. */
+  function buildHeaders(op, body, accept) {
+    var headers = { 'Accept': accept ||
+      (op.binary ? 'application/octet-stream, application/json' : 'application/json') };
     if (body) headers['Content-Type'] = 'application/json';
     /* ngrok 경고 페이지 우회 등 서버 주소에 따라 필요한 추가 헤더 (config.js) */
     for (var hk in (CONFIG.EXTRA_HEADERS || {})) headers[hk] = CONFIG.EXTRA_HEADERS[hk];
@@ -83,6 +84,13 @@
       var tk = typeof CONFIG.AUTH.getToken === 'function' ? CONFIG.AUTH.getToken() : CONFIG.AUTH.getToken;
       if (tk) headers[CONFIG.AUTH.header] = (CONFIG.AUTH.scheme ? CONFIG.AUTH.scheme + ' ' : '') + tk;
     }
+    return headers;
+  }
+
+  /* --------------------------------------------------------- 실제 호출 */
+  function httpCall(op, opId, params, body, opts) {
+    var url = CONFIG.url(buildPath(op.path, params));
+    var headers = buildHeaders(op, body);
 
     var timeout = (opts && opts.timeout) || (op.long ? CONFIG.TIMEOUT_MS_REPORT : CONFIG.TIMEOUT_MS);
     var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -108,6 +116,115 @@
         if (!txt) return null;
         try { return JSON.parse(txt); }
         catch (e) { throw ApiError('응답을 JSON 으로 해석하지 못했습니다.', res.status, opId, txt.slice(0, 200)); }
+      });
+    }).catch(function (err) {
+      if (timer) clearTimeout(timer);
+      if (err.name === 'ApiError') throw err;
+      if (err.name === 'AbortError') throw ApiError('요청 시간 초과', 0, opId);
+      throw ApiError(err.message || '네트워크 오류', 0, opId);
+    });
+  }
+
+  /* ----------------------------------------------- 스트리밍(SSE) 호출 */
+  /*  서버가 event: delta / event: done 두 종류만 보냅니다.
+   *    delta — 지금까지 자란 답변 글자. 화면에 이어 붙이면 됩니다.
+   *    done  — 최종 구조(reply · action · draft). 이걸 못 받으면 미완성입니다.
+   *  브라우저가 스트림을 못 읽거나 서버가 구버전이면 통짜 JSON 으로 조용히 내려갑니다.
+   */
+  function canStream() {
+    return typeof TextDecoder !== 'undefined' &&
+           typeof ReadableStream !== 'undefined' &&
+           typeof fetch !== 'undefined';
+  }
+
+  function readSse(res, onDelta, resetIdle) {
+    var reader = res.body.getReader();
+    var dec = new TextDecoder('utf-8');
+    var buf = '';
+    var last = null;
+
+    function drain() {
+      var i;
+      /* SSE 는 빈 줄 하나로 덩어리를 가릅니다. CRLF 로 보내는 프록시가 있어 먼저 폅니다. */
+      buf = buf.replace(/\r\n/g, '\n');
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        var block = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        var ev = '', data = '';
+        var lines = block.split('\n');
+        for (var k = 0; k < lines.length; k++) {
+          if (lines[k].indexOf('event: ') === 0) ev = lines[k].slice(7);
+          else if (lines[k].indexOf('data: ') === 0) data += lines[k].slice(6);
+        }
+        if (!data) continue;
+        var payload;
+        try { payload = JSON.parse(data); } catch (e) { continue; }
+        if (ev === 'delta') { if (onDelta && payload.text) onDelta(payload.text); }
+        else if (ev === 'done') last = payload;
+      }
+    }
+
+    function pump() {
+      return reader.read().then(function (r) {
+        if (resetIdle) resetIdle();
+        if (r.value) { buf += dec.decode(r.value, { stream: true }); drain(); }
+        if (r.done) { buf += dec.decode(); drain(); return last; }
+        return pump();
+      });
+    }
+    return pump();
+  }
+
+  function streamCall(opId, body, onDelta) {
+    var op = OPS[opId];
+    if (!op) return Promise.reject(ApiError('정의되지 않은 오퍼레이션: ' + opId, 0, opId));
+    /* call() 과 같은 이유로 주소가 정해진 뒤에 나갑니다(그 함수 주석 참고). */
+    if (typeof CONFIG.ready === 'function') {
+      return CONFIG.ready().then(function () { return streamRun(op, opId, body, onDelta); });
+    }
+    return streamRun(op, opId, body, onDelta);
+  }
+
+  function streamRun(op, opId, body, onDelta) {
+    var sent = {};
+    for (var k in body) sent[k] = body[k];
+    sent.stream = true;
+
+    var url = CONFIG.url(buildPath(op.path, null));
+    var headers = buildHeaders(op, sent, 'text/event-stream, application/json');
+
+    /* 타임아웃은 **조각이 안 올 때만** 셉니다. 총량으로 재면 긴 답변이 중간에 잘립니다. */
+    var idle = (CONFIG.TIMEOUT_MS_REPORT || 120000);
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = null;
+    function resetIdle() {
+      if (!ctrl) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () { ctrl.abort(); }, idle);
+    }
+    resetIdle();
+
+    return fetch(url, {
+      method: op.method, headers: headers, body: JSON.stringify(sent),
+      signal: ctrl ? ctrl.signal : undefined, credentials: 'same-origin'
+    }).then(function (res) {
+      if (!res.ok) {
+        if (timer) clearTimeout(timer);
+        return res.text().then(function (txt) {
+          var detail = txt;
+          try { var j = JSON.parse(txt); detail = j.message || j.detail || j.error || txt; } catch (e) { /* 평문 */ }
+          throw ApiError(detail || ('HTTP ' + res.status), res.status, opId);
+        });
+      }
+      var ct = res.headers.get('content-type') || '';
+      if (ct.indexOf('text/event-stream') < 0 || !res.body || !res.body.getReader) {
+        /* 서버가 stream 을 모르는 구버전 → 통짜 JSON 으로 왔다고 보고 그대로 읽습니다. */
+        if (timer) clearTimeout(timer);
+        return res.text().then(function (t) { return t ? JSON.parse(t) : null; });
+      }
+      return readSse(res, onDelta, resetIdle).then(function (out) {
+        if (timer) clearTimeout(timer);
+        return out;
       });
     }).catch(function (err) {
       if (timer) clearTimeout(timer);
@@ -419,6 +536,17 @@
      */
     chat: function (body) {
       return call('chat.send', null, body);
+    },
+
+    /**
+     * 챗봇 — 답변을 조각으로 받아 가며 화면에 흘립니다.
+     * onDelta(text) 가 새로 온 글자만 받고, 프로미스는 최종 응답(reply·action·draft)
+     * 으로 풀립니다. 브라우저나 서버가 스트리밍을 못 하면 chat() 과 똑같이 한 번에
+     * 돌아오므로 호출부는 분기하지 않아도 됩니다.
+     */
+    chatStream: function (body, onDelta) {
+      if (!canStream()) return call('chat.send', null, body);
+      return streamCall('chat.send', body, onDelta);
     }
   };
 
