@@ -976,7 +976,11 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .plist .ic{font-size:12px;color:var(--sel);text-align:center}
 .plist .tx{min-width:0}
 .plist .tx b{display:block;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.plist .tx span{font-size:11px;color:var(--ink3);}
+/* :not(.ai-tag) — 이 규칙이 span 태그 자체를 잡다 보니, .ai-tag(밑에서 흰 글씨로
+   따로 지정)보다 선택자 우선순위가 높아져(클래스 2개+태그 1개 > 클래스 2개)
+   조용히 이겨 버립니다. 라이트 모드에서 배지 글씨가 배경(--ink3, 대비 1.4:1)에
+   묻혀 안 보이던 원인입니다 — 실측(getComputedStyle)으로 확인했습니다. */
+.plist .tx span:not(.ai-tag){font-size:11px;color:var(--ink3);}
 .plist .cost{font-size:11px;color:var(--ink2);
   font-variant-numeric:tabular-nums;white-space:nowrap}
 /* ── 최소 터치·클릭 면적 24x24 (WCAG 2.2 Target Size Minimum) ──────────────
