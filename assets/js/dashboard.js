@@ -46,6 +46,7 @@
         meta: S.meta,
         kpi: S.grid ? S.grid.kpi : null,
         priorities: S.priorities ? S.priorities.items : null,
+        cells: S.map ? S.map.cells() : null,
         simulation: readSavedScenario()
       };
     });

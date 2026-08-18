@@ -142,7 +142,7 @@
   function buildXlsx(sheets) {
     var used = {};
     sheets = sheets.map(function (s) {
-      return { name: safeSheetName(s.name, used), cols: s.cols || [], rows: s.rows || [], headerRows: s.headerRows == null ? 1 : s.headerRows };
+      return { name: safeSheetName(s.name, used), cols: s.cols || [], rows: s.rows || [], headerRows: s.headerRows == null ? 1 : s.headerRows, cf: s.cf };
     });
 
     var files = [];
@@ -242,6 +242,18 @@
         '</styleSheet>'
     });
 
+    /** s.cf: [{sqref:'F2:F787', colors:[minRGB, midRGB, maxRGB]}] → 3색 색상 스케일.
+        새 관계(rels) 파트가 필요 없습니다 — 시트 XML 안에 색이 그대로 들어갑니다. */
+    function condFmtXml(cf) {
+      return (cf || []).map(function (r) {
+        return '<conditionalFormatting sqref="' + r.sqref + '">' +
+          '<cfRule type="colorScale" priority="1"><colorScale>' +
+          '<cfvo type="min"/><cfvo type="percentile" val="50"/><cfvo type="max"/>' +
+          '<color rgb="' + r.colors[0] + '"/><color rgb="' + r.colors[1] + '"/><color rgb="' + r.colors[2] + '"/>' +
+          '</colorScale></cfRule></conditionalFormatting>';
+      }).join('');
+    }
+
     sheets.forEach(function (s, si) {
       var maxCols = 0;
       s.rows.forEach(function (r) { if (r.length > maxCols) maxCols = r.length; });
@@ -274,6 +286,7 @@
           '<sheetViews><sheetView' + (si === 0 ? ' tabSelected="1"' : '') + ' workbookViewId="0"/></sheetViews>' +
           '<sheetFormatPr defaultRowHeight="15"/>' + cols +
           '<sheetData>' + rowsXml + '</sheetData>' +
+          condFmtXml(s.cf) +
           '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>' +
           '</worksheet>'
       });
@@ -422,8 +435,39 @@
       sheets.push({ name: t.title, cols: widths, rows: r, headerRows: 1 });
     });
 
-    /* 3) 산출식·주석 시트 — 수치의 출처를 문서 안에 남깁니다 */
+    /* 3) 데이터 시트 — AI 가 문장에 쓴 Top5 가 아니라 지금 지도에 그려진 전체
+       격자 원자료를 그대로 싣습니다. 정렬·필터 가능한 실데이터 + MI·커버리지
+       색상 스케일은 한글(워드프로세서) 문서로는 원천적으로 못 하는 것이라
+       엑셀 내보내기만의 차별점으로 여기 넣습니다. */
     var meta = draft.meta || {};
+    var cells = meta.cells || [];
+    if (cells.length) {
+      var dataCols = ['격자ID', '격자명', '권역', '수요지수', '공급지수', 'MI',
+                       '커버리지(%)', '우선순위점수', '분류', '권장조치'];
+      var dataRows = [dataCols].concat(cells.map(function (c) {
+        return [
+          c.id, c.name, c.region, c.demand, c.supply,
+          typeof c.mi === 'number' ? Math.round(c.mi * 100) / 100 : c.mi,
+          typeof c.coverage === 'number' ? Math.round(c.coverage * 1000) / 10 : c.coverage,
+          typeof c.priorityScore === 'number' ? Math.round(c.priorityScore * 100) / 100 : c.priorityScore,
+          c.quadrantLabel, c.actionLabel
+        ];
+      }));
+      var lastRow = dataRows.length;
+      var miCol = colName(5), covCol = colName(6);   /* dataCols 의 'MI'·'커버리지(%)' 위치 */
+      sheets.push({
+        name: '데이터', cols: [12, 16, 10, 10, 10, 9, 12, 12, 10, 10],
+        rows: dataRows, headerRows: 1,
+        /* MI 는 높을수록 나쁨(수요>공급) — 기본 순서(초록=낮음 → 빨강=높음)가 그대로 맞습니다.
+           커버리지는 반대로 낮을수록 나쁨이라 색을 뒤집습니다(빨강=낮음 → 초록=높음). */
+        cf: [
+          { sqref: miCol + '2:' + miCol + lastRow, colors: ['FF63BE7B', 'FFFFEB84', 'FFF8696B'] },
+          { sqref: covCol + '2:' + covCol + lastRow, colors: ['FFF8696B', 'FFFFEB84', 'FF63BE7B'] }
+        ]
+      });
+    }
+
+    /* 4) 산출식·주석 시트 — 수치의 출처를 문서 안에 남깁니다 */
     var f = meta.formula || {};
 
     /* 서버 meta.dataQuality 에서 출처 문장을 만든다. 없으면 폴백 문구를 쓴다. */
@@ -732,6 +776,9 @@
       if (ctx.meta && ctx.meta.dataQuality && !draft.meta.dataQuality) {
         draft.meta.dataQuality = ctx.meta.dataQuality;   /* 출처 시트를 서버 값으로 */
       }
+      /* 엑셀의 '데이터' 시트용 — AI 가 문장에 쓴 Top5 가 아니라 지금 지도에 그려진
+         전체 격자를 그대로 싣습니다(지도가 기준·시나리오 어느 쪽이든 화면과 일치). */
+      if (ctx.cells && ctx.cells.length) draft.meta.cells = ctx.cells;
       currentDraft = draft;
       renderDraft(draft);
       mountChat();                 /* 초안이 생긴 뒤에야 고칠 것이 있습니다 */

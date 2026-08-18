@@ -129,6 +129,7 @@
         meta: S.meta,
         kpi: currentPeriodBlock() ? currentPeriodBlock().kpi : null,
         priorities: null,
+        cells: S.map ? S.map.cells() : null,
         simulation: slimSimulation(S.result),
         recommendation: S.recommendation
           ? { placements: S.recommendation.placements, summary: S.recommendation.summary,
