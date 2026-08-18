@@ -497,7 +497,7 @@
     var chartItems = priorityChartItems(draft);
     if (chartItems.length) {
       var chart = drawPriorityChart(chartItems);
-      b += '\\pard\\b\\fs20 노선 조정 우선순위 Top ' + chartItems.length + '\\b0\\par\n';
+      b += '\\pard\\b\\fs20 ' + rtfText('노선 조정 우선순위 Top ' + chartItems.length) + '\\b0\\par\n';
       b += '\\pard\\qc ' + rtfPicture(chart) + '\\par\\par\n';
     }
 
