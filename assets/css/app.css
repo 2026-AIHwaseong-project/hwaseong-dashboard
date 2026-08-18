@@ -1120,6 +1120,10 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .doc .dwarn code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
 .doc table{margin:2px 0 12px}
 .doc .dcap{font-size:11px;color:var(--ink3);margin:10px 0 3px;font-weight:600}
+/* 흰 배경으로 고정해 그린 캔버스라(한글·엑셀과 같은 그림) 다크모드에서도 카드를
+   두르지 않고 그대로 둡니다 — 테두리만 옅게 더해 배경과 경계를 표시합니다. */
+.doc .dchart{display:block;max-width:100%;height:auto;border:1px solid var(--line);
+  border-radius:8px;margin:2px 0 12px}
 
 .loading{display:flex;flex-direction:column;align-items:center;gap:12px;padding:44px 10px;color:var(--ink3);font-size:12px}
 .spin{width:26px;height:26px;border:2.5px solid var(--line);border-top-color:var(--sel);border-radius:50%;

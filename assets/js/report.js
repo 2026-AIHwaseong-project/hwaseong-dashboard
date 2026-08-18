@@ -112,6 +112,67 @@
   }
 
   /* ======================================================================
+   *  A-1. 우선순위 막대그래프 — 미리보기·한글·엑셀 셋이 캔버스 하나를 같이 쓴다
+   *
+   *  SVG 로 그린 뒤 내보내기용으로 다시 래스터화하면 두 벌을 관리하게 됩니다.
+   *  <canvas> 로 한 번만 그리고, 화면엔 dataURL 을 <img> 로 박고 한글·엑셀엔
+   *  같은 캔버스의 PNG 바이트를 그대로 심습니다 — 그리는 코드가 한 곳입니다.
+   * ==================================================================== */
+  var CHART_SCALE = 2;   /* 화면 DPI 와 무관하게 항상 2배로 그려 인쇄·확대에도 흐리지 않게 */
+
+  /** draft.meta.cells(엑셀 데이터 시트와 같은 출처 — chat.js 참고)에서 직접 계산합니다.
+      AI 가 만든 tables[] 는 형식이 흔들릴 수 있어 차트 값의 출처로 쓰지 않습니다. */
+  function priorityChartItems(draft) {
+    var cells = (draft.meta && draft.meta.cells) || [];
+    var top = cells.filter(function (c) { return typeof c.priorityScore === 'number' && c.priorityScore > 0; })
+      .sort(function (a, b) { return b.priorityScore - a.priorityScore; })
+      .slice(0, 5);
+    if (!top.length) return [];
+    var max = top[0].priorityScore;
+    return top.map(function (c) { return { name: c.name, score: c.priorityScore, pct: c.priorityScore / max }; });
+  }
+
+  /** items 를 캔버스에 그려 {canvas, width, height} 로 돌려줍니다(width/height 는
+      논리 픽셀 — 실제 캔버스 픽셀은 CHART_SCALE 배 더 큽니다). */
+  function drawPriorityChart(items) {
+    var W = 620, rowH = 32, padL = 148, padR = 56, padY = 6;
+    var H = padY * 2 + items.length * rowH;
+    var canvas = document.createElement('canvas');
+    canvas.width = W * CHART_SCALE;
+    canvas.height = H * CHART_SCALE;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(CHART_SCALE, CHART_SCALE);
+    ctx.fillStyle = '#ffffff';           /* 한글·엑셀은 다크모드가 없으니 배경을 항상 흰색으로 고정 */
+    ctx.fillRect(0, 0, W, H);
+    var barMaxW = W - padL - padR;
+    items.forEach(function (it, i) {
+      var y = padY + i * rowH;
+      ctx.textBaseline = 'middle';
+      ctx.font = '12px "Malgun Gothic", sans-serif';
+      ctx.fillStyle = '#41546E';
+      ctx.textAlign = 'right';
+      ctx.fillText(it.name, padL - 10, y + rowH / 2);
+      var barW = Math.max(3, barMaxW * it.pct);
+      ctx.fillStyle = '#0054A6';
+      ctx.fillRect(padL, y + 6, barW, rowH - 13);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#12233A';
+      ctx.font = 'bold 12px "Malgun Gothic", sans-serif';
+      ctx.fillText(it.score.toFixed(1) + '점', padL + barW + 8, y + rowH / 2);
+    });
+    return { canvas: canvas, width: W, height: H };
+  }
+
+  /** dataURL(base64) → 원본 바이트(Uint8Array). xlsx 미디어 파트에 그대로 쓴다. */
+  function pngBytes(canvas) {
+    var b64 = canvas.toDataURL('image/png').split(',')[1];
+    var bin = atob(b64);
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  /* ======================================================================
    *  B. XLSX 생성
    * ==================================================================== */
   function xmlEsc(s) {
@@ -139,7 +200,9 @@
    * sheets: [{ name, cols:[너비...], rows:[ [값,...] ... ], headerRows:1 }]
    * 값이 number 면 숫자 셀, 아니면 문자열 셀로 씁니다.
    */
-  function buildXlsx(sheets) {
+  /** chart 가 있으면 0번째 시트(sheetIndex, 기본 0)에 그림으로 심는다. */
+  function buildXlsx(sheets, chart, sheetIndex) {
+    sheetIndex = sheetIndex || 0;
     var used = {};
     sheets = sheets.map(function (s) {
       return { name: safeSheetName(s.name, used), cols: s.cols || [], rows: s.rows || [], headerRows: s.headerRows == null ? 1 : s.headerRows, cf: s.cf };
@@ -153,11 +216,13 @@
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Default Extension="xml" ContentType="application/xml"/>' +
+        (chart ? '<Default Extension="png" ContentType="image/png"/>' : '') +
         '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
         sheets.map(function (s, i) {
           return '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
         }).join('') +
         '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+        (chart ? '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' : '') +
         '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
         '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>' +
         '</Types>'
@@ -279,18 +344,62 @@
         return '<row r="' + (ri + 1) + '">' + cells + '</row>';
       }).join('');
 
+      var hasChart = chart && si === sheetIndex;
       files.push({
         name: 'xl/worksheets/sheet' + (si + 1) + '.xml',
         text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+          'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
           '<sheetViews><sheetView' + (si === 0 ? ' tabSelected="1"' : '') + ' workbookViewId="0"/></sheetViews>' +
           '<sheetFormatPr defaultRowHeight="15"/>' + cols +
           '<sheetData>' + rowsXml + '</sheetData>' +
           condFmtXml(s.cf) +
           '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>' +
+          (hasChart ? '<drawing r:id="rId1"/>' : '') +
           '</worksheet>'
       });
+      if (hasChart) {
+        files.push({
+          name: 'xl/worksheets/_rels/sheet' + (si + 1) + '.xml.rels',
+          text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>' +
+            '</Relationships>'
+        });
+      }
     });
+
+    /* 그림 — 새 xlsx 파트 4개(그림 바이트·앵커·관계 2개)가 더 필요합니다.
+       cx/cy 는 EMU(1px@96dpi = 9525EMU) — 논리 크기(chart.width/height)로 정해야
+       CHART_SCALE 로 키워 그린 만큼 화면에서 커지지 않고 원래 의도한 크기로 뜹니다. */
+    if (chart) {
+      var cx = Math.round(chart.width * 9525), cy = Math.round(chart.height * 9525);
+      files.push({ name: 'xl/media/image1.png', bytes: pngBytes(chart.canvas) });
+      files.push({
+        name: 'xl/drawings/drawing1.xml',
+        text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" ' +
+          'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+          'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+          '<xdr:oneCellAnchor>' +
+          '<xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>' + (chart.anchorRow || 0) +
+          '</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>' +
+          '<xdr:ext cx="' + cx + '" cy="' + cy + '"/>' +
+          '<xdr:pic>' +
+          '<xdr:nvPicPr><xdr:cNvPr id="1" name="우선순위 막대그래프"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>' +
+          '<xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>' +
+          '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + cx + '" cy="' + cy + '"/></a:xfrm>' +
+          '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>' +
+          '</xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>'
+      });
+      files.push({
+        name: 'xl/drawings/_rels/drawing1.xml.rels',
+        text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>' +
+          '</Relationships>'
+      });
+    }
 
     return new Blob([zip(files)], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -352,6 +461,24 @@
     return out + '\\pard\\par\n';
   }
 
+  /** 캔버스 PNG 를 RTF \pict 로 심는다. \pngblip 은 워드·한컴오피스가 다 읽는
+      표준 컨트롤워드라 옛 RTF 방식(비트맵을 손수 인코딩)을 안 써도 된다.
+      picw/pich 는 실제 픽셀(원본 크기), picwgoal/pichgoal 은 화면에 그릴 목표
+      크기(트윕, 1px@96dpi = 15트윕) — 캔버스는 CHART_SCALE 배로 그렸으므로 목표
+      크기는 논리 크기(width/height)로 정해야 원래 의도한 만큼만 차지한다. */
+  function rtfPicture(chart) {
+    var hex = '', bin = atob(chart.canvas.toDataURL('image/png').split(',')[1]);
+    for (var i = 0; i < bin.length; i++) {
+      var h = bin.charCodeAt(i).toString(16);
+      hex += h.length < 2 ? '0' + h : h;
+    }
+    var lines = [];
+    for (var j = 0; j < hex.length; j += 128) lines.push(hex.slice(j, j + 128));
+    return '{\\pict\\pngblip\\picw' + chart.canvas.width + '\\pich' + chart.canvas.height +
+      '\\picwgoal' + Math.round(chart.width * 15) + '\\pichgoal' + Math.round(chart.height * 15) +
+      '\n' + lines.join('\n') + '}';
+  }
+
   function buildRtf(draft) {
     var b = '';
     b += '{\\rtf1\\ansi\\ansicpg949\\deff0\\uc1\n';
@@ -365,6 +492,14 @@
     if (draft.subtitle) b += '\\pard\\qc\\fs20\\cf2 ' + rtfText(draft.subtitle) + '\\cf1\\par\n';
     b += '\\pard\\qc\\fs17\\cf2 ' + rtfText((draft.org || '') + (draft.dept ? ' ' + draft.dept : '') +
       '   |   작성일 ' + C.korDate((draft.generatedAt || '').slice(0, 10))) + '\\cf1\\par\\par\n';
+
+    /* 우선순위 막대그래프 — 미리보기와 같은 캔버스 */
+    var chartItems = priorityChartItems(draft);
+    if (chartItems.length) {
+      var chart = drawPriorityChart(chartItems);
+      b += '\\pard\\b\\fs20 노선 조정 우선순위 Top ' + chartItems.length + '\\b0\\par\n';
+      b += '\\pard\\qc ' + rtfPicture(chart) + '\\par\\par\n';
+    }
 
     /* 본문 */
     (draft.sections || []).forEach(function (s) {
@@ -544,7 +679,16 @@
 
     function clientSide() {
       if (format === 'xlsx') {
-        C.downloadBlob(buildXlsx(draftToSheets(draft)), stem + '.xlsx');
+        var sheets = draftToSheets(draft);
+        var chartItems = priorityChartItems(draft);
+        var chart = chartItems.length ? drawPriorityChart(chartItems) : null;
+        /* 열 C 앵커는 실측(Excel COM)에서 잘못임이 드러났다 — '보고서' 시트는 A열이
+           110유닛(≈577pt, 글 줄바꿈용)이라 C열부터 시작하면 그림 왼쪽 끝이 벌써
+           인쇄 가능 폭(A4 기준 약 487pt)을 넘어서, 그림이 페이지 경계에서 잘려
+           오른쪽 막대(1위, 제일 긴 막대)의 점수만 다음 페이지에 혼자 찍혔다.
+           A열(0)에 붙이고 글 마지막 줄 아래로 내리면 Left=0 이라 안 잘린다. */
+        if (chart) chart.anchorRow = sheets[0].rows.length + 1;
+        C.downloadBlob(buildXlsx(sheets, chart), stem + '.xlsx');
         return '엑셀 파일을 내려받았습니다.';
       }
       C.downloadBlob(buildRtf(draft), stem + '.rtf');
@@ -655,6 +799,15 @@
     h += '<p class="dmeta">' + esc((draft.org || '') + ' ' + (draft.dept || '')) +
       ' · 생성 ' + esc(draft.generatedAt || '') +
       (draft.model ? ' · 모델 ' + esc(draft.model) : '') + '</p>';
+
+    /* 본문 앞에 한눈에 보는 막대그래프 — 글을 읽기 전에 순위부터 보이게 */
+    var chartItems = priorityChartItems(draft);
+    if (chartItems.length) {
+      var chart = drawPriorityChart(chartItems);
+      h += '<p class="dcap">노선 조정 우선순위 Top ' + chartItems.length + '</p>' +
+        '<img class="dchart" src="' + chart.canvas.toDataURL('image/png') + '" ' +
+        'width="' + chart.width + '" height="' + chart.height + '" alt="우선순위 막대그래프">';
+    }
 
     (draft.sections || []).forEach(function (s) {
       h += '<h3>' + esc(s.heading) + '</h3>';
