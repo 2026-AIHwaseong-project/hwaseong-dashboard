@@ -331,7 +331,10 @@
       var rowsXml = s.rows.map(function (row, ri) {
         var cells = row.map(function (v, ci) {
           var ref = colName(ci) + (ri + 1);
-          var style = ri < s.headerRows ? 1 : (typeof v === 'string' && v.length > 60 ? 3 : 0);
+          /* 30자 넘는 글은 줄바꿈(스타일 3). 한글은 전각이라 열 폭 한 칸에 반 글자만
+             들어갑니다 — 60자 기준이던 때는 43자짜리 비고 문장이 줄바꿈 없이 옆으로
+             흘러 인쇄하면 뒷부분만 다음 장에 찍혔습니다(실측). */
+          var style = ri < s.headerRows ? 1 : (typeof v === 'string' && v.length > 30 ? 3 : 0);
           if (v == null || v === '') return '<c r="' + ref + '" s="' + style + '"/>';
           if (typeof v === 'number' && isFinite(v)) {
             return '<c r="' + ref + '" s="' + style + '"><v>' + v + '</v></c>';
@@ -534,23 +537,49 @@
   /* ======================================================================
    *  D. 초안 → 시트 변환
    * ==================================================================== */
+  /* 첫 시트는 '요약' — 줄글이 아니라 항목·값 표입니다.
+     행정 실무에서 매체별 역할이 갈립니다: 읽고 결재하는 문서는 한글, 다루는 자료는
+     엑셀(현황표·붙임). 예전에는 이 자리에 보고서 본문을 문단째 넣었는데, 문단이 셀
+     하나에 갇혀 편집도 인쇄도 안 되고 한글 파일과 내용이 절반 겹쳐 "왜 둘 다 있나"가
+     됐습니다. 줄글은 한글이 전담하고, 엑셀은 표로만 갑니다. */
   function draftToSheets(draft) {
     var sheets = [];
+    var meta = draft.meta || {};
+    var kpi = meta.kpi || {};
+    var cells = meta.cells || [];
 
-    /* 1) 요약 시트 — 문서 본문을 그대로 */
-    var rows = [];
-    rows.push([{ __title: draft.title }]);
-    if (draft.subtitle) rows.push([draft.subtitle]);
-    rows.push([(draft.org || '') + ' ' + (draft.dept || '') + '  |  작성일시 ' + (draft.generatedAt || '')]);
-    rows.push([]);
-    (draft.sections || []).forEach(function (s) {
-      rows.push([s.heading]);
-      if (s.body) String(s.body).split('\n').forEach(function (p) { if (p.trim()) rows.push([p]); });
-      (s.bullets || []).forEach(function (li) { rows.push(['· ' + li]); });
-      rows.push([]);
-    });
-    if (draft.disclaimer) rows.push(['※ ' + draft.disclaimer]);
-    sheets.push({ name: '보고서', cols: [110], rows: rows, headerRows: 0 });
+    var top = cells.filter(function (c) { return typeof c.priorityScore === 'number' && c.priorityScore > 0; })
+      .sort(function (a, b) { return b.priorityScore - a.priorityScore; })[0];
+
+    var sum = [['항목', '값']];
+    function add(k, v) { if (v !== null && v !== undefined && v !== '') sum.push([k, v]); }
+    add('문서', draft.title || '');
+    add('기준 시간대', draft.subtitle || '');
+    add('작성 기관', ((draft.org || '') + ' ' + (draft.dept || '')).trim());
+    add('생성 일시', draft.generatedAt || '');
+    add('생성 모델', draft.model || '');
+    sum.push([]);
+    add('분석 격자', typeof kpi.totalCells === 'number' ? kpi.totalCells : cells.length || '');
+    add('사각지대 격자(고수요·저공급)', kpi.needCells);
+    add('사각지대 비중(%)', kpi.needShare);
+    add('사각지대 잠재수요(통행/일)', kpi.potentialTripsPerDay);
+    add('이 중 고령층(통행/일)', kpi.elderlyTripsPerDay);
+    add('DRT 후보 격자', kpi.drtCells);
+    if (top) {
+      sum.push([]);
+      add('최우선 격자', top.name + ' (' + top.id + ')');
+      add('최우선 격자 권장조치', top.actionLabel || '');
+    }
+    /* 줄글 전문은 한글 문서가 전담합니다. 여기엔 결론 한 줄만 남깁니다. */
+    var head = (draft.sections || [])[0];
+    if (head && head.body) {
+      sum.push([]);
+      add('요지', String(head.body).split('\n')[0]);
+    }
+    if (draft.disclaimer) { sum.push([]); add('비고', draft.disclaimer); }
+    /* 폭 26+56 — 인쇄 시 A4 한 장 안에 두 열이 같이 들어가는 선입니다. 예전 30+78 은
+       합이 인쇄 가능 폭을 넘어 항목열과 값열이 서로 다른 장에 찍혔습니다(실측). */
+    sheets.push({ name: '요약', cols: [26, 56], rows: sum, headerRows: 1 });
 
     /* 2) 표들 */
     (draft.tables || []).forEach(function (t) {
@@ -574,8 +603,6 @@
        격자 원자료를 그대로 싣습니다. 정렬·필터 가능한 실데이터 + MI·커버리지
        색상 스케일은 한글(워드프로세서) 문서로는 원천적으로 못 하는 것이라
        엑셀 내보내기만의 차별점으로 여기 넣습니다. */
-    var meta = draft.meta || {};
-    var cells = meta.cells || [];
     if (cells.length) {
       var dataCols = ['격자ID', '격자명', '권역', '수요지수', '공급지수', 'MI',
                        '커버리지(%)', '우선순위점수', '분류', '권장조치'];
@@ -682,11 +709,11 @@
         var sheets = draftToSheets(draft);
         var chartItems = priorityChartItems(draft);
         var chart = chartItems.length ? drawPriorityChart(chartItems) : null;
-        /* 열 C 앵커는 실측(Excel COM)에서 잘못임이 드러났다 — '보고서' 시트는 A열이
-           110유닛(≈577pt, 글 줄바꿈용)이라 C열부터 시작하면 그림 왼쪽 끝이 벌써
-           인쇄 가능 폭(A4 기준 약 487pt)을 넘어서, 그림이 페이지 경계에서 잘려
-           오른쪽 막대(1위, 제일 긴 막대)의 점수만 다음 페이지에 혼자 찍혔다.
-           A열(0)에 붙이고 글 마지막 줄 아래로 내리면 Left=0 이라 안 잘린다. */
+        /* 요약 표 아래, A열에 붙인다. C열 앵커는 실측(Excel COM)에서 잘못임이
+           드러났다 — 첫 시트 A열이 넓어 C열부터 시작하면 그림 왼쪽 끝이 이미
+           인쇄 가능 폭(A4 약 487pt)을 넘어서, 인쇄 시 그림이 페이지 경계에서
+           잘리고 1위 막대의 점수만 다음 장에 혼자 찍혔다. A열(0)이면 Left=0 이라
+           안 잘린다. */
         if (chart) chart.anchorRow = sheets[0].rows.length + 1;
         C.downloadBlob(buildXlsx(sheets, chart), stem + '.xlsx');
         return '엑셀 파일을 내려받았습니다.';
@@ -748,8 +775,8 @@
       '<span class="hs" data-foot></span>' +
       '<span class="sp"></span>' +
       '<button class="btn" data-copy type="button" disabled>본문 복사</button>' +
-      '<button class="btn" data-dl-hwp type="button" disabled>' + HW.icon('doc') + '한글 문서</button>' +
-      '<button class="btn primary" data-dl-xlsx type="button" disabled><i>▦</i>엑셀 파일</button>' +
+      '<button class="btn primary" data-dl-hwp type="button" disabled>' + HW.icon('doc') + '한글 문서</button>' +
+      '<button class="btn excel" data-dl-xlsx type="button" disabled><i>▦</i>엑셀 파일</button>' +
       '</footer>' +
       '</div>';
     document.body.appendChild(m);
@@ -932,6 +959,8 @@
       /* 엑셀의 '데이터' 시트용 — AI 가 문장에 쓴 Top5 가 아니라 지금 지도에 그려진
          전체 격자를 그대로 싣습니다(지도가 기준·시나리오 어느 쪽이든 화면과 일치). */
       if (ctx.cells && ctx.cells.length) draft.meta.cells = ctx.cells;
+      if (ctx.kpi) draft.meta.kpi = ctx.kpi;             /* 엑셀 '요약' 시트용 */
+      if (ctx.priorities) draft.meta.priorities = ctx.priorities;
       currentDraft = draft;
       renderDraft(draft);
       mountChat();                 /* 초안이 생긴 뒤에야 고칠 것이 있습니다 */

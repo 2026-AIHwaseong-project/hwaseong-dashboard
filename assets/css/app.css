@@ -44,6 +44,7 @@
   /* --ink3 은 배경 #EEF2F7 위에서 4.6:1 (WCAG AA) */
   --ink:#12233A; --ink2:#41546E; --ink3:#5D6E85;
   --sel:#0054A6; --selbg:rgba(0,84,166,.09);
+  --xls:#217346; --xls-ink:#1A5C38;   /* 엑셀 버튼 — 스프레드시트 초록 */
   --water:#DCE6F1; --land:#F4F1EA; --coast:#9AA9BC;
   /* 미스매칭 MI: 발산형(파랑 ← 중립 → 빨강). 중간값은 반드시 무채색. */
   --mi0:#1c5cab; --mi1:#5598e7; --mi2:#9ec5f4; --mi3:#e9e7e0; --mi4:#f3a68f; --mi5:#e2604f; --mi6:#a62b28;
@@ -89,6 +90,7 @@
     --brand:#5AA6EA; --brand-ink:#8CC4F5; --brand-soft:#16283C; --brand-line:#27405C;
     --brand-2:#F36F21; --brand-2-ink:#FFA066; --brand-2-soft:#2C1B10;
     --sel:#5AA6EA; --selbg:rgba(90,166,234,.14);
+    --xls:#4CAF7D; --xls-ink:#6FCFA8;
     --water:#10151c; --land:#232a33; --coast:#3e4a58;
     /* ── 다크의 지표 색은 '심각할수록 진하게' 로 읽히게 만듭니다 ──────────────
        예전에는 심각한 쪽이 파스텔로 빠졌습니다(--sb4 #a4c9f5 는 L* 80 에 채도 26,
@@ -122,6 +124,7 @@
   --brand:#5AA6EA; --brand-ink:#8CC4F5; --brand-soft:#16283C; --brand-line:#27405C;
   --brand-2:#F36F21; --brand-2-ink:#FFA066; --brand-2-soft:#2C1B10;
   --sel:#5AA6EA; --selbg:rgba(90,166,234,.14);
+  --xls:#4CAF7D; --xls-ink:#6FCFA8;
   --water:#10151c; --land:#232a33; --coast:#3e4a58;
   /* 위 @media 블록과 **같은 값이어야 합니다** — 다르면 테마를 손으로 고른 사람과
      시스템 설정을 따르는 사람이 서로 다른 색의 지도를 봅니다. 근거는 위 주석. */
@@ -145,6 +148,7 @@
   --bg:#EEF2F7; --card:#FFFFFF; --line:#DCE4EE; --grid:#E3E9F1; --axis:#B7C3D4;
   --ink:#12233A; --ink2:#41546E; --ink3:#5D6E85;
   --sel:#0054A6; --selbg:rgba(0,84,166,.09);
+  --xls:#217346; --xls-ink:#1A5C38;   /* 엑셀 버튼 — 스프레드시트 초록 */
   --water:#DCE6F1; --land:#F4F1EA; --coast:#9AA9BC;
   --mi0:#1c5cab; --mi1:#5598e7; --mi2:#9ec5f4; --mi3:#e9e7e0; --mi4:#f3a68f; --mi5:#e2604f; --mi6:#a62b28;
   --sb0:#dcebfb; --sb1:#9ec5f4; --sb2:#5598e7; --sb3:#2a78d6; --sb4:#184f95;
@@ -1056,6 +1060,11 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
    라이트에서는 더 진하게(#003C77), 다크에서는 더 밝게(#8CC4F5) 가는 값이라
    두 테마 모두 '눌러지는 쪽' 으로 움직입니다. */
 .btn.primary:hover:not(:disabled){background:var(--brand-ink);border-color:var(--brand-ink)}
+/* 내보내기 두 버튼을 색으로 갈라 둡니다 — 한글은 파랑(읽는 문서), 엑셀은 초록
+   (다루는 자료). 스프레드시트가 초록이라는 건 사람들이 이미 아는 규칙이라
+   글자를 안 읽어도 어느 쪽인지 구분됩니다. */
+.btn.excel{background:var(--xls);border-color:var(--xls);color:#fff}
+.btn.excel:hover:not(:disabled){background:var(--xls-ink);border-color:var(--xls-ink)}
 /* 작은 상자 버튼은 .btn.sm 과 .minib 두 벌이었는데 글자 11.5 대 11, 여백 5·11 대
    4·10, 라운드 8 대 7 로 세 값이 전부 조금씩 달랐습니다. 1px 차이는 위계로 읽히지
    않고 안 맞아 보이기만 합니다. 한 치수(11px / 5·11 / 8)로 맞춥니다. */
@@ -1554,6 +1563,7 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 :root[data-theme="dark"] .rec-badge,
 :root[data-theme="dark"] .plist .ai-tag,
 :root[data-theme="dark"] .btn.primary,
+:root[data-theme="dark"] .btn.excel,
 :root[data-theme="dark"] .simtool.on,
 :root[data-theme="dark"] .cm-b.me,
 :root[data-theme="dark"] .help:hover{color:var(--bg)}
@@ -1565,6 +1575,7 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   :root:where(:not([data-theme="light"])) .rec-badge,
   :root:where(:not([data-theme="light"])) .plist .ai-tag,
   :root:where(:not([data-theme="light"])) .btn.primary,
+  :root:where(:not([data-theme="light"])) .btn.excel,
   :root:where(:not([data-theme="light"])) .simtool.on,
   :root:where(:not([data-theme="light"])) .cm-b.me,
   :root:where(:not([data-theme="light"])) .help:hover{color:var(--bg)}
