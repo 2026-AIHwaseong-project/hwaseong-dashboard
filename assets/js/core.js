@@ -440,6 +440,17 @@
       if (e.key === 'Escape' && host.classList.contains('menu-open')) setMenu(false);
     });
 
+    /* 넓은 화면에서 사이드바(서랍)를 내비바 바로 아래에 붙이려면 내비바의 실제
+       높이를 알아야 합니다(app.css 의 --nav-h). 폰트·확대·테마·창폭으로 높이가
+       바뀌므로 CSS 상수로 박지 않고 여기서 재서 넣습니다. host 는 .topnav 라
+       offsetHeight 가 3px 브랜드 테두리까지 포함한 내비바 전체 높이입니다. */
+    function syncNavH() {
+      document.documentElement.style.setProperty('--nav-h', host.offsetHeight + 'px');
+    }
+    syncNavH();
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(syncNavH);
+    window.addEventListener('resize', syncNavH);
+
     mountIssuer();
     mountIcons();
   }
