@@ -337,7 +337,11 @@ svg text{font-family:inherit}
     transition:none;
   }
   .tn-drawer .tn-cut{margin-top:auto}       /* 발행 버튼을 사이드바 맨 아래로 밀착 */
-  .wrap{margin-left:var(--side-w)}          /* 본문을 사이드바 폭만큼 오른쪽으로 */
+  /* 본문은 사이드바를 뺀 나머지 영역의 **중앙**에 놓습니다. margin-left 를
+     --side-w 로만 밀면 초광폭에서 본문이 사이드바에 붙어 왼쪽으로 쏠립니다.
+     왼쪽 여백 = 사이드바 폭 + 남은 공간에서 1680px 를 뺀 절반(음수 방지 max). */
+  .wrap{margin-left:calc(var(--side-w) + max(0px,(100% - var(--side-w) - 1680px)/2));
+    margin-right:auto}
 }
 
 /* ── 우측 하단 AI 런처 (코리요) ────────────────────────────────────
