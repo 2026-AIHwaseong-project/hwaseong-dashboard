@@ -1,7 +1,8 @@
+# 백엔드: [hwaseong-dashboard-backend](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend)
+
 # 화성시 버스 수요·공급 미스매칭 대시보드 — 프론트엔드
 
 > 26년 여름학기 AI화성챌린지 대학생 솔루션데이 · 과제 23번(교통분야)
-> 백엔드: [hwaseong-dashboard-backend](https://github.com/2026-AIHwaseong-project/hwaseong-dashboard-backend)
 
 교통카드 실현수요와 거주인구 기반 잠재수요를 같은 1km 격자에서 대조해
 **대중교통 사각지대**를 찾아내고, **노선 조정 우선순위**와 **정책 시뮬레이션**을
