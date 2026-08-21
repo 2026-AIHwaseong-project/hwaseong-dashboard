@@ -1,0 +1,109 @@
+/* ============================================================
+ * 관리자 콘솔 전용 스타일 — admin.html 만 로드한다.
+ * app.css 의 토큰(:root 변수)·카드·버튼을 재사용하고, 여기는 콘솔
+ * 고유의 레이아웃만 둔다. app.css 에 끼워 넣지 않는 이유:
+ * check-css.js 의 MUST 규칙·다크모드 3벌 동기화를 건드리지 않기 위해.
+ * ============================================================ */
+
+.admwrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 96px; }
+
+.admhead { display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.admhead h1 { margin: 0 0 4px; }
+.admsub { color: var(--ink3); margin: 0; max-width: 640px; }
+.admnav { display: flex; gap: 10px; align-items: center; }
+.admnav a { color: var(--brand); text-decoration: none; font-weight: 600; }
+.admnav a:hover { text-decoration: underline; }
+
+.admlogin { max-width: 480px; }
+.admlogin form { display: flex; gap: 8px; margin-top: 10px; }
+.admlogin input { flex: 1; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--bg); color: var(--ink); }
+.admerr { color: var(--bad); font-weight: 600; }
+
+.admstrip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+  margin-bottom: 14px; }
+.admstrip .tile { border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; background: var(--card); }
+.admstrip .tile b { display: block; font-size: 17px; font-variant-numeric: tabular-nums; }
+.admstrip .tile span { color: var(--ink3); font-size: 12px; }
+
+.admwrap .card { margin-bottom: 14px; }
+.admhint { color: var(--ink3); font-size: 13px; margin: 4px 0 10px; }
+
+.admtag { font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 8px;
+  vertical-align: 2px; margin-left: 6px; }
+.admtag.ok   { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
+.admtag.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--brand-2-ink); }
+.admtag.mute { background: color-mix(in srgb, var(--ink3) 12%, transparent); color: var(--ink3); }
+
+/* 파라미터 행 */
+.admrows { display: flex; flex-direction: column; }
+.admrow { display: grid; grid-template-columns: minmax(220px, 1.2fr) 220px 1fr;
+  gap: 12px; align-items: start; padding: 10px 8px; border-top: 1px solid var(--line); }
+.admrow:first-child { border-top: 0; }
+.admrow.changed { border-left: 3px solid var(--brand-2); background:
+  color-mix(in srgb, var(--brand-2) 5%, transparent); }
+.admrow .plabel { font-weight: 600; }
+.admrow .plabel small { display: block; color: var(--ink3); font-weight: 400;
+  font-size: 12px; margin-top: 2px; }
+.admrow .pinput { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.admrow .pinput input[type=number] { width: 130px; padding: 6px 8px; text-align: right;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+  color: var(--ink); font-variant-numeric: tabular-nums; }
+.admrow .pinput input.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
+.admrow .pinput .unit { color: var(--ink3); font-size: 12px; }
+.admrow .pinput .minib { font-size: 11px; padding: 3px 8px; border: 1px solid var(--line);
+  border-radius: 7px; background: transparent; color: var(--ink3); cursor: pointer; }
+.admrow .pinput .minib:hover { color: var(--ink); border-color: var(--ink3); }
+.admrow .pnote { color: var(--ink3); font-size: 12px; line-height: 1.5; }
+.admrow .pnote b.ov { color: var(--brand-2-ink); }
+.admrow .pval { font-variant-numeric: tabular-nums; }
+
+/* 최신화 카드 */
+.admactions { display: flex; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+.admactions .btn small { display: block; font-weight: 400; font-size: 11px; opacity: .75; }
+#dataState table { border-collapse: collapse; font-size: 13px; }
+#dataState td { padding: 3px 12px 3px 0; }
+#dataState td:first-child { color: var(--ink3); }
+#jobLog { max-height: 260px; overflow: auto; background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+  font: 12px/1.55 var(--font-mono, monospace); white-space: pre-wrap; }
+
+/* 이력 */
+#historyList table { width: 100%; border-collapse: collapse; font-size: 13px; }
+#historyList th, #historyList td { text-align: left; padding: 6px 8px;
+  border-top: 1px solid var(--line); vertical-align: top; }
+#historyList th { color: var(--ink3); font-weight: 600; border-top: 0; }
+#historyList .hkind { font-weight: 700; white-space: nowrap; }
+#historyList .hchg { font-variant-numeric: tabular-nums; }
+
+/* hidden 복구 — display:flex 가 UA 의 [hidden]{display:none} 을 이기는 사고 방지.
+   app.css 의 .cm[hidden] 복구 규칙과 정확히 같은 이유(실제 사고 전례)다. */
+.admsavebar[hidden], .admmodal[hidden] { display: none; }
+
+/* 저장 바 */
+.admsavebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 80;
+  display: flex; gap: 10px; align-items: center; padding: 12px 20px;
+  background: var(--card); border-top: 2px solid var(--brand);
+  box-shadow: 0 -4px 16px rgba(0,0,0,.08); }
+.admsavebar input { flex: 1; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--bg); color: var(--ink); }
+.admsavebar #saveCount { font-weight: 700; white-space: nowrap; }
+.btn.ghost { background: transparent; color: var(--ink3); border: 1px solid var(--line); }
+
+/* 확인 모달 */
+.admmodal { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center;
+  justify-content: center; background: rgba(0,0,0,.4); }
+.admmodal-box { background: var(--card); border-radius: 12px; padding: 20px;
+  max-width: 560px; width: calc(100% - 40px); max-height: 80vh; overflow: auto; }
+.admmodal-box table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+.admmodal-box td, .admmodal-box th { padding: 6px 8px; border-top: 1px solid var(--line);
+  text-align: left; font-variant-numeric: tabular-nums; }
+.admmodal-box th { border-top: 0; color: var(--ink3); }
+.admmodal-box .arrow { color: var(--brand-2-ink); font-weight: 700; }
+
+@media (max-width: 760px) {
+  .admstrip { grid-template-columns: repeat(2, 1fr); }
+  .admrow { grid-template-columns: 1fr; gap: 6px; }
+}
