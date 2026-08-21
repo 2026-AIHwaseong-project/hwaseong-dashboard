@@ -32,7 +32,16 @@
     'recommendations.run': { method: 'POST', path: '/recommendations', long: true },  // 최적화 계산
     'reports.draft':   { method: 'POST', path: '/reports/draft',  long: true }, // AI 호출 → 타임아웃 김
     'reports.export':  { method: 'POST', path: '/reports/export', long: true, binary: true },
-    'chat.send':       { method: 'POST', path: '/chat', long: true }            // AI 호출 → 타임아웃 김
+    'chat.send':       { method: 'POST', path: '/chat', long: true },           // AI 호출 → 타임아웃 김
+
+    /* 관리자 콘솔 (admin.html 전용 — ADMIN_TOKEN 필요, 미설정 서버는 503).
+       메서드를 GET/POST 로만 쓰는 이유: 서버 CORS allow_methods 가 GET/POST 라
+       PUT 을 쓰면 교차 출처(Pages 배포)에서 프리플라이트가 막힌다. */
+    'admin.status':    { method: 'GET',  path: '/admin/status' },
+    'admin.params':    { method: 'GET',  path: '/admin/params' },
+    'admin.save':      { method: 'POST', path: '/admin/params' },
+    'admin.refresh':   { method: 'POST', path: '/admin/refresh', long: true },  // 재계산 수 분
+    'admin.history':   { method: 'GET',  path: '/admin/history' }
   };
 
   /* 경로의 {placeholder} 를 params 값으로 치환하고, 남은 params 는 쿼리스트링으로 */
