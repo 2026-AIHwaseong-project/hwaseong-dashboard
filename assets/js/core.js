@@ -582,6 +582,94 @@
   function openGuide() { buildGuide().classList.add('open'); }
   function closeGuide() { if (guideModal) guideModal.classList.remove('open'); }
 
+  /* ── KPI 미니 비교차트 (시간대별 가로 막대 + 평균 점선 눈금) ──────────
+     숫자만 있던 KPI 타일에 맥락을 답니다. 세로 막대로 먼저 만들었다가
+     버렸습니다 — 30~39처럼 좁은 범위는 0 기준 세로 막대에서 높이 차이가
+     원리적으로 안 읽힙니다. 가로 막대 + 값 숫자 직접 표기로 바꾸면
+     ① 차이는 숫자가 보증하고 ② 패턴은 길이가 보여주고 ③ 이 제품의 기존
+     차트 문법(우선순위 Top10·권역 요약의 가로 막대·트랙)과도 한 벌이 됩니다.
+     평균은 9px 잔글씨 대신 캡션("평균 33 · 현재 +6")과 막대를 관통하는
+     세로 점선 눈금, 두 곳에서 말합니다. 줄을 누르면 그 시간대로 전환. */
+
+  /**
+   * @param cfg { periods:[{id,name,label}], values:[숫자|null,...], current:'am',
+   *              unit:'개', fmt?:v=>문자열, head?:캡션 대체문구, avgLine?:false }
+   */
+  function kspark(cfg) {
+    var f = cfg.fmt || fmt;
+    var max = 0, sum = 0, n = 0, cur = null;
+    cfg.values.forEach(function (v, i) {
+      if (v != null) { max = Math.max(max, v); sum += v; n++; }
+      if (cfg.periods[i] && cfg.periods[i].id === cfg.current) cur = v;
+    });
+    var complete = n === cfg.values.length && n > 0;
+    var avg = n ? sum / n : 0;
+    var showAvg = cfg.avgLine !== false && max > 0 && complete;
+
+    /* 캡션 — 평균과 '현재가 평균에서 얼마나 떨어져 있는지'를 글자로 명시 */
+    var capHtml;
+    if (cfg.head != null) {
+      capHtml = esc(cfg.head);
+    } else if (!complete) {
+      capHtml = '불러오는 중…';
+    } else {
+      var d = (cur != null) ? cur - avg : null;
+      var dTxt = '';
+      if (d != null) {
+        var da = Math.abs(d);
+        dTxt = (Math.round(da) === 0 && da < 0.5)
+          ? ' · <b>평균 수준</b>'
+          : ' · 현재 <b>' + (d > 0 ? '+' : '−') + f(da) + '</b>';
+      }
+      capHtml = (showAvg ? '<i class="ks-avgkey"></i>' : '') + '평균 ' + f(avg) + dTxt;
+    }
+
+    var html = '<div class="ks-cap"><span>' + capHtml + '</span></div><div class="ks-rows">';
+    cfg.periods.forEach(function (p, i) {
+      var v = cfg.values[i];
+      var w = (v == null || max <= 0) ? 0 : Math.max(2, v / max * 100);
+      var on = p.id === cfg.current;
+      html += '<button type="button" class="ks-row2' + (on ? ' on' : '') +
+        '" data-kperiod="' + esc(p.id) + '"' + (on ? ' aria-current="true"' : '') +
+        ' aria-label="' + esc(p.name + ' ' + p.label + ' — ' +
+          (v == null ? '—' : f(v) + (cfg.unit || '')) +
+          (showAvg && v != null && v > avg ? ' · 평균 초과' : '') + (on ? ' (현재)' : '')) + '">' +
+        '<span class="ks-nm">' + esc(p.name) + '</span>' +
+        '<span class="ks-tr">' +
+        (showAvg ? '<i class="ks-avgtick" style="left:' + (avg / max * 100).toFixed(1) + '%"></i>' : '') +
+        /* 평균 초과 줄만 지표색(hi) — 색 자체가 '평균 위' 라는 뜻이 됩니다.
+           평균이 없는 차트(해소 통행·로딩 중)는 전부 지표색으로 둡니다. */
+        (w > 0 ? '<i class="' + (!showAvg || v > avg ? 'ks-fill hi' : 'ks-fill') +
+          '" style="width:' + w.toFixed(1) + '%"></i>' : '') +
+        '</span>' +
+        '<span class="ks-val">' + (v == null ? '–' : esc(f(v))) + '</span>' +
+        '</button>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  /** KPI 띠 컨테이너에 한 번만 겁니다 — 클릭=시간대 전환, 호버=툴팁 */
+  function wireKspark(host) {
+    if (!host || host.getAttribute('data-ks-wired')) return;
+    host.setAttribute('data-ks-wired', '1');
+    host.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-kperiod]');
+      if (!b) return;
+      var tab = $('#periods [data-period="' + b.getAttribute('data-kperiod') + '"]');
+      if (tab) tab.click();          // 탭과 완전히 같은 경로 — aria·재요청 로직 재사용
+    });
+    function tip(e) {
+      var b = e.target.closest('[data-kperiod]');
+      if (b) showTip(esc(b.getAttribute('aria-label')), e);
+    }
+    host.addEventListener('mouseover', tip);
+    host.addEventListener('mousemove', tip);
+    host.addEventListener('mouseout', function (e) {
+      if (e.target.closest && e.target.closest('[data-kperiod]')) hideTip();
+    });
+  }
+
   /* ── 아이콘 ─────────────────────────────────────────────────────────
      한 벌로 직접 그립니다. 예전에는 ▤ · ✦ 같은 글자 기호를 아이콘 자리에
      썼는데, 그건 폰트마다 모양·굵기·정렬이 제각각이라 나란히 놓으면 한 벌로
@@ -638,6 +726,7 @@
     todayISO: todayISO, nowStamp: nowStamp, korDate: korDate,
     setProjection: setProjection, fitHeight: fitHeight, project: project, xy: xy, unproject: unproject,
     showTip: showTip, hideTip: hideTip, toast: toast,
+    kspark: kspark, wireKspark: wireKspark,
     initTheme: initTheme, applyTheme: applyTheme,
     downloadBlob: downloadBlob,
     barUp: barUp, barDown: barDown, barRight: barRight,

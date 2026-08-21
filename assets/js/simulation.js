@@ -815,6 +815,8 @@
       : (rtrips > 0
           ? ('해소 ' + fmt(rtrips) + '통행/일 — 단가를 논하기엔 표본이 작습니다')
           : '배치를 추가하면 산출됩니다');
+  
+    paintKsparks();
   }
 
   /**
@@ -836,6 +838,56 @@
        라고 적으면 네 줄을 써서 숫자 하나를 전하게 됩니다(값 32개를 그대로 반복).
        비교 대상이 생겼을 때만 기준선 값을 함께 보여 줍니다. */
     $('#' + id + 's').textContent = (deltaVal == null) ? '' : subtext;
+  }
+
+  /* ── KPI 미니 비교차트 (dashboard.js 와 같은 컴포넌트) ────────────────
+     여기 값은 viewPeriods() 를 씁니다 — 배치가 있으면 '시나리오 적용 후'
+     값이라, 이 배치안이 어느 시간대를 얼마나 살리는지가 막대에도 보입니다.
+     영역을 지정하면 영역 기준으로 같이 좁혀집니다(타일 숫자와 같은 모수).
+     k4(해소 통행당 사업비)는 시간대 비교가 성립하지 않는 지표라 뺍니다. */
+  function ksFmt(v) { return v >= 10000 ? C.fmt1(v / 10000) + '만' : fmt(Math.round(v)); }
+
+  function paintKsparks() {
+    if (!S.meta || !S.result) return;
+    var periods = S.meta.periods || [];
+    var byId = {};
+    viewPeriods().forEach(function (p) { byId[p.period] = p; });
+    [['kc1', 'needCells', '개'],
+     ['kc2', 'potentialTripsPerDay', ' 통행/일'],
+     ['kc3', 'elderlyTripsPerDay', ' 통행/일']].forEach(function (def) {
+      var host = $('#' + def[0]);
+      if (!host) return;
+      host.innerHTML = C.kspark({
+        periods: periods,
+        values: periods.map(function (p) {
+          return byId[p.id] ? byId[p.id].kpi[def[1]] : null;
+        }),
+        current: S.period,
+        unit: def[2],
+        fmt: ksFmt
+      });
+    });
+    /* k4 는 원/통행이라 시간대 비교가 성립하지 않지만, 그 단가의 분모(해소
+       통행)는 시간대별로 존재합니다 — 이 배치안이 어느 시간대를 얼마나
+       살리는지를 여기 그립니다. 평균선은 뜻이 없어 끕니다. */
+    var k4 = $('#kc4');
+    if (k4) {
+      var hasPl = S.placements.length > 0;
+      k4.innerHTML = C.kspark({
+        periods: periods,
+        values: periods.map(function (p) {
+          var b = byId[p.id];
+          if (!b || !hasPl) return null;      /* 배치 전 — 값이 없다는 뜻의 '–' */
+          return Math.max(0, -(b.delta.potentialTripsPerDay || 0));
+        }),
+        current: S.period,
+        unit: ' 통행/일 해소',
+        fmt: ksFmt,
+        avgLine: false,
+        head: hasPl ? '시간대별 해소 통행' : '배치하면 해소량이 표시됩니다'
+      });
+    }
+    C.wireKspark($('.kpis'));
   }
 
   function paintPlacementList() {

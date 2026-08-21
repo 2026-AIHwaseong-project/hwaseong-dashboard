@@ -1752,3 +1752,47 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   .rec-scope .rs-btn,.rec-tab,.trow,.scen,.scen .sload,.rgtbl tbody tr,.rgtbl th{
     transition:none}
 }
+
+/* ===========================================================================
+ * [30] KPI 미니 비교차트 (kspark — core.js)
+ *   시간대 4줄 가로 막대 + 값 숫자 + 평균 점선 눈금. 우선순위 Top10 ·
+ *   권역 요약의 가로 막대(트랙 위 채움)와 같은 문법이라 화면 전체가 한 벌로
+ *   읽힙니다. 줄을 누르면 그 시간대로 전환(시간대 탭과 같은 동작).
+ * ======================================================================== */
+/* 타일을 세로 플렉스로 — 차트가 타일 바닥에 붙어, 위 글줄 수가 달라도
+   네 타일의 차트가 한 줄로 나란히 섭니다(정렬이 곧 완성도입니다). */
+.kpi{display:flex;flex-direction:column}
+.kspark{margin-top:auto;padding-top:11px}
+.kspark:empty{display:none}
+/* 캡션 — 평균값과 현재-평균 차이를 잔글씨가 아니라 읽히는 크기로 */
+.ks-cap{display:flex;justify-content:flex-end;margin-bottom:6px;
+  font-size:11px;color:var(--ink2);line-height:1}
+.ks-cap b{color:var(--ink);font-weight:700}
+.ks-avgkey{display:inline-block;width:0;height:10px;margin:0 5px -2px 1px;
+  border-left:2px dashed var(--ink3)}
+.ks-rows{display:flex;flex-direction:column;gap:5px}
+.ks-row2{display:grid;grid-template-columns:30px 1fr 44px;gap:8px;align-items:center;
+  background:none;border:0;padding:2px 3px;margin:-2px -3px;cursor:pointer;border-radius:6px}
+.ks-row2:hover{background:var(--selbg)}
+.ks-nm{font-size:10px;color:var(--ink3);text-align:left;line-height:1}
+.ks-row2.on .ks-nm{color:var(--ink);font-weight:700}
+/* 트랙은 중립색 — 빨강·보라·초록 어떤 채움과도 부딪히지 않게 */
+.ks-tr{position:relative;height:6px;border-radius:3px;background:var(--grid)}
+/* 기본(평균 이하) = 중립 — 문제가 아닌 줄은 뒤로 물러납니다.
+   --ink3 는 라이트·다크 양쪽에서 트랙과 안전하게 갈리는 회색입니다. */
+.ks-fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px;
+  background:var(--ink3);opacity:.32;transition:width .35s,opacity .15s}
+.ks-fill.hi{background:var(--bad);opacity:.42}
+.ks-row2.on .ks-fill{opacity:.75}
+.ks-row2.on .ks-fill.hi{opacity:.95}
+.ks-row2:not(.on):hover .ks-fill{opacity:.6}
+/* 평균 눈금 — 트랙보다 위아래로 3px 길게, 모든 줄에서 같은 자리 →
+   네 줄을 관통하는 끊긴 세로선으로 읽힙니다 */
+.ks-avgtick{position:absolute;top:-3px;bottom:-3px;width:0;
+  border-left:2px dashed var(--ink3);opacity:.75}
+.ks-val{font-size:10.5px;color:var(--ink3);text-align:right;line-height:1;
+  font-variant-numeric:tabular-nums}
+.ks-row2.on .ks-val{color:var(--ink);font-weight:700;font-size:11px}
+.kspark.drt .ks-fill.hi{background:var(--tag-drt-fg)}
+.kspark.good .ks-fill.hi{background:var(--good)}
+@media (prefers-reduced-motion:reduce){.ks-fill{transition:none}}

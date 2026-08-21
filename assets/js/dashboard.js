@@ -29,7 +29,8 @@
     selectedStopId: null,
     profile: null,
     focusRegion: null,
-    map: null
+    map: null,
+    kpis: {}            // 시간대별 KPI 캐시 — KPI 미니차트(kspark)용
   };
 
   /* =====================================================================
@@ -233,6 +234,54 @@
     $('#k3s').textContent = '사각지대 잠재수요의 ' + share.toFixed(1) + '% · 교통약자 가중 근거';
 
     $('#k4').innerHTML = fmt(k.drtCells) + '<small>개</small>';
+
+    S.kpis[S.period] = k;
+    prefetchKpis();
+    paintKsparks();
+  }
+
+  /* ── KPI 미니 비교차트 ────────────────────────────────────────────────
+     타일의 숫자는 '지금 시간대' 하나뿐이라, 그 값이 큰 건지 작은 건지
+     맥락이 없었습니다. 네 시간대 값을 막대로 나란히 놓고 평균선을 그어
+     "심야가 유독 높다" 같은 패턴이 타일 안에서 바로 읽히게 합니다.
+     막대 클릭 = 그 시간대로 전환(탭과 같은 경로).
+
+     다른 시간대 KPI 는 백그라운드에서 미리 받아 둡니다 — api.grid 가
+     캐시라 비용은 한 번뿐이고, 덤으로 시간대 탭 전환이 즉시가 됩니다. */
+  var _prefetched = false;
+  function prefetchKpis() {
+    if (_prefetched || !S.meta) return;
+    _prefetched = true;
+    (S.meta.periods || []).forEach(function (p) {
+      if (S.kpis[p.id]) return;
+      api.grid(p.id).then(function (g) {
+        S.kpis[p.id] = g.kpi;
+        paintKsparks();
+      }).catch(function () { /* 실패해도 타일 숫자는 그대로 — 차트만 비웁니다 */ });
+    });
+  }
+
+  /* 만 단위가 넘는 값(잠재수요)은 '3.9만' 으로 줄여 씁니다 — 9px 라벨 자리 */
+  function ksFmt(v) { return v >= 10000 ? C.fmt1(v / 10000) + '만' : fmt(Math.round(v)); }
+
+  function paintKsparks() {
+    if (!S.meta) return;
+    var periods = S.meta.periods || [];
+    [['kc1', 'needCells', '개'],
+     ['kc2', 'potentialTripsPerDay', ' 통행/일'],
+     ['kc3', 'elderlyTripsPerDay', ' 통행/일'],
+     ['kc4', 'drtCells', '개']].forEach(function (def) {
+      var host = $('#' + def[0]);
+      if (!host) return;
+      host.innerHTML = C.kspark({
+        periods: periods,
+        values: periods.map(function (p) { return S.kpis[p.id] ? S.kpis[p.id][def[1]] : null; }),
+        current: S.period,
+        unit: def[2],
+        fmt: ksFmt
+      });
+    });
+    C.wireKspark($('.kpis'));
   }
 
   /* =====================================================================
