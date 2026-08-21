@@ -134,6 +134,9 @@
         recommendation: S.recommendation
           ? { placements: S.recommendation.placements, summary: S.recommendation.summary,
               methodLabel: S.recommendation.methodLabel, methodNote: S.recommendation.methodNote,
+              /* 주말 기준선에 같은 배치를 적용했을 때의 효과 — 추천이 이미 반영해 고른 것을
+                 보고서 문장이 설명할 수 있도록 근거로 같이 넘깁니다. */
+              weekendImpact: S.recommendation.weekendImpact || null,
               edited: S.recEdited }
           : null
       };

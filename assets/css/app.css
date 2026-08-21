@@ -489,7 +489,10 @@ h1{font-size:clamp(18px,1.45vw,23px);font-weight:800;margin:0;letter-spacing:-.0
    탭은 부가 컨트롤이 아니라 문서의 목차처럼 굵게 섭니다.
    고른 탭만 공식 파랑으로 채우고, 주황은 그 아래 3px 밑줄 한 줄로 '지금 여기'
    만 표시합니다 — 주황은 대비가 2.95:1 이라 글자로는 쓸 수 없기 때문입니다. */
-.periods{display:flex;gap:2px;border:1px solid var(--line);border-radius:11px;padding:3px;background:var(--card)}
+/* 요일 토글 + 시간대 탭을 한 묶음으로 감싸 함께 줄바꿈되게 합니다 — 따로 두면
+   폭이 좁을 때 시간대 탭만 다음 줄로 밀려 "그 왼편에" 배치가 깨집니다. */
+.ptoggles{display:flex;gap:8px;flex-wrap:wrap}
+.periods,.daytype{display:flex;gap:2px;border:1px solid var(--line);border-radius:11px;padding:3px;background:var(--card)}
 .pbtn{position:relative;border-radius:8px;padding:7px 15px 8px;text-align:center;color:var(--ink2);
   transition:background .12s,color .12s}
 .pbtn b{display:block;font-size:13px;font-weight:700;line-height:1.25;color:inherit;letter-spacing:-.01em}
@@ -1318,7 +1321,7 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   .kpi:nth-child(odd){border-left:0}
   .kpi:nth-child(n+3){border-top:1px solid var(--line)}
   h1{font-size:18px}
-  .periods{width:100%;justify-content:space-between}
+  .periods,.daytype{width:100%;justify-content:space-between}
   .wrap{padding:12px 12px 24px}
   .topnav .tn-in{padding:8px 12px}
   .topnav{--rail-pad:12px}   /* 위 패딩과 함께 — 주황 레일이 CI 끝에서 끊기도록 */

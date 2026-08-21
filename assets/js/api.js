@@ -463,9 +463,12 @@
       return cached('meta', function () { return call('meta.get'); });
     },
 
-    /** 격자 목록 + 해당 시간대 KPI */
-    grid: function (period) {
-      return cached('grid:' + period, function () { return call('grid.list', { period: period }); });
+    /** 격자 목록 + 해당 시간대 KPI. daytype 은 'wd'(평일, 기본) | 'we'(주말) */
+    grid: function (period, daytype) {
+      var dt = daytype || 'wd';
+      return cached('grid:' + period + ':' + dt, function () {
+        return call('grid.list', { period: period, daytype: dt });
+      });
     },
 
     /** 정류장 목록 (캐시) */
@@ -486,10 +489,11 @@
       return cached('routes', function () { return call('routes.list'); });
     },
 
-    /** 노선 조정 우선순위 */
-    priorities: function (period, limit) {
-      return cached('pri:' + period + ':' + (limit || 10), function () {
-        return call('priorities.list', { period: period, limit: limit || 10 });
+    /** 노선 조정 우선순위. daytype 은 'wd'(평일, 기본) | 'we'(주말) */
+    priorities: function (period, limit, daytype) {
+      var dt = daytype || 'wd';
+      return cached('pri:' + period + ':' + (limit || 10) + ':' + dt, function () {
+        return call('priorities.list', { period: period, limit: limit || 10, daytype: dt });
       });
     },
 
