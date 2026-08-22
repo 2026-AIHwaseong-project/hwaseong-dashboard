@@ -261,7 +261,9 @@
 
     $('#k4').innerHTML = fmt(k.drtCells) + '<small>개</small>';
 
-    S.kpis[S.period] = k;
+    /* 요일축이 섞이면 안 됩니다 — 평일 차트에 주말 값이 끼는 사고 방지로
+       저장소를 daytype 별로 나눕니다. */
+    (S.kpis[S.daytype] = S.kpis[S.daytype] || {})[S.period] = k;
     prefetchKpis();
     paintKsparks();
   }
@@ -274,15 +276,18 @@
 
      다른 시간대 KPI 는 백그라운드에서 미리 받아 둡니다 — api.grid 가
      캐시라 비용은 한 번뿐이고, 덤으로 시간대 탭 전환이 즉시가 됩니다. */
-  var _prefetched = false;
+  var _prefetched = {};
   function prefetchKpis() {
-    if (_prefetched || !S.meta) return;
-    _prefetched = true;
+    if (!S.meta || _prefetched[S.daytype]) return;
+    _prefetched[S.daytype] = true;
+    var dt = S.daytype;
+    var store = S.kpis[dt] = S.kpis[dt] || {};
     (S.meta.periods || []).forEach(function (p) {
-      if (S.kpis[p.id]) return;
-      api.grid(p.id).then(function (g) {
-        S.kpis[p.id] = g.kpi;
-        paintKsparks();
+      if (store[p.id]) return;
+      api.grid(p.id, dt).then(function (g) {
+        store[p.id] = g.kpi;
+        /* 받는 사이 축을 바꿨으면 그 축의 페인트가 이미 책임집니다 */
+        if (S.daytype === dt) paintKsparks();
       }).catch(function () { /* 실패해도 타일 숫자는 그대로 — 차트만 비웁니다 */ });
     });
   }
@@ -301,7 +306,7 @@
       if (!host) return;
       host.innerHTML = C.kspark({
         periods: periods,
-        values: periods.map(function (p) { return S.kpis[p.id] ? S.kpis[p.id][def[1]] : null; }),
+        values: periods.map(function (p) { var k = (S.kpis[S.daytype] || {})[p.id]; return k ? k[def[1]] : null; }),
         current: S.period,
         unit: def[2],
         fmt: ksFmt
