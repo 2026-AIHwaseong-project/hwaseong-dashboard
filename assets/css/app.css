@@ -1927,10 +1927,8 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 /* 보조 3개는 오히려 반걸음 물러납니다 — 차이가 없으면 위계도 없습니다 */
 .kpi:not(.hero) .vl{font-size:clamp(17px,1.55vw,21px);font-weight:650}
 .kpi:not(.hero) .lb{color:var(--ink3)}
-/* 사이드 카드 디박싱 — 리스트에 상자는 과합니다. 면(바탕 톤)과 킥커 제목,
-   행 사이 괘선만 남깁니다. 지도 카드는 화면의 닻이라 상자를 유지합니다 */
-.sidecard{background:transparent;border:0;box-shadow:none;border-radius:0;
-  padding:2px 2px 10px}
+/* 사이드 카드(Top10·시나리오 등)는 .card 의 흰 면을 그대로 씁니다 — KPI 띠와
+   같은 결론(팀 리뷰): 경계는 면으로, 위계는 킥커 제목과 내용 차등으로. */
 /* 킥커 — 섹션 제목은 작고 조용하게, 내용이 크게. 제목이 크면 전부가 제목입니다 */
 .chead h2{font-size:11.5px;font-weight:700;letter-spacing:.055em;color:var(--ink3)}
 .mapcard .chead h2{font-size:13px;letter-spacing:.02em;color:var(--ink)}
@@ -1964,9 +1962,6 @@ button.rhead:hover .rkind{border-color:var(--brand)}
  *   정확히 세 개의 강조점을 찍습니다. 셋 다 이미 있는 상태색·선택색이라
  *   새 색은 하나도 들어오지 않습니다.
  * ======================================================================== */
-/* 히어로 숫자 = 문제 지표 — 상태색으로. 다크에서는 토큰이 알아서 밝은 색 */
-.kpi.hero .vl{color:var(--bad)}
-.kpi.hero .vl small{color:var(--ink2)}
 /* 미니차트의 '현재' 행 — 굵은 값만으론 스치기 쉬워 선택 배경면을 깝니다 */
 .ks-row2.on{background:var(--selbg);border-radius:5px}
 /* 브리핑의 핵심 숫자 — 본문 잉크와 갈라 브랜드 남색으로 */
