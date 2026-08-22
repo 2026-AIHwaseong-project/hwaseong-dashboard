@@ -1321,7 +1321,14 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   .kpi:nth-child(odd){border-left:0}
   .kpi:nth-child(n+3){border-top:1px solid var(--line)}
   h1{font-size:18px}
-  .periods,.daytype{width:100%;justify-content:space-between}
+  /* 요일 토글은 2개, 시간대 탭은 4개 — justify-content:space-between 은 개수에
+     따라 간격이 달라져 2개일 때 가운데가 뻥 뚫려 보입니다(실측 버그). flex:1 로
+     칸을 균등 분할하면 개수와 무관하게 항상 꽉 찹니다. */
+  .periods,.daytype{width:100%}
+  .periods .pbtn,.daytype .pbtn{flex:1}
+  /* 요일 토글은 부제(span) 없이 한 줄이라 시간대 탭(47px)보다 짧아져(31px)
+     터치 타깃 44px 미만이 됩니다 — 세로로 채워 높이를 맞춥니다. */
+  .daytype .pbtn{min-height:44px;display:flex;align-items:center;justify-content:center}
   .wrap{padding:12px 12px 24px}
   .topnav .tn-in{padding:8px 12px}
   .topnav{--rail-pad:12px}   /* 위 패딩과 함께 — 주황 레일이 CI 끝에서 끊기도록 */
