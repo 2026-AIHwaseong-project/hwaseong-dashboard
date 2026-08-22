@@ -48,7 +48,10 @@
         어디에 버스가 부족한지와 노선 조정 우선순위를 산출합니다.
         <span class="mono" style="font-size:11px">최종 갱신 <span id="updatedAt">–</span></span></p>
     </div>
-    <div class="periods" id="periods" role="tablist" aria-label="시간대 선택"></div>
+    <div class="ptoggles">
+      <div class="daytype" id="daytype" role="tablist" aria-label="요일 선택"></div>
+      <div class="periods" id="periods" role="tablist" aria-label="시간대 선택"></div>
+    </div>
   </header>
 
   <!-- ───────────────────── 한 줄 브리핑 ───────────────────── -->
@@ -56,29 +59,33 @@
 
   <!-- ─────────────────────────── KPI ─────────────────────────── -->
   <section class="kpis" aria-label="핵심 지표">
-    <div class="kpi">
+    <div class="kpi hero">
       <div class="lb">고수요·저공급 격자
         <button class="help" data-help="need" type="button">?</button></div>
       <div class="vl pending" id="k1">–</div>
       <div class="sb" id="k1s">–</div>
+      <div class="kspark" id="kc1" aria-label="시간대별 비교"></div>
     </div>
     <div class="kpi">
       <div class="lb">사각지대 잠재수요
         <button class="help" data-help="potential" type="button">?</button></div>
       <div class="vl pending" id="k2">–</div>
       <div class="sb" id="k2s">–</div>
+      <div class="kspark" id="kc2" aria-label="시간대별 비교"></div>
     </div>
     <div class="kpi">
       <div class="lb">사각지대 고령 통행
         <button class="help" data-help="elderly" type="button">?</button></div>
       <div class="vl pending" id="k3">–</div>
       <div class="sb" id="k3s">–</div>
+      <div class="kspark" id="kc3" aria-label="시간대별 비교"></div>
     </div>
     <div class="kpi">
       <div class="lb">DRT(똑버스) 후보 격자
         <button class="help" data-help="drt" type="button">?</button></div>
       <div class="vl pending" id="k4">–</div>
       <div class="sb">저수요·저공급 — 노선 신설 대신 수요응답형</div>
+      <div class="kspark drt" id="kc4" aria-label="시간대별 비교"></div>
     </div>
   </section>
 
@@ -91,13 +98,14 @@
       <div class="chead">
         <h2>격자 미스매칭 지도
           <button class="help" data-help="mi" type="button">?</button></h2>
-        <span class="hsub" id="mapSub">붉을수록 수요 대비 버스가 부족한 격자 · 실제 읍면동 경계</span>
+        <span class="hsub" id="mapSub">붉은 칸일수록 버스가 부족합니다 — 칸을 누르면 상세가 열립니다</span>
+        <button class="tbtn gopen" data-guide-open type="button">사용 안내</button>
       </div>
       <div class="mtools">
         <div class="lset" id="layers" role="tablist" aria-label="지도 레이어">
-          <button class="lbtn on" data-layer="mi" type="button">미스매칭 MI</button>
-          <button class="lbtn" data-layer="demand" type="button">수요 D</button>
-          <button class="lbtn" data-layer="supply" type="button">공급 S</button>
+          <button class="lbtn on" data-layer="mi" type="button" title="미스매칭 지수 MI — 수요 대비 공급 부족 정도">버스 부족도</button>
+          <button class="lbtn" data-layer="demand" type="button" title="잠재수요 D">수요</button>
+          <button class="lbtn" data-layer="supply" type="button" title="공급 지수 S">공급</button>
           <button class="lbtn" data-layer="flow" type="button">유동인구</button>
         </div>
         <div class="tset">

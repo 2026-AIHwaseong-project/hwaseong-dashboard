@@ -941,6 +941,8 @@
       context: {
         org: CONFIG.APP.org,
         dept: CONFIG.APP.dept,
+        /* 대시보드에서만 있는 값(시뮬레이션 화면엔 요일 토글이 없어 undefined → 'wd') */
+        daytype: ctx.daytype || 'wd',
         kpi: ctx.kpi || null,
         priorities: ctx.priorities || null,
         simulation: inclSim ? (ctx.simulation || null) : null,

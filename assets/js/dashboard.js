@@ -21,6 +21,7 @@
     meta: null,
     period: 'am',
     periodName: '출근',
+    daytype: 'wd',
     grid: null,          // { cells, kpi, ... }
     priorities: null,
     stops: [],
@@ -29,7 +30,8 @@
     selectedStopId: null,
     profile: null,
     focusRegion: null,
-    map: null
+    map: null,
+    kpis: {}            // 시간대별 KPI 캐시 — KPI 미니차트(kspark)용
   };
 
   /* =====================================================================
@@ -43,6 +45,7 @@
     HW.report.setContextProvider(function () {
       return {
         period: S.period,
+        daytype: S.daytype,
         meta: S.meta,
         kpi: S.grid ? S.grid.kpi : null,
         priorities: S.priorities ? S.priorities.items : null,
@@ -54,13 +57,18 @@
     api.meta().then(function (meta) {
       S.meta = meta;
       renderPeriodTabs(meta.periods);
+      renderDaytypeToggle();
       renderFooter(meta);
       renderDataQuality(meta);
       /* 격자 크기는 서버 meta 를 따른다 — HTML 에 1km 를 박아두면 세분화 때 틀어진다 */
       var sub = $('#mapSub');
       if (sub && meta.grid && meta.grid.sizeMeters) {
-        sub.textContent = '붉을수록 수요 대비 버스가 부족한 격자 · 격자 ' +
-          (meta.grid.sizeMeters / 1000) + 'km · 실제 읍면동 경계';
+        /* 설명("~한 격자")이 아니라 행동("누르면 열립니다")을 말합니다 —
+           매뉴얼 없이 쓰게 하는 건 안내문이 아니라 이런 마이크로카피입니다. */
+        /* '격자 1km' 는 한 단위로 묶습니다(NBSP) — 좁은 화면에서 '1km'만
+           고아로 떨어져 다음 줄에 남는 것을 막습니다. */
+        sub.textContent = '붉은 칸일수록 버스가 부족합니다 — 칸을 누르면 상세가 열립니다 · 격자\u00A0' +
+          (meta.grid.sizeMeters / 1000) + 'km';
       }
       S.map = HW.createMap({
         svg: $('#map'), legend: $('#legend'), meta: meta,
@@ -170,6 +178,29 @@
     });
   }
 
+  /* 평일/주말 전환. 시간대(4개)와 별개 축이라 토글은 따로 두되, 전환 시
+     loadPeriod 를 그대로 재사용합니다 — 격자·우선순위 재요청 로직이 같습니다. */
+  var DAYTYPE_LABEL = { wd: '평일', we: '주말' };
+  function renderDaytypeToggle() {
+    var host = $('#daytype');
+    if (!host) return;
+    host.innerHTML = ['wd', 'we'].map(function (dt) {
+      return '<button class="pbtn' + (dt === S.daytype ? ' on' : '') + '" data-daytype="' + dt +
+        '" role="tab" aria-selected="' + (dt === S.daytype) + '"><b>' + DAYTYPE_LABEL[dt] + '</b></button>';
+    }).join('');
+    host.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-daytype]');
+      if (!b || b.getAttribute('data-daytype') === S.daytype) return;
+      S.daytype = b.getAttribute('data-daytype');
+      $$('#daytype [data-daytype]').forEach(function (x) {
+        var on = x.getAttribute('data-daytype') === S.daytype;
+        x.classList.toggle('on', on);
+        x.setAttribute('aria-selected', String(on));
+      });
+      loadPeriod(S.period);
+    });
+  }
+
   /* 탭을 빠르게 연달아 누르면 먼저 보낸 요청이 늦게 도착해 이전 시간대
      데이터가 화면을 덮을 수 있습니다. 마지막 요청만 반영합니다. */
   var loadSeq = 0;
@@ -184,9 +215,9 @@
       b.classList.toggle('on', on);
       b.setAttribute('aria-selected', String(on));
     });
-    $('#pchip').textContent = p ? (p.name + ' ' + p.label) : pid;
+    $('#pchip').textContent = (DAYTYPE_LABEL[S.daytype] || '') + ' · ' + (p ? (p.name + ' ' + p.label) : pid);
 
-    return Promise.all([api.grid(pid), api.priorities(pid, 10)]).then(function (r) {
+    return Promise.all([api.grid(pid, S.daytype), api.priorities(pid, 10, S.daytype)]).then(function (r) {
       if (seq !== loadSeq) return;   // 그사이 다른 탭으로 넘어갔으면 버립니다
       clearFail();
       S.grid = r[0];
@@ -233,6 +264,59 @@
     $('#k3s').textContent = '사각지대 잠재수요의 ' + share.toFixed(1) + '% · 교통약자 가중 근거';
 
     $('#k4').innerHTML = fmt(k.drtCells) + '<small>개</small>';
+
+    /* 요일축이 섞이면 안 됩니다 — 평일 차트에 주말 값이 끼는 사고 방지로
+       저장소를 daytype 별로 나눕니다. */
+    (S.kpis[S.daytype] = S.kpis[S.daytype] || {})[S.period] = k;
+    prefetchKpis();
+    paintKsparks();
+  }
+
+  /* ── KPI 미니 비교차트 ────────────────────────────────────────────────
+     타일의 숫자는 '지금 시간대' 하나뿐이라, 그 값이 큰 건지 작은 건지
+     맥락이 없었습니다. 네 시간대 값을 막대로 나란히 놓고 평균선을 그어
+     "심야가 유독 높다" 같은 패턴이 타일 안에서 바로 읽히게 합니다.
+     막대 클릭 = 그 시간대로 전환(탭과 같은 경로).
+
+     다른 시간대 KPI 는 백그라운드에서 미리 받아 둡니다 — api.grid 가
+     캐시라 비용은 한 번뿐이고, 덤으로 시간대 탭 전환이 즉시가 됩니다. */
+  var _prefetched = {};
+  function prefetchKpis() {
+    if (!S.meta || _prefetched[S.daytype]) return;
+    _prefetched[S.daytype] = true;
+    var dt = S.daytype;
+    var store = S.kpis[dt] = S.kpis[dt] || {};
+    (S.meta.periods || []).forEach(function (p) {
+      if (store[p.id]) return;
+      api.grid(p.id, dt).then(function (g) {
+        store[p.id] = g.kpi;
+        /* 받는 사이 축을 바꿨으면 그 축의 페인트가 이미 책임집니다 */
+        if (S.daytype === dt) paintKsparks();
+      }).catch(function () { /* 실패해도 타일 숫자는 그대로 — 차트만 비웁니다 */ });
+    });
+  }
+
+  /* 만 단위가 넘는 값(잠재수요)은 '3.9만' 으로 줄여 씁니다 — 9px 라벨 자리 */
+  function ksFmt(v) { return v >= 10000 ? C.fmt1(v / 10000) + '만' : fmt(Math.round(v)); }
+
+  function paintKsparks() {
+    if (!S.meta) return;
+    var periods = S.meta.periods || [];
+    [['kc1', 'needCells', '개'],
+     ['kc2', 'potentialTripsPerDay', ' 통행/일'],
+     ['kc3', 'elderlyTripsPerDay', ' 통행/일'],
+     ['kc4', 'drtCells', '개']].forEach(function (def) {
+      var host = $('#' + def[0]);
+      if (!host) return;
+      host.innerHTML = C.kspark({
+        periods: periods,
+        values: periods.map(function (p) { var k = (S.kpis[S.daytype] || {})[p.id]; return k ? k[def[1]] : null; }),
+        current: S.period,
+        unit: def[2],
+        fmt: ksFmt
+      });
+    });
+    C.wireKspark($('.kpis'));
   }
 
   /* =====================================================================

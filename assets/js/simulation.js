@@ -42,7 +42,8 @@
     recStrategy: 'efficiency',  // 어떤 목적으로 고를지 (효율/약자/균형/즉시)
     recRegion: null,        // 추천 범위 읍면동 (null = 화성시 전체)
     area: null,             // 분석 영역 안 격자 ID Set (null = 화성시 전체)
-    baseCells: {}           // 시간대별 기준선 격자 — 영역 KPI 를 다시 세는 데 씁니다
+    baseCells: {},          // 시간대별 기준선 격자 — 영역 KPI 를 다시 세는 데 씁니다
+    cmpPick: []             // [비교]로 고른 저장 시나리오 index — 최대 2개
   };
 
   /* =====================================================================
@@ -134,6 +135,9 @@
         recommendation: S.recommendation
           ? { placements: S.recommendation.placements, summary: S.recommendation.summary,
               methodLabel: S.recommendation.methodLabel, methodNote: S.recommendation.methodNote,
+              /* 주말 기준선에 같은 배치를 적용했을 때의 효과 — 추천이 이미 반영해 고른 것을
+                 보고서 문장이 설명할 수 있도록 근거로 같이 넘깁니다. */
+              weekendImpact: S.recommendation.weekendImpact || null,
               edited: S.recEdited }
           : null
       };
@@ -179,6 +183,9 @@
       return Promise.all([api.stops(), api.routes(), api.grid(S.period)]);
     }).then(function (r) {
       S.map.setData({ stops: r[0].stops, routes: r[1].routes, cells: r[2].cells, scale: r[2].scale });
+      /* 부트에서 받은 격자를 기준선 창고에 적립합니다 — 저장본 검증(sanePlacements)이
+         추가 요청 없이 첫 클릭부터 동작합니다. */
+      S.baseCells[S.period] = r[2].cells;
       wireControls();
       renderScenarioList();
       syncSideHeight();
@@ -815,6 +822,8 @@
       : (rtrips > 0
           ? ('해소 ' + fmt(rtrips) + '통행/일 — 단가를 논하기엔 표본이 작습니다')
           : '배치를 추가하면 산출됩니다');
+  
+    paintKsparks();
   }
 
   /**
@@ -836,6 +845,56 @@
        라고 적으면 네 줄을 써서 숫자 하나를 전하게 됩니다(값 32개를 그대로 반복).
        비교 대상이 생겼을 때만 기준선 값을 함께 보여 줍니다. */
     $('#' + id + 's').textContent = (deltaVal == null) ? '' : subtext;
+  }
+
+  /* ── KPI 미니 비교차트 (dashboard.js 와 같은 컴포넌트) ────────────────
+     여기 값은 viewPeriods() 를 씁니다 — 배치가 있으면 '시나리오 적용 후'
+     값이라, 이 배치안이 어느 시간대를 얼마나 살리는지가 막대에도 보입니다.
+     영역을 지정하면 영역 기준으로 같이 좁혀집니다(타일 숫자와 같은 모수).
+     k4(해소 통행당 사업비)는 시간대 비교가 성립하지 않는 지표라 뺍니다. */
+  function ksFmt(v) { return v >= 10000 ? C.fmt1(v / 10000) + '만' : fmt(Math.round(v)); }
+
+  function paintKsparks() {
+    if (!S.meta || !S.result) return;
+    var periods = S.meta.periods || [];
+    var byId = {};
+    viewPeriods().forEach(function (p) { byId[p.period] = p; });
+    [['kc1', 'needCells', '개'],
+     ['kc2', 'potentialTripsPerDay', ' 통행/일'],
+     ['kc3', 'elderlyTripsPerDay', ' 통행/일']].forEach(function (def) {
+      var host = $('#' + def[0]);
+      if (!host) return;
+      host.innerHTML = C.kspark({
+        periods: periods,
+        values: periods.map(function (p) {
+          return byId[p.id] ? byId[p.id].kpi[def[1]] : null;
+        }),
+        current: S.period,
+        unit: def[2],
+        fmt: ksFmt
+      });
+    });
+    /* k4 는 원/통행이라 시간대 비교가 성립하지 않지만, 그 단가의 분모(해소
+       통행)는 시간대별로 존재합니다 — 이 배치안이 어느 시간대를 얼마나
+       살리는지를 여기 그립니다. 평균선은 뜻이 없어 끕니다. */
+    var k4 = $('#kc4');
+    if (k4) {
+      var hasPl = S.placements.length > 0;
+      k4.innerHTML = C.kspark({
+        periods: periods,
+        values: periods.map(function (p) {
+          var b = byId[p.id];
+          if (!b || !hasPl) return null;      /* 배치 전 — 값이 없다는 뜻의 '–' */
+          return Math.max(0, -(b.delta.potentialTripsPerDay || 0));
+        }),
+        current: S.period,
+        unit: ' 통행/일 해소',
+        fmt: ksFmt,
+        avgLine: false,
+        head: hasPl ? '시간대별 해소 통행' : '배치하면 해소량이 표시됩니다'
+      });
+    }
+    C.wireKspark($('.kpis'));
   }
 
   function paintPlacementList() {
@@ -1143,9 +1202,336 @@
     return p ? p.name : (pid || '–');
   }
 
+  /* =====================================================================
+   * 시나리오 비교
+   *   저장된 시나리오 2개를 같은 엔진(POST /simulations)으로 다시 계산해
+   *   기준선과 나란히 놓습니다. 숫자는 전부 결정론 — AI 는 [소견 생성]을
+   *   눌렀을 때 문장만 씁니다. "어느 안이 낫다"는 단정하지 않고 지표별
+   *   우위만 표시합니다. 효율은 A, 교통약자는 B 가 앞설 수 있고, 그 사이의
+   *   선택이 담당자의 정책 판단이기 때문입니다.
+   * =================================================================== */
+  function togglePick(i) {
+    var at = S.cmpPick.indexOf(i);
+    if (at >= 0) S.cmpPick.splice(at, 1);
+    else if (S.cmpPick.length >= 2) {
+      C.toast('비교는 한 번에 2개까지입니다 — 먼저 하나를 해제하세요.');
+      return;
+    }
+    else S.cmpPick.push(i);
+    $$('#scenList [data-pick]').forEach(function (b) {
+      var on = S.cmpPick.indexOf(+b.getAttribute('data-pick')) >= 0;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+    syncCmpBar();
+  }
+
+  function syncCmpBar() {
+    var b = $('#btnCompare');
+    if (b) b.hidden = S.cmpPick.length !== 2;
+  }
+
+  /** 저장본을 저장 당시 조건 그대로 다시 계산합니다(화성시 전체 기준). */
+  function simOf(s) {
+    return api.runSimulation({
+      name: s.name,
+      period: s.period || S.period,
+      budgetKrw: s.budgetKrw,
+      placements: (s.placements || []).map(function (p) {
+        return { type: p.type, cellId: p.cellId, count: p.count };
+      })
+    });
+  }
+
+  /* 격자 데이터셋이 개편되면서(분할격자 a~d 접미사 시절) 오래된 저장본이 지금
+     없는 격자 id 를 들고 있을 수 있습니다 — 서버로 보내 400 으로 죽느니 여기서
+     고치거나 뺍니다. 접미사만 떼면 지금 격자와 일치하는 배치는 옮겨 살립니다.
+     (현행 786개 id 중 영문자로 끝나는 것은 없어 오인 수선 여지가 없습니다.) */
+  function sanePlacements(list) {
+    var valid = null;
+    for (var k in S.baseCells) {
+      if (S.baseCells[k] && S.baseCells[k].length) {
+        valid = {};
+        S.baseCells[k].forEach(function (c) { valid[c.id] = 1; });
+        break;
+      }
+    }
+    /* 검증 재료가 아직 없으면 손대지 않습니다 — 잘못 고치느니 그대로 보냅니다 */
+    if (!valid) return { placements: list || [], repaired: 0, dropped: 0 };
+    var out = [], repaired = 0, dropped = 0;
+    (list || []).forEach(function (p) {
+      if (valid[p.cellId]) { out.push(p); return; }
+      var fix = String(p.cellId || '').replace(/[a-z]$/i, '');
+      if (fix !== p.cellId && valid[fix]) {
+        var q = {};
+        for (var key in p) q[key] = p[key];
+        q.cellId = fix;
+        out.push(q);
+        repaired++;
+      }
+      else dropped++;
+    });
+    return { placements: out, repaired: repaired, dropped: dropped };
+  }
+
+  function saneNote(name, sane) {
+    if (!sane.repaired && !sane.dropped) return '';
+    return '<div class="cmp-warn">「' + esc(name) + '」 은 격자 개편 전 저장본입니다 — ' +
+      (sane.repaired ? '배치 ' + sane.repaired + '건을 지금 격자로 옮기고 ' : '') +
+      (sane.dropped ? sane.dropped + '건은 대응 격자가 없어 제외하고 ' : '') +
+      '계산했습니다.</div>';
+  }
+
+  var cmpModal = null;
+  function ensureCmpModal() {
+    if (cmpModal) return;
+    cmpModal = document.createElement('div');
+    cmpModal.className = 'modal';
+    cmpModal.id = 'cmp-modal';
+    cmpModal.innerHTML =
+      '<div class="veil" data-cmp-close></div>' +
+      '<div class="sheet cmp-sheet" role="dialog" aria-modal="true" aria-label="시나리오 비교">' +
+      '<header><h2>시나리오 비교</h2><span class="hs" id="cmpSub"></span><span class="sp"></span>' +
+      '<button class="xbtn" data-cmp-close type="button" aria-label="닫기">' + HW.icon('close', 17) + '</button></header>' +
+      '<div class="body" id="cmpBody"></div></div>';
+    document.body.appendChild(cmpModal);
+    cmpModal.addEventListener('click', function (e) {
+      if (e.target.closest('[data-cmp-close]')) closeCmp();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && cmpModal.classList.contains('open')) closeCmp();
+    });
+  }
+  function closeCmp() { if (cmpModal) cmpModal.classList.remove('open'); }
+
+  function runCompare() {
+    var list = loadScenarios();
+    var A = list[S.cmpPick[0]], B = list[S.cmpPick[1]];
+    if (!A || !B) { C.toast('비교할 시나리오 2개를 먼저 선택하세요.'); return; }
+    ensureCmpModal();
+    $('#cmpSub').textContent = periodName(S.period) + ' 시간대 · 화성시 전체 기준';
+    $('#cmpBody').innerHTML = '<div class="empty">두 시나리오를 같은 조건으로 다시 계산하는 중…</div>';
+    cmpModal.classList.add('open');
+    /* 기준선 격자를 먼저 확보해야 저장본 검증(sanePlacements)이 가능합니다 —
+       api.grid 가 캐시라 두 번째부터는 즉시 지나갑니다. */
+    ensureBaseCells().then(function () {
+      var sa = sanePlacements(A.placements), sb = sanePlacements(B.placements);
+      /* 수선본으로 계산하고 표시도 수선본 기준으로 — 표의 배치 구성과 서버
+         계산이 서로 다른 배치를 말하면 안 됩니다. */
+      var A2 = { name: A.name, period: A.period, budgetKrw: A.budgetKrw, placements: sa.placements };
+      var B2 = { name: B.name, period: B.period, budgetKrw: B.budgetKrw, placements: sb.placements };
+      return Promise.all([simOf(A2), simOf(B2)]).then(function (r) {
+        /* 기다리다 닫았으면 조용히 버립니다 — 닫힌 모달을 다시 채우지 않습니다 */
+        if (!cmpModal.classList.contains('open')) return;
+        paintCompare(A2, B2, r[0], r[1], saneNote(A.name, sa) + saneNote(B.name, sb));
+      });
+    }).catch(function (err) {
+      var b = $('#cmpBody');
+      if (b) b.innerHTML = '<div class="empty">비교 계산에 실패했습니다 — ' + esc(api.humanize(err)) + '</div>';
+    });
+  }
+
+  function paintCompare(A, B, ra, rb, notes) {
+    var pid = S.period, pn = periodName(pid);
+    function blk(r) {
+      return (r.periods || []).filter(function (p) { return p.period === pid; })[0] || {};
+    }
+    var ba = blk(ra), bb = blk(rb);
+    var base = ba.baseline || {};
+    var effA = ra.effectiveness || {}, effB = rb.effectiveness || {};
+
+    function compo(s) {
+      var byType = {};
+      (s.placements || []).forEach(function (p) {
+        byType[p.type] = (byType[p.type] || 0) + (p.count || 1);
+      });
+      var parts = Object.keys(byType).map(function (t) {
+        return (TYPE_KO[t] || t) + ' ' + byType[t];
+      });
+      return (s.placements || []).length + '건' + (parts.length ? ' — ' + parts.join(' · ') : '');
+    }
+
+    /* dir: 'lo' 낮을수록 우위 · 'hi' 높을수록 우위 · null 우위 표시 없음.
+       한쪽이라도 값이 없거나 동률이면 우위를 매기지 않습니다. 우위 횟수는
+       tally 에 모아 위 요약 카드의 "지표 우위 n개"가 됩니다. */
+    var tally = { a: 0, b: 0 };
+    function row(label, baseVal, aVal, bVal, dir, f, unit) {
+      var win = null;
+      if (dir && aVal != null && bVal != null && aVal !== bVal) {
+        win = ((dir === 'lo') === (aVal < bVal)) ? 'a' : 'b';
+        tally[win]++;
+      }
+      /* 기준선 대비 증감 칩(▼ 12) — "30에서 18이면 얼마나 좋아진 거지"를
+         읽는 사람이 암산하지 않게 합니다. 개선 방향이면 초록, 악화면 빨강. */
+      function chip(v) {
+        if (!dir || baseVal == null || v == null) return '';
+        var d = v - baseVal;
+        if (!d) return '';
+        var better = (dir === 'lo') ? d < 0 : d > 0;
+        return ' <i class="dchip ' + (better ? 'good' : 'bad') + '">' +
+          (d < 0 ? '▼' : '▲') + ' ' + f(Math.abs(d)) + '</i>';
+      }
+      return '<tr><td>' + label + '</td><td class="base">' +
+        (baseVal == null ? '—' : f(baseVal) + (unit || '')) + '</td>' +
+        '<td class="' + (win === 'a' ? 'win a' : '') + '">' +
+        (aVal == null ? '—' : f(aVal) + (unit || '') + chip(aVal)) + '</td>' +
+        '<td class="' + (win === 'b' ? 'win b' : '') + '">' +
+        (bVal == null ? '—' : f(bVal) + (unit || '') + chip(bVal)) + '</td></tr>';
+    }
+    function sec(t) { return '<tr class="sec"><td colspan="4">' + t + '</td></tr>'; }
+    function kpi(b, k) { return (b.kpi || {})[k]; }
+
+    var warn = (A.budgetKrw !== B.budgetKrw)
+      ? '<div class="cmp-warn">두 안의 설정 예산이 다릅니다(' + won(A.budgetKrw) + ' vs ' +
+        won(B.budgetKrw) + ') — 총액보다 <b>해소 통행당 사업비</b>로 비교하세요.</div>'
+      : '';
+
+    var tbl = '<div class="cmp-scroll"><table class="cmp2"><thead><tr><th>지표</th><th class="base">기준선(현행)</th>' +
+      '<th title="' + esc(A.name) + '"><i class="cdot a"></i>' + esc(A.name) + '</th>' +
+      '<th title="' + esc(B.name) + '"><i class="cdot b"></i>' + esc(B.name) + '</th></tr></thead><tbody>' +
+      sec('투입') +
+      row('총 사업비', 0, (ra.cost || {}).totalKrw, (rb.cost || {}).totalKrw, null, won) +
+      '<tr><td>배치 구성</td><td class="base">—</td><td class="wrapok">' + esc(compo(A)) +
+      '</td><td class="wrapok">' + esc(compo(B)) + '</td></tr>' +
+      sec('성과 — ' + pn + ' 시간대') +
+      row('공급 부족(사각지대) 격자', base.needCells,
+        kpi(ba, 'needCells'), kpi(bb, 'needCells'), 'lo', fmt, '개') +
+      row('사각지대 잠재수요', base.potentialTripsPerDay,
+        kpi(ba, 'potentialTripsPerDay'), kpi(bb, 'potentialTripsPerDay'), 'lo', fmt, ' 통행/일') +
+      row('사각지대 고령 통행', base.elderlyTripsPerDay,
+        kpi(ba, 'elderlyTripsPerDay'), kpi(bb, 'elderlyTripsPerDay'), 'lo', fmt, ' 통행/일') +
+      sec('효율 — 전 시간대 합') +
+      row('해소 통행량', null, effA.resolvedTripsPerDay, effB.resolvedTripsPerDay, 'hi', fmt, ' 통행/일') +
+      row('해소 통행당 사업비', null, effA.krwPerTripPerDay, effB.krwPerTripPerDay, 'lo', fmt, '원') +
+      '</tbody></table></div>' +
+      '<p class="cmp-note">색 굵은 값 = 그 지표에서 앞서는 안(색은 안 이름의 ● 와 동일) · ' +
+      '▼▲ = 기준선 대비 증감 · 숫자는 모두 같은 엔진으로 다시 계산한 값입니다.</p>';
+
+    /* 요약 카드 — 표를 읽기 전에 결론의 뼈대(해소량·사업비·단가·우위 수)가
+       보이게 합니다. tally 는 위 표를 만들며 채워졌습니다. */
+    function card(nm, r, eff, n, cls) {
+      var rt = eff.resolvedTripsPerDay;
+      return '<div class="cmp-card ' + cls + '">' +
+        '<div class="nm"><i class="cdot ' + cls + '"></i>' + esc(nm) + '</div>' +
+        '<div class="big">' + (rt == null ? '—' : fmt(rt)) + '<small> 통행/일 해소</small></div>' +
+        '<div class="sub">사업비 ' + won((r.cost || {}).totalKrw) +
+        (eff.krwPerTripPerDay != null ? ' · 통행당 ' + fmt(eff.krwPerTripPerDay) + '원' : '') + '</div>' +
+        '<div class="tag">지표 우위 ' + n + '개</div></div>';
+    }
+    var sum = '<div class="cmp-sum">' + card(A.name, ra, effA, tally.a, 'a') +
+      '<span class="vs">vs</span>' + card(B.name, rb, effB, tally.b, 'b') + '</div>';
+
+    /* 시간대별 사각지대 미니차트 — KPI 타일과 같은 문법(kspark)이라 따로 안 배워도 읽힙니다 */
+    var mp = (S.meta && S.meta.periods) || [];
+    function ks(r, nm, cls) {
+      return '<div><h4 title="' + esc(nm) + '"><i class="cdot ' + cls + '"></i>' + esc(nm) + '</h4>' + C.kspark({
+        periods: mp,
+        values: mp.map(function (p) {
+          var b2 = (r.periods || []).filter(function (x) { return x.period === p.id; })[0];
+          return b2 ? (b2.kpi || {}).needCells : null;
+        }),
+        current: pid, unit: '개', fmt: fmt
+      }) + '</div>';
+    }
+    var ksHtml = mp.length
+      ? '<div class="cmp-diff"><h4>시간대별 사각지대 — 배치 적용 후 (개)</h4>' +
+        '<div class="cmp-ks">' + ks(ra, A.name, 'a') + ks(rb, B.name, 'b') + '</div></div>'
+      : '';
+
+    /* 해소 격자 diff — 표가 "얼마나"를 말한다면 이 단락은 "어디가"를 말합니다 */
+    var cellsA = (ra.cellsByPeriod || {})[pid], cellsB = (rb.cellsByPeriod || {})[pid];
+    var bs = S.baseCells[pid];
+    var diffHtml = '';
+    if (cellsA && cellsB && bs) {
+      var afterA = {}, afterB = {};
+      cellsA.forEach(function (c) { afterA[c.id] = c.quadrant; });
+      cellsB.forEach(function (c) { afterB[c.id] = c.quadrant; });
+      var onlyA = [], onlyB = [], both = 0;
+      bs.forEach(function (c) {
+        if (c.quadrant !== 'need') return;
+        var a = afterA[c.id] != null && afterA[c.id] !== 'need';
+        var b2 = afterB[c.id] != null && afterB[c.id] !== 'need';
+        if (a && b2) both++;
+        else if (a) onlyA.push(c);
+        else if (b2) onlyB.push(c);
+      });
+      function chips(arr) {
+        if (!arr.length) return '<span class="cmp-chip">없음</span>';
+        return arr.slice(0, 4).map(function (c) {
+          return '<span class="cmp-chip">' + esc((c.region ? c.region + ' ' : '') + c.id) + '</span>';
+        }).join('') + (arr.length > 4
+          ? '<span class="cmp-chip">외 ' + (arr.length - 4) + '칸</span>' : '');
+      }
+      diffHtml = '<div class="cmp-diff"><h4>' + pn + ' 시간대 해소 격자 — 어디가 다른가</h4>' +
+        '<div class="row"><span class="lbl">둘 다 해소</span>' + both + '칸</div>' +
+        '<div class="row"><span class="lbl"><i class="cdot a"></i>' + esc(A.name) + '만</span>' + chips(onlyA) + '</div>' +
+        '<div class="row"><span class="lbl"><i class="cdot b"></i>' + esc(B.name) + '만</span>' + chips(onlyB) + '</div></div>';
+    }
+
+    var aiHtml = '<div class="cmp-ai">' +
+      '<button class="minib" id="cmpAiBtn" type="button">' + HW.icon('spark') + 'AI 소견 생성</button>' +
+      '<p class="cmp-note">위 표의 수치만 근거로 요약 소견을 씁니다 — 채택 판단은 담당자의 몫입니다.</p>' +
+      '<div id="cmpAiOut"></div></div>';
+
+    $('#cmpBody').innerHTML = (notes || '') + warn + sum + tbl + ksHtml + diffHtml + aiHtml;
+
+    /* AI 소견에 넘길 요약 — 표에 있는 숫자 그대로, 그 이상은 주지 않습니다 */
+    function pack(s, b, eff, r) {
+      return {
+        name: s.name, costKrw: (r.cost || {}).totalKrw, placements: compo(s),
+        needCells: kpi(b, 'needCells'), potentialTripsPerDay: kpi(b, 'potentialTripsPerDay'),
+        elderlyTripsPerDay: kpi(b, 'elderlyTripsPerDay'),
+        resolvedTripsPerDay: eff.resolvedTripsPerDay, krwPerTripPerDay: eff.krwPerTripPerDay
+      };
+    }
+    var model = {
+      period: pn,
+      baseline: {
+        needCells: base.needCells,
+        potentialTripsPerDay: base.potentialTripsPerDay,
+        elderlyTripsPerDay: base.elderlyTripsPerDay
+      },
+      scenarios: [pack(A, ba, effA, ra), pack(B, bb, effB, rb)]
+    };
+    $('#cmpAiBtn').addEventListener('click', function () { cmpAiOpinion(model, this); });
+  }
+
+  function cmpAiOpinion(model, btn) {
+    var out = $('#cmpAiOut');
+    if (!out || btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = '생성 중…';
+    api.chat({
+      mode: 'help',
+      period: S.period,
+      messages: [{
+        role: 'user',
+        content: 'context.compare 는 두 배치안을 같은 엔진으로 재계산해 비교한 결과입니다. ' +
+          '공무원 보고 관점에서 두 안의 차이와 상충 지점(비용 대 효과 · 교통약자)을 ' +
+          '4문장 이내 소견으로 정리해 주세요. 수치는 context 에 있는 것만 쓰고, ' +
+          '최종 채택 판단은 내리지 마세요.'
+      }],
+      context: { compare: model }
+    }).then(function (r) {
+      out.innerHTML = '<div class="cmp-ai-out">' +
+        esc((r && r.reply) || '(빈 응답)').replace(/\n/g, '<br>') +
+        '<span class="by">AI 생성 초안 — 수치 검증은 위 표 기준 · 채택 판단은 담당자</span></div>';
+    }).catch(function (err) {
+      out.innerHTML = '<div class="cmp-ai-out">소견을 받지 못했습니다 — ' +
+        esc(api.humanize(err)) + '</div>';
+    }).then(function () {
+      btn.disabled = false;
+      btn.innerHTML = HW.icon('spark') + 'AI 소견 생성';
+    });
+  }
+
   function renderScenarioList() {
     var list = loadScenarios();
     var host = $('#scenList');
+    /* 저장·삭제로 목록 순서가 바뀌면 index 로 든 선택이 다른 카드를 가리키게
+       됩니다 — 어긋난 선택으로 엉뚱한 두 안을 비교하느니 다시 고르게 합니다. */
+    S.cmpPick = [];
+    syncCmpBar();
     if (!list.length) {
       host.innerHTML = '<div class="empty">저장된 시나리오가 없습니다.<br>배치안을 만든 뒤 [시나리오 저장]을 누르세요.</div>';
       return;
@@ -1164,6 +1550,8 @@
         '<span>' + (su.needDelta < 0 ? '사각지대 −' + Math.abs(su.needDelta) + '개' : '변화 없음') + '</span>' +
         (su.krwPerTrip != null ? '<span>' + fmt(su.krwPerTrip) + '원/통행</span>' : '') +
         '</span></button>' +
+        '<button class="spick" data-pick="' + i + '" type="button" aria-pressed="false"' +
+        ' aria-label="' + esc(s.name) + ' 비교 대상으로 선택">비교</button>' +
         '<button class="sdel" data-del="' + i + '" type="button" aria-label="시나리오 삭제">' +
         HW.icon('close', 14) + '</button>' +
         '</div>';
@@ -1188,14 +1576,22 @@
     /* 영역이 켜져 있으면 영역 밖 배치는 복원하지 않습니다. guardFor 의 영역
        제약은 지도 클릭 경로에만 걸려서, 그대로 되살리면 예산은 쓰였는데 영역
        기준 KPI 변화는 0 인 상태가 됩니다. */
-    S.placements = (s.placements || [])
+    /* 구버전 저장본의 사라진 격자 id 는 여기서도 400 을 만듭니다 — 비교와
+       같은 규칙으로 옮기거나 뺀 뒤 복원합니다(부트에서 기준선을 적립해 둠). */
+    var sane = sanePlacements(s.placements);
+    S.placements = sane.placements
       .filter(function (p) { return !S.area || S.area.has(p.cellId); })
       .map(function (p) {
         return { type: p.type, cellId: p.cellId, count: p.count,
           fromAI: p.fromAI, rank: p.rank, rationale: p.rationale };
       });
-    if (S.area && (s.placements || []).length !== S.placements.length) {
-      C.toast('영역 밖 배치 ' + ((s.placements || []).length - S.placements.length) +
+    if (sane.repaired || sane.dropped) {
+      C.toast('격자 개편 전 저장본 — ' +
+        (sane.repaired ? '배치 ' + sane.repaired + '건을 지금 격자로 옮기고 ' : '') +
+        (sane.dropped ? sane.dropped + '건은 제외하고 ' : '') + '불러왔습니다.', 'err', 6000);
+    }
+    if (S.area && sane.placements.length !== S.placements.length) {
+      C.toast('영역 밖 배치 ' + (sane.placements.length - S.placements.length) +
         '건은 불러오지 않았습니다.', 'err', 5000);
     }
     $('#scenName').value = S.name;
@@ -1349,8 +1745,11 @@
       paintRecScope();
     });
     $('#btnSave').addEventListener('click', saveCurrent);
+    $('#btnCompare').addEventListener('click', runCompare);
 
     $('#scenList').addEventListener('click', function (e) {
+      var pk = e.target.closest('[data-pick]');
+      if (pk) { e.stopPropagation(); togglePick(+pk.getAttribute('data-pick')); return; }
       var d = e.target.closest('[data-del]');
       if (d) { e.stopPropagation(); deleteScenario(+d.getAttribute('data-del')); return; }
       var b = e.target.closest('[data-load]');
