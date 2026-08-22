@@ -248,9 +248,15 @@ svg text{font-family:inherit}
              + var(--rail-ci) + var(--rail-plate));
   background:var(--brand-2);pointer-events:none}
 .topnav .tn-in{max-width:1680px;   /* .wrap 과 같은 값이어야 좌측 정렬이 맞습니다 */margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:11px;min-width:0}
-/* 공식 CI. 원본 BI 에서 가로형 시그니처를 투명 배경으로 뽑아 둔 것입니다. */
+/* 로고 묶음 전체가 첫 화면으로 가는 링크입니다. 링크 기본 색·밑줄은 지우고
+   포커스 링만 남깁니다 — 키보드로 넘길 때 여기가 어디인지 보여야 합니다. */
+.brand{display:flex;align-items:center;gap:11px;min-width:0;
+  text-decoration:none;color:inherit;border-radius:6px}
+.brand:hover .svc{color:var(--brand-ink)}
+/* 공식 CI. 한글 로고타입만 쓰고 배경은 투명입니다(영문 시그니처는 30px 높이에서
+   읽히지 않아 뺐습니다). 컬러본은 밝은 바탕, 흰색 반전본은 어두운 바탕용입니다. */
 .brand .ci{height:30px;width:auto;display:block;flex:0 0 auto}
+.brand .ci-reverse{display:none}
 /* CI 옆 서비스명. CI 가 기관을 말하므로 여기는 이 도구의 이름만 답니다. */
 .brand .svc{font-size:13px;font-weight:700;letter-spacing:-.02em;color:var(--ink);
   white-space:nowrap;padding-left:11px;border-left:1px solid var(--line);line-height:1.2}
@@ -1552,19 +1558,18 @@ button.rhead:hover .rkind{border-color:var(--brand)}
  *   기존 규칙은 건드리지 않고 다크에서만 글자색을 덮어씁니다. → 6.03:1
  * ======================================================================== */
 
-/* 공식 CI 는 다크 배경에서 못 읽습니다 — 파랑 #0054A6 이 다크 카드 위에서
-   2.25:1 입니다(주황은 5.68:1 로 살아남지만 로고는 한 덩어리라 의미 없음).
-   로고 자체를 밝게 고치는 것은 CI 변형이라 하면 안 되므로, 다크에서만
-   흰 판을 깔아 규정대로 밝은 바탕 위에 얹습니다. */
-/* ⚠️ 아래 흰 판의 좌우 패딩(9px×2 = 18px)만큼 CI 가 넓어지므로, 주황 레일이
-   끊기는 지점(--rail-plate)도 같이 밀어야 합니다. 두 값은 반드시 함께 고칩니다 —
-   판만 넓히면 레일이 CI 중간에서 끊기고, 레일만 밀면 CI 밖으로 삐져나옵니다. */
-:root[data-theme="dark"] .brand .ci{background:#fff;padding:5px 9px;border-radius:7px;box-sizing:content-box}
-:root[data-theme="dark"] .topnav{--rail-plate:18px}
+/* 공식 CI 는 다크 배경에서 컬러 그대로는 못 읽습니다 — 파랑 #0054A6 이 다크
+   카드 위에서 2.25:1 입니다(주황은 5.68:1 로 살아남지만 로고는 한 덩어리라
+   의미 없음). 예전에는 흰 판을 깔아 밝은 바탕을 만들어 줬는데, 어두운 막대
+   위에 흰 알약이 떠서 배경이 비쳐야 할 자리를 막았습니다.
+   지금은 **흰색 1도 반전 시그니처**로 바꿔 답니다 — 모양은 그대로 두고 색만
+   단색으로 가는 방식이라 CI 를 변형하는 것이 아니고, 배경도 투명하게 남습니다.
+   판이 사라졌으므로 그 패딩을 보정하던 --rail-plate 도 함께 없앱니다. */
+:root[data-theme="dark"] .brand .ci-color{display:none}
+:root[data-theme="dark"] .brand .ci-reverse{display:block}
 @media (prefers-color-scheme:dark){
-  :root:where(:not([data-theme="light"])) .brand .ci{
-    background:#fff;padding:5px 9px;border-radius:7px;box-sizing:content-box}
-  :root:where(:not([data-theme="light"])) .topnav{--rail-plate:18px}
+  :root:where(:not([data-theme="light"])) .brand .ci-color{display:none}
+  :root:where(:not([data-theme="light"])) .brand .ci-reverse{display:block}
 }
 /* 추천 박스 안의 설명글은 10.5px 로 작습니다. --ink3 로는 다크에서 3.97:1 이라
    읽기 어렵습니다. 전역 토큰은 그대로 두고 이 박스 안에서만 한 단계 올립니다. */
@@ -1980,26 +1985,3 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 .ks-row2.on{background:var(--selbg);border-radius:5px}
 /* 브리핑의 핵심 숫자 — 본문 잉크와 갈라 브랜드 남색으로 */
 .brief .brief-main b{color:var(--brand-ink)}
-
-/* ===========================================================================
- * [35] 배치 수단 픽토그램
- *   ●◆▲ 글자기호 대체. 색은 지도 배치 마커(pmk-*)와 같은 의미색이라
- *   "버튼에서 고른 것"과 "지도에 찍힌 것"이 색으로 이어집니다.
- * ======================================================================== */
-.tico{display:inline-flex;width:15px;height:15px;flex:none;font-style:normal;
-  vertical-align:-2px}
-.tico svg{width:100%;height:100%}
-.tico-stop{color:var(--good)}
-.tico-drt{color:var(--sel)}
-.tico-freq{color:var(--warn)}
-.simtool{display:inline-flex;align-items:center;gap:5px}
-/* 선택된 도구는 파란 채움 위라 아이콘도 흰색으로 */
-.simtool.on .tico{color:#fff}
-/* 배치 목록의 아이콘 — 기존 일괄 파랑(--sel)보다 수단색이 우선 */
-.plist .ic.tico-stop,.plist .ic .tico-stop{color:var(--good)}
-.plist .ic.tico-drt,.plist .ic .tico-drt{color:var(--sel)}
-.plist .ic.tico-freq,.plist .ic .tico-freq{color:var(--warn)}
-.plist .ic .tico{width:14px;height:14px;vertical-align:-2.5px}
-/* 지도 배치 뱃지 속 픽토그램 — 뱃지는 수단색 채움(.pmk-*), 그림은 흰 스트로크.
-   그룹의 케이싱 스트로크(--card)와 채움이 안쪽 그림에 새지 않게 끊습니다. */
-.pmk-g{fill:none;stroke:#fff;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
