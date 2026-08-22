@@ -248,6 +248,13 @@
       new global.ResizeObserver(syncSideHeight).observe(map);
     }
     global.addEventListener('resize', syncSideHeight);
+    /* 저장하지 않은 배치안을 두고 화면을 떠나려 하면 한 번 묻습니다 — 관리자
+       콘솔(admin.js)의 dirty 가드와 같은 이유입니다. S.placements 는 브라우저
+       메모리에만 있어서, 회의 전 마지막으로 수치 하나 확인하러 대시보드로
+       넘어가면 그대로 사라집니다. */
+    global.addEventListener('beforeunload', function (e) {
+      if (S.placements.length > 0) { e.preventDefault(); e.returnValue = ''; return ''; }
+    });
   }
 
   function fail(err) {
@@ -292,7 +299,7 @@
   function renderToolbar(effects) {
     $('#tools').innerHTML = effects.map(function (e) {
       return '<button class="simtool" data-tool="' + esc(e.type) + '" type="button" aria-pressed="false">' +
-        '<i>' + esc(e.icon) + '</i>' + esc(e.label) + '</button>';
+        '<i>' + HW.icon(e.type, 13) + '</i>' + esc(e.label) + '</button>';
     }).join('');
   }
 
@@ -867,7 +874,7 @@
       '<ul class="plist">' + S.placements.map(function (p, i) {
       var e = S.effects[p.type] || {};
       var cell = S.map.cellById(p.cellId);
-      return '<li' + (p.fromAI ? ' class="from-ai"' : '') + '><span class="ic">' + esc(e.icon || '●') + '</span>' +
+      return '<li' + (p.fromAI ? ' class="from-ai"' : '') + '><span class="ic">' + HW.icon(p.type, 14) + '</span>' +
         '<span class="tx"><b>' + esc(e.label || p.type) + (p.count > 1 ? ' ×' + p.count : '') +
         (p.fromAI ? '<span class="ai-tag">추천 ' + p.rank + '순위</span>' : '') + '</b>' +
         '<span>' + esc(cell ? cell.name : '') + ' · ' + esc(p.cellId) + ' · 반경 ' + (e.radiusKm || '?') + 'km</span>' +
