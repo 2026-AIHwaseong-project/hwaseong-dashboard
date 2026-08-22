@@ -1172,26 +1172,34 @@
       gPlaced.innerHTML = h;
     }
 
-    /** 수단별 배치 기호.
-        색으로 먼저 구분되고, 모양(원·마름모·삼각)은 색각 이상·흑백 출력 대비입니다.
-        예전에는 셋 다 같은 보라색 글자 기호(●◆▲)라 구분이 안 됐습니다. */
+    /** 수단별 배치 기호 — 수단색 원형 뱃지 + 흰 픽토그램.
+        도구 버튼·배치 목록과 같은 그림(표지판/호출 승합차/버스+)이라
+        "버튼에서 고른 것"이 지도에서 같은 얼굴로 나타납니다. 흑백 출력에서도
+        픽토그램 자체가 모양 구분을 대신합니다(예전 원·마름모·삼각의 역할).
+        같은 칸에 여러 번 놓으면 그림 대신 개수를 씁니다 — 작은 뱃지 안에
+        둘 다 넣으면 어느 쪽도 안 읽힙니다. */
+    var PMK_GLYPH = {
+      stop: '<rect x="4.2" y="1.8" width="7.6" height="5.2" rx="1.2"/>' +
+        '<path d="M6.3 4.4h3.4M8 7v6.2M5.2 13.2h5.6"/>',
+      drt: '<rect x="1.6" y="5.4" width="10.6" height="5.8" rx="1.6"/>' +
+        '<path d="M1.6 8.3h10.6M13.4 2.6a3.4 3.4 0 0 1 1.8 3"/>' +
+        '<circle cx="4.4" cy="12.6" r="1.25"/><circle cx="9.4" cy="12.6" r="1.25"/>',
+      freq: '<rect x="1.6" y="6" width="9.4" height="5.4" rx="1.4"/>' +
+        '<path d="M1.6 8.7h9.4M13.2 1.9v4M11.2 3.9h4"/>' +
+        '<circle cx="4.2" cy="12.8" r="1.2"/><circle cx="8.6" cy="12.8" r="1.2"/>'
+    };
     function markerShape(type, x, y, r, count) {
-      var g = '<g class="pmk pmk-' + esc(type) + '" stroke-width="' + (r * 0.4).toFixed(2) +
-        '" transform="translate(' + x.toFixed(1) + ',' + y.toFixed(1) + ')">';
-      if (type === 'drt') {
-        g += '<path d="M0,' + (-r).toFixed(2) + 'L' + r.toFixed(2) + ',0L0,' + r.toFixed(2) +
-          'L' + (-r).toFixed(2) + ',0Z"/>';
-      } else if (type === 'freq') {
-        var a = r * 1.12;
-        g += '<path d="M0,' + (-a).toFixed(2) + 'L' + (a * 0.87).toFixed(2) + ',' + (a * 0.56).toFixed(2) +
-          'L' + (-a * 0.87).toFixed(2) + ',' + (a * 0.56).toFixed(2) + 'Z"/>';
-      } else {
-        g += '<circle r="' + r.toFixed(2) + '"/>';
-      }
-      /* 같은 칸에 같은 수단을 여러 번 놓으면 개수를 기호 안에 씁니다 */
+      var R = r * 1.15;
+      var g = '<g class="pmk pmk-' + esc(type) + '" transform="translate(' +
+        x.toFixed(1) + ',' + y.toFixed(1) + ')">';
+      g += '<circle r="' + R.toFixed(2) + '"/>';
       if (count > 1) {
-        g += '<text class="pmk-n" font-size="' + (r * 1.1).toFixed(2) +
-          '" y="' + (r * 0.38).toFixed(2) + '" text-anchor="middle">' + count + '</text>';
+        g += '<text class="pmk-n" font-size="' + (R * 1.15).toFixed(2) +
+          '" y="' + (R * 0.4).toFixed(2) + '" text-anchor="middle">' + count + '</text>';
+      } else if (PMK_GLYPH[type]) {
+        var k = (R / 10).toFixed(3);
+        g += '<g class="pmk-g" transform="scale(' + k + ') translate(-8,-8)">' +
+          PMK_GLYPH[type] + '</g>';
       }
       return g + '</g>';
     }

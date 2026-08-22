@@ -2000,3 +2000,6 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 .plist .ic.tico-drt,.plist .ic .tico-drt{color:var(--sel)}
 .plist .ic.tico-freq,.plist .ic .tico-freq{color:var(--warn)}
 .plist .ic .tico{width:14px;height:14px;vertical-align:-2.5px}
+/* 지도 배치 뱃지 속 픽토그램 — 뱃지는 수단색 채움(.pmk-*), 그림은 흰 스트로크.
+   그룹의 케이싱 스트로크(--card)와 채움이 안쪽 그림에 새지 않게 끊습니다. */
+.pmk-g{fill:none;stroke:#fff;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
