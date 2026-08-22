@@ -1983,7 +1983,10 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 .trow.sel .bar i,.trow:hover .bar i{opacity:.85}
 /* 지도 머리의 [사용 안내] — 부제 옆의 작은 진입점(기존 tbtn 문법 재사용) */
 .gopen{flex:none}
-@media (max-width:640px){.gopen{display:none}}
+/* 좁은 화면에서 숨겼던 규칙을 걷습니다 — 사용 안내가 팝업이던 시절에는 작은
+   화면에서 읽기 어려워 접었지만, 스포트라이트 투어가 모바일 대응(e85bae0)된
+   뒤로는 오히려 모바일에서 더 필요한 문입니다(막대의 안내 버튼은 좁은 화면에서
+   서랍으로 접힙니다). 390px 에서 두 버튼이 한 줄에 들어가는 것을 확인했습니다. */
 
 /* ===========================================================================
  * [34] 시인성 패스 — 눈이 먼저 닿는 점 세 곳
@@ -1996,11 +1999,23 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 /* 브리핑의 핵심 숫자 — 본문 잉크와 갈라 브랜드 남색으로 */
 .brief .brief-main b{color:var(--brand-ink)}
 
-/* 지도 머리의 시뮬레이션 이동 — 행동 버튼이라 브랜드 윤곽으로 반 발 세웁니다 */
-.chead .cta{border-color:var(--brand);color:var(--brand);font-weight:700;text-decoration:none}
-.chead .cta:hover{background:var(--brand-soft)}
-/* .tbtn 의 display 가 UA 의 [hidden] 규칙을 이깁니다 — 명시적으로 잠급니다 */
+/* 지도 머리의 시뮬레이션 이동.
+   처음에는 옆 [사용 안내]와 같은 칩(.tbtn)으로 만들었는데, .tbtn 의 점선
+   테두리를 물려받아 "누르는 버튼"이 아니라 "빈 자리 표시"처럼 보였습니다.
+   상세 카드 아래의 같은 행동과 같은 부품(.btn.sm.primary + 뒤 화살표)을
+   쓰면 한눈에 같은 행동임이 읽히고 눌러야 할 것으로도 보입니다.
+   .chead 가 space-between 이라 auto 여백으로 남는 자리를 한 번에 먹여
+   [이 격자로 시뮬레이션][사용 안내]가 오른쪽에서 한 벌로 붙게 합니다
+   (CTA 가 숨으면 그 역할을 [사용 안내]가 물려받습니다). */
+.chead .cta{margin-left:auto;text-decoration:none;padding:5px 12px;font-size:11px}
+.chead .cta[hidden] ~ .gopen{margin-left:auto}
+/* .btn 의 display:inline-flex 가 UA 의 [hidden] 규칙을 이깁니다 */
 .chead .cta[hidden]{display:none}
+/* 안내 칩도 글자만 있어 옆 버튼과 결이 달랐습니다 — 화면 곳곳의 용어 도움말
+   (?)과 같은 원형 물음표를 붙여 "설명을 여는 것"임을 그림으로 말합니다.
+   .tbtn 은 inline 이라 아이콘을 넣으면 글자 기준선이 흔들려 flex 로 세웁니다. */
+.chead .gopen{display:inline-flex;align-items:center;gap:5px}
+.chead .gopen .ic{width:13px;height:13px;opacity:.85}
 
 /* ===========================================================================
  * [35] 배치 수단 픽토그램
