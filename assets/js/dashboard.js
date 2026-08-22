@@ -63,8 +63,10 @@
       /* 격자 크기는 서버 meta 를 따른다 — HTML 에 1km 를 박아두면 세분화 때 틀어진다 */
       var sub = $('#mapSub');
       if (sub && meta.grid && meta.grid.sizeMeters) {
-        sub.textContent = '붉을수록 수요 대비 버스가 부족한 격자 · 격자 ' +
-          (meta.grid.sizeMeters / 1000) + 'km · 실제 읍면동 경계';
+        /* 설명("~한 격자")이 아니라 행동("누르면 열립니다")을 말합니다 —
+           매뉴얼 없이 쓰게 하는 건 안내문이 아니라 이런 마이크로카피입니다. */
+        sub.textContent = '붉은 칸일수록 버스가 부족합니다 — 칸을 누르면 상세가 열립니다 · 격자 ' +
+          (meta.grid.sizeMeters / 1000) + 'km';
       }
       S.map = HW.createMap({
         svg: $('#map'), legend: $('#legend'), meta: meta,

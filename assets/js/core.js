@@ -446,7 +446,11 @@
     drawer.addEventListener('click', function (e) {
       if (e.target.closest('a, button')) setMenu(false);
     });
-    $('[data-guide-open]', host).addEventListener('click', openGuide);
+    /* 안내 진입점은 서랍 말고도 지도 머리 등 여러 곳에 둡니다 — "매뉴얼
+       없이도"는 안내를 잘 만드는 것보다 잘 보이는 곳에 두는 문제라서요. */
+    document.addEventListener('click', function (e) {
+      if (e.target.closest('[data-guide-open]')) openGuide();
+    });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && host.classList.contains('menu-open')) setMenu(false);
     });
