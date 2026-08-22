@@ -1904,9 +1904,12 @@ button.rhead:hover .rkind{border-color:var(--brand)}
  *   한 단계 물러납니다. 위계는 장식이 아니라 크기·무게·면의 차이로만 만듭니다.
  * ======================================================================== */
 /* 브리핑 승격 — 이미 있던 '한 줄 브리핑'(§13)이 이 화면의 3초 메시지입니다.
-   파란 상자에 갇혀 다른 카드와 같은 목소리였던 것을 상자에서 꺼내
-   리드 문장으로 키웁니다. 내용·마크업·데이터 흐름은 §13 그대로입니다. */
-.brief{background:transparent;border:0;border-radius:0;padding:2px 2px 0;margin-bottom:14px}
+   글자는 리드 크기로 키우되, 이 문장은 시간대·요일마다 다시 쓰이는 살아있는
+   요약이라 정적인 제목 글줄과 면으로 구분합니다. 다만 사방 테두리 상자로
+   돌아가면 다른 카드와 같은 목소리(평평함)가 되므로, 공문서 요약 블록의
+   문법인 왼쪽 어깨선 + 옅은 면만 씁니다. */
+.brief{background:var(--brand-soft);border:0;border-left:3px solid var(--brand);
+  border-radius:0 10px 10px 0;padding:12px 17px 11px;margin-bottom:16px}
 .brief .brief-main{font-size:15.5px;line-height:1.55;letter-spacing:-.01em;word-break:keep-all}
 .brief .brief-main b{font-weight:800;font-variant-numeric:tabular-nums}
 .brief .brief-act{border-top:0;padding-top:2px;margin-top:5px}
