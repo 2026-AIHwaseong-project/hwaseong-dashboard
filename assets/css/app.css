@@ -465,22 +465,31 @@ body.chat-open .toasts{right:auto;left:16px}
 /* 낮은 화면에서는 한 단 줄여 본문에 자리를 넘깁니다 */
 @media (max-height:700px){ .cm-report .cm-log{min-height:96px;max-height:96px} }
 
-/* 사용 안내 모달 — 화면 축소판 그림 + 번호 설명 */
-/* .sheet 를 함께 붙이는 이유는 바로 위와 같습니다 — .sheet{width:min(920px,100%)} 가
-   §모달에 있어 그냥 .guide-sheet 로는 특이도가 같아(0,1,0) 밀립니다. */
-.sheet.guide-sheet{width:min(720px,100%)}
-.ghero{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:10px;
-  background:var(--card)}
-.ghero text{font-family:inherit}
-.gsteps{display:grid;grid-template-columns:repeat(2,1fr);gap:12px 18px;margin-top:14px}
-.gstep b{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink)}
-.gstep p{margin:5px 0 0 25px;font-size:11px;line-height:1.65;color:var(--ink2);word-break:keep-all}
-.gnum{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
-  width:18px;height:18px;border-radius:50%;background:var(--brand);color:#fff;
-  font-size:11px;font-weight:700}
-.gfoot{margin:14px 0 0;padding-top:10px;border-top:1px dashed var(--line);
-  font-size:11px;color:var(--ink3);text-align:center}
-@media (max-width:640px){.gsteps{grid-template-columns:1fr}}
+/* 사용 안내 투어 — 어둠막(svg mask 구멍) + 말풍선 + 상시 닫기 ×.
+   맨 위 켜켜(300대)에 둡니다: 서랍(61)·모달(80)·토스트(90)·챗봇(55)을
+   전부 덮어야 "투어 중에는 구경만 한다"가 지켜집니다.
+   어둠막이 입력을 전부 삼키고, .touring 이 문서 스크롤을 잠급니다. */
+.touring,.touring body{overflow:hidden}
+.touring .tn-drawer,.touring .tn-scrim{transition:none}
+.tour-dim{position:fixed;inset:0;width:100%;height:100%;z-index:300}
+.tour-bubble{position:fixed;z-index:302;width:min(330px,calc(100vw - 24px));
+  background:var(--card);border:1px solid var(--line);border-radius:13px;
+  padding:14px 16px 12px;box-shadow:0 12px 34px rgba(9,17,32,.38)}
+/* 말풍선 꼬리 — 대상 아래 붙을 땐 위쪽, 위에 붙을 땐(.up) 아래쪽을 가리킴 */
+.tour-bubble::before{content:"";position:absolute;top:-7px;left:calc(50% - 7px);
+  width:13px;height:13px;background:var(--card);transform:rotate(45deg);
+  border-left:1px solid var(--line);border-top:1px solid var(--line)}
+.tour-bubble.up::before{top:auto;bottom:-7px;border:0;
+  border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.tour-bubble p{margin:0 0 10px;font-size:13px;line-height:1.65;color:var(--ink);
+  word-break:keep-all}
+.tour-bt{display:flex;gap:6px;align-items:center;justify-content:flex-end}
+.tour-n{margin-right:auto;font-size:11px;color:var(--ink3);font-weight:600}
+.tour-x{position:fixed;top:14px;right:16px;z-index:303;width:38px;height:38px;
+  display:flex;align-items:center;justify-content:center;border-radius:50%;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.45);
+  color:#fff;cursor:pointer;transition:background .12s}
+.tour-x:hover{background:rgba(255,255,255,.3)}
 
 header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;margin:18px 0 14px}
 /* KPI 값(.kpi .vl)이 clamp(19px,1.9vw,26px) 로 뷰포트를 따라 줄어드는데 제목이

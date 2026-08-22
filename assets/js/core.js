@@ -407,18 +407,18 @@
       '<span class="svc">' + esc(app.navName || app.name || '') + '</span></a>' +
       '<div class="tn-sp"></div>' +
       '<div class="tn-act">' +
+      '<button class="btn sm" data-guide-open type="button">' +
+      icon('help') + '사용 안내</button>' +
       '<button class="btn sm" data-theme-btn type="button">테마 · 자동</button>' +
       '</div></div>' +
-      /* 서랍 메뉴 — 화면 이동과 보고서 생성이 모두 여기로 들어왔습니다.
-         테마 버튼만 막대에 남는 이유: 테마는 "지금 이 화면"을 바꾸는 스위치라
-         숨기면 찾을 수 없고, 이동·생성은 목적지가 분명해 서랍 안이 맞습니다. */
+      /* 서랍 메뉴 — 화면 이동과 보고서 생성이 여기로 들어왔습니다.
+         막대에 남는 것은 "지금 이 화면"에 작용하는 스위치들뿐입니다 —
+         테마, 그리고 화면 위를 순서대로 비추는 사용 안내(투어). */
       '<div class="tn-scrim" data-menu-scrim></div>' +
       '<nav class="tn-drawer" id="tn-drawer" aria-label="주요 화면">' +
       links.map(function (l) {
         return '<a href="' + l.href + '"' + (l.id === current ? ' aria-current="page"' : '') + '>' + esc(l.label) + '</a>';
       }).join('') +
-      '<button class="tn-item" data-guide-open type="button">' +
-      icon('help') + '사용 안내</button>' +
       /* AI 도우미는 여기 두지 않습니다 — 우측 하단 런처(chat.js)가 상시 떠 있어
          서랍에 또 두면 같은 곳으로 가는 문이 둘이 됩니다. */
       '<div class="tn-cut" role="separator"></div>' +
@@ -456,10 +456,10 @@
     drawer.addEventListener('click', function (e) {
       if (e.target.closest('a, button')) setMenu(false);
     });
-    /* 안내 진입점은 서랍 말고도 지도 머리 등 여러 곳에 둡니다 — "매뉴얼
+    /* 안내 진입점은 막대 말고도 지도 머리 등 여러 곳에 둡니다 — "매뉴얼
        없이도"는 안내를 잘 만드는 것보다 잘 보이는 곳에 두는 문제라서요. */
     document.addEventListener('click', function (e) {
-      if (e.target.closest('[data-guide-open]')) openGuide();
+      if (e.target.closest('[data-guide-open]')) startTour(0);
     });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && host.classList.contains('menu-open')) setMenu(false);
@@ -467,6 +467,16 @@
 
     mountIssuer();
     mountIcons();
+
+    /* 투어가 다른 화면으로 넘어오며 남겨 둔 이어가기 표식. 화면 골격이
+       그려진 다음에 읽어야 하므로 topnav 장착 끝에서 소비합니다. */
+    _page = current;
+    var pend = null;
+    try {
+      pend = sessionStorage.getItem(TOUR_STEP_KEY);
+      if (pend !== null) sessionStorage.removeItem(TOUR_STEP_KEY);
+    } catch (e) { /* noop */ }
+    if (pend !== null) setTimeout(function () { startTour(+pend); }, 400);
   }
 
   /** 정적 HTML 에 놓인 버튼에도 아이콘 한 벌을 붙입니다.
@@ -504,108 +514,236 @@
   }
 
   /* ----------------------------------------------------------- 사용 안내
-     글 목록 대신 화면 축소판 그림에 번호를 얹어 설명합니다 — 처음 보는
-     사람(심사위원)이 3분 안에 "어디를 눌러야 하는지"를 눈으로 익히는 용도.
-     그림은 실제 대시보드 배치(시간대 탭 / 지도 / 우선순위)를 그대로 축소한
-     SVG 라, 테마 변수(currentColor 계열)를 따라 다크 모드에서도 맞습니다. */
-  var guideModal = null;
+     팝업 설명서 대신 화면 그 자체를 안내판으로 씁니다. 화면을 어둡게 깔고
+     실제 요소에만 구멍(스포트라이트)을 내 순서대로 비추는 투어입니다.
+     투어 동안 화면은 조작할 수 없습니다 — 어둠막이 모든 입력을 삼키고,
+     사용자는 [이전]·[다음]·[종료]와 우상단 × 만 누릅니다. 단계가 다른
+     화면에 있으면 실제로 이동했다가, 끝나면 시작한 화면으로 돌아옵니다. */
+  var TOUR_STEP_KEY = 'hw.tourStep', TOUR_RET_KEY = 'hw.tourReturn';
+  var _page = '';                    // mountTopnav 이 채우는 현재 화면 id
+  var TOUR = [
+    { page: 'dashboard', targets: ['.mapcard'],
+      text: '시간대를 변경하고 버스 공급이 부족한 지역을 찾아보세요' },
+    { page: 'dashboard', targets: ['#simLink2'], reveal: '#simLink2',
+      text: '정책을 적용했을 때의 변화를 시뮬레이션으로 확인해보세요' },
+    { page: 'simulation', targets: ['#tools', '#btnRecommend'],
+      text: '직접 수단을 배치해보거나 AI 추천 배치안을 받아 확인하고 시나리오를 저장해 보세요' },
+    { menu: true, targets: ['.tn-issue'],
+      text: '메뉴 버튼을 눌러 다양한 기능을 사용할 수 있어요. AI 보고서 버튼을 클릭해 AI 보고서를 생성, 저장할 수 있어요. 마음에 들지 않는 부분은 메시지를 보내 수정해 보세요' },
+    { menu: true, targets: ['.tn-drawer a[href$="admin.html"]'],
+      text: '관리자 콘솔 기능으로 데이터를 수정할 수 있어요' },
+    { targets: ['.chat-launch'],
+      text: 'AI 챗봇으로 무엇이든 물어보세요' }
+  ];
+  var tour = null;                   // { root, dim, bubble } — 떠 있는 동안만
+  var tourIdx = -1;
+  var tourRevealed = null;           // 이 단계가 잠시 보이게 만든 요소(원래 hidden)
 
-  function guideHero() {
-    var tabs = ['출근', '낮', '퇴근', '심야'].map(function (t, i) {
-      var x = 40 + i * 68;
-      return i === 0
-        ? '<rect x="' + x + '" y="12" width="64" height="30" rx="8" fill="var(--brand)"/>' +
-          '<text x="' + (x + 32) + '" y="31" text-anchor="middle" fill="#fff" font-weight="700">' + t + '</text>' +
-          '<rect x="' + (x + 12) + '" y="37" width="40" height="2.5" rx="1.2" fill="var(--brand-2)"/>'
-        : '<rect x="' + x + '" y="12" width="64" height="30" rx="8" fill="var(--bg)" stroke="var(--line)"/>' +
-          '<text x="' + (x + 32) + '" y="31" text-anchor="middle" fill="var(--ink2)">' + t + '</text>';
-    }).join('');
+  function tourHref(page) {
+    var pages = (CONFIG && CONFIG.PAGES) || {};
+    return page === 'simulation' ? (pages.simulation || 'simulation.html')
+                                 : (pages.dashboard || 'index.html');
+  }
+  function setDrawer(open) {
+    var host = $('[data-topnav]');
+    if (host) host.classList.toggle('menu-open', open);
+  }
 
-    /* 격자 8×4 — 대부분 옅은 파랑(공급 충분), 오른쪽 위로 갈수록 붉게(부족).
-       2행 5열이 "클릭해 볼 붉은 격자" 주인공입니다. */
-    var CELL = ['....odro', '...obrRo', '....oob.', '........'];
-    var FILL = { '.': 'var(--brand-soft)', b: 'var(--brand)', o: 'var(--brand-2)', d: 'var(--brand-2)', r: 'var(--bad)', R: 'var(--bad)' };
-    var cells = '';
-    CELL.forEach(function (row, r) {
-      row.split('').forEach(function (c, col) {
-        var x = 56 + col * 41, y = 92 + r * 41;
-        cells += '<rect x="' + x + '" y="' + y + '" width="35" height="35" rx="4" fill="' + FILL[c] + '"' +
-          (c === '.' ? '' : c === 'o' || c === 'd' ? ' opacity=".55"' : c === 'b' ? ' opacity=".45"' : '') + '/>';
-        if (c === 'R') {
-          cells += '<rect x="' + (x - 3) + '" y="' + (y - 3) + '" width="41" height="41" rx="6" ' +
-            'fill="none" stroke="var(--bad)" stroke-width="2.2"/>' +
-            /* 마우스 커서 */
-            '<path transform="translate(' + (x + 24) + ' ' + (y + 24) + ')" ' +
-            'd="M0 0l5.2 13.2 2.1-5.4 5.4-2.1z" fill="var(--ink)" stroke="var(--card)" stroke-width="1.4"/>';
-        }
-      });
+  function tourBlockKeys(e) {
+    if (e.key === 'Escape') { endTour(); return; }
+    /* 스크롤·이동 계열 키 차단 — 투어 중 화면은 구경만 합니다 */
+    if (!e.target.closest('.tour-bubble') &&
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+         'PageUp', 'PageDown', 'Home', 'End', ' '].indexOf(e.key) !== -1) e.preventDefault();
+  }
+  function tourBlockWheel(e) { e.preventDefault(); }
+  function onTourResize() { if (tour && tourIdx >= 0) showTourStep(tourIdx); }
+
+  /* 화면 이동 직후에는 데이터·폰트가 마저 그려지며 레이아웃이 움직여서,
+     진입 순간에 잰 구멍 좌표가 곧 어긋납니다(특히 3단계 시뮬레이션 진입과
+     [이전]으로 대시보드에 되돌아올 때). 투어가 떠 있는 동안 대상 위치를
+     주기적으로 다시 재서, 움직였으면 스포트라이트를 그 자리로 따라 붙입니다. */
+  function tourWatch() {
+    if (!tour || tourIdx < 0 || !tour.els) return;
+    if (tour.els.some(function (n) { return !n.isConnected; })) {
+      showTourStep(tourIdx);   // 화면이 다시 그려져 요소 자체가 바뀜 — 재탐색
+      return;
+    }
+    var moved = tour.els.some(function (n, k) {
+      var r = n.getBoundingClientRect(), d = tour.rects[k];
+      return Math.abs(r.left - d.left) > 1.5 || Math.abs(r.top - d.top) > 1.5 ||
+        Math.abs(r.width - d.width) > 1.5 || Math.abs(r.height - d.height) > 1.5;
     });
+    if (moved) renderTourStep(TOUR[tourIdx], tourIdx, tour.els, false);
+  }
 
-    /* 우선순위 Top 목록 — 순위 칩과 길이가 줄어드는 붉은 막대 */
-    var rows = [128, 104, 82, 62].map(function (w, i) {
-      var y = 96 + i * 30;
-      return '<rect x="450" y="' + y + '" width="20" height="20" rx="6" fill="var(--brand-soft)"/>' +
-        '<text x="460" y="' + (y + 14) + '" text-anchor="middle" fill="var(--brand-ink)" font-weight="700" font-size="11">' + (i + 1) + '</text>' +
-        '<rect x="478" y="' + (y + 5) + '" width="' + w + '" height="10" rx="5" fill="var(--bad)" opacity="' + (0.9 - i * 0.18) + '"/>';
-    }).join('');
+  function startTour(i) {
+    try {
+      if (!sessionStorage.getItem(TOUR_RET_KEY)) sessionStorage.setItem(TOUR_RET_KEY, location.href);
+    } catch (e) { /* noop */ }
+    if (!tour) {
+      var root = el('div', { 'class': 'tour' });
+      root.innerHTML =
+        '<svg class="tour-dim" aria-hidden="true" preserveAspectRatio="none"></svg>' +
+        '<div class="tour-bubble" role="dialog" aria-label="사용 안내"></div>' +
+        '<button class="tour-x" type="button" aria-label="사용 안내 닫기">' + icon('close', 18) + '</button>';
+      document.body.appendChild(root);
+      $('.tour-x', root).addEventListener('click', endTour);
+      root.addEventListener('click', function (e) {
+        var go = e.target.closest('[data-tour-go]');
+        if (go) showTourStep(+go.getAttribute('data-tour-go'));
+        else if (e.target.closest('[data-tour-end]')) endTour();
+      });
+      tour = {
+        root: root, dim: $('.tour-dim', root), bubble: $('.tour-bubble', root),
+        els: null, rects: null, watch: setInterval(tourWatch, 350)
+      };
+      window.addEventListener('keydown', tourBlockKeys, true);
+      window.addEventListener('wheel', tourBlockWheel, { passive: false });
+      window.addEventListener('touchmove', tourBlockWheel, { passive: false });
+      window.addEventListener('resize', onTourResize);
+    }
+    document.documentElement.classList.add('touring');
+    showTourStep(i);
+  }
 
-    function badge(n, cx, cy) {
-      return '<circle cx="' + cx + '" cy="' + cy + '" r="11" fill="var(--brand)" stroke="var(--card)" stroke-width="2"/>' +
-        '<text x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">' + n + '</text>';
+  function endTour() {
+    if (tourRevealed) { tourRevealed.hidden = true; tourRevealed = null; }
+    setDrawer(false);
+    document.documentElement.classList.remove('touring');
+    if (tour) {
+      clearInterval(tour.watch);
+      window.removeEventListener('keydown', tourBlockKeys, true);
+      window.removeEventListener('wheel', tourBlockWheel);
+      window.removeEventListener('touchmove', tourBlockWheel);
+      window.removeEventListener('resize', onTourResize);
+      tour.root.parentNode.removeChild(tour.root);
+      tour = null;
+    }
+    tourIdx = -1;
+    var ret = null;
+    try {
+      ret = sessionStorage.getItem(TOUR_RET_KEY);
+      sessionStorage.removeItem(TOUR_RET_KEY);
+      sessionStorage.removeItem(TOUR_STEP_KEY);
+    } catch (e) { /* noop */ }
+    /* 투어가 화면을 옮겨 다녔으면, 시작했던 화면으로 되돌린다 */
+    if (ret) {
+      var a = document.createElement('a');
+      a.href = ret;
+      if (a.pathname !== location.pathname) location.href = ret;
+    }
+  }
+
+  function showTourStep(i, tries) {
+    if (i < 0 || i >= TOUR.length) { endTour(); return; }
+    var step = TOUR[i];
+
+    /* 이 단계가 다른 화면 것이면 이어가기 표식을 남기고 실제로 이동 */
+    if (step.page && _page && step.page !== _page) {
+      try { sessionStorage.setItem(TOUR_STEP_KEY, String(i)); } catch (e) { /* noop */ }
+      location.href = tourHref(step.page);
+      return;
+    }
+    tourIdx = i;
+
+    /* 단계 부수효과 — 서랍 열기/닫기, 숨은 버튼 잠시 보이기.
+       .touring 이 서랍 트랜지션을 꺼 두어 좌표를 바로 잴 수 있습니다. */
+    setDrawer(!!step.menu);
+    if (tourRevealed && (!step.reveal || $(step.reveal) !== tourRevealed)) {
+      tourRevealed.hidden = true;
+      tourRevealed = null;
+    }
+    if (step.reveal) {
+      var rv = $(step.reveal);
+      if (rv && rv.hidden) { rv.hidden = false; tourRevealed = rv; }
     }
 
-    return '<svg class="ghero" viewBox="0 0 660 286" role="img" aria-label="대시보드 화면 안내도">' +
-      '<g font-size="11">' + tabs +
-      /* 지도 카드 */
-      '<rect x="40" y="58" width="380" height="212" rx="10" fill="var(--bg)" stroke="var(--line)"/>' +
-      '<text x="56" y="80" fill="var(--ink3)" font-size="10">미스매칭 지도 — 붉을수록 공급 부족</text>' +
-      cells +
-      /* 우선순위 카드 */
-      '<rect x="436" y="58" width="186" height="212" rx="10" fill="var(--bg)" stroke="var(--line)"/>' +
-      '<text x="450" y="80" fill="var(--ink3)" font-size="10">노선 조정 우선순위 Top10</text>' + rows +
-      /* 시뮬레이션 버튼 */
-      '<rect x="450" y="228" width="158" height="28" rx="8" fill="var(--brand)"/>' +
-      '<text x="529" y="246" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="700">이 격자로 시뮬레이션 →</text>' +
-      badge(1, 28, 27) + badge(2, 300, 131) + badge(3, 622, 70) + badge(4, 622, 242) +
-      '</g></svg>';
+    /* 대상 요소 찾기. 데이터가 늦게 그려지는 요소(#tools)는 잠깐 기다렸다
+       다시 재고, 끝내 크기가 없으면 그 부모 상자를 비춥니다. */
+    var els = step.targets.map(function (sel) { return $(sel); }).filter(Boolean);
+    var zero = els.some(function (n) {
+      var r = n.getBoundingClientRect();
+      return r.width < 4 || r.height < 4;
+    });
+    if ((els.length < step.targets.length || zero) && (tries || 0) < 10) {
+      setTimeout(function () { showTourStep(i, (tries || 0) + 1); }, 180);
+      return;
+    }
+    els = els.map(function (n) {
+      var r = n.getBoundingClientRect();
+      return (r.width < 4 || r.height < 4) && n.parentElement ? n.parentElement : n;
+    });
+    if (!els.length) { endTour(); return; }
+
+    /* 화면 밖이면 끌어온 뒤 렌더 — 서랍 단계는 fixed 라 스크롤이 필요 없다 */
+    if (!step.menu) {
+      var r0 = els[0].getBoundingClientRect();
+      if (r0.top < 0 || r0.bottom > innerHeight) els[0].scrollIntoView({ block: 'center' });
+    }
+    requestAnimationFrame(function () { renderTourStep(step, i, els); });
   }
 
-  function buildGuide() {
-    if (guideModal) return guideModal;
-    var steps = [
-      ['시간대를 바꿔보세요', '출근·낮·퇴근·심야마다 답이 달라집니다 — 심야에는 공급 부족 격자가 30개에서 40개로 늘어납니다.'],
-      ['붉은 격자를 클릭', '붉을수록 "수요는 있는데 버스가 없는 곳"입니다. 클릭하면 상세 수치와 경유 노선이 아래에 나타납니다.'],
-      ['우선순위에서 대상 선택', '오른쪽 Top10이 조정 후보 목록입니다. 항목을 고르면 해당 격자를 지도에서 바로 확인할 수 있습니다.'],
-      ['시뮬레이션 → 보고서', '정류장·똑버스·증편을 놓아 예산 안에서 효과를 비교하고, AI 보고서로 회의 자료를 만듭니다.']
-    ];
-    guideModal = el('div', { 'class': 'modal', id: 'guide-modal' });
-    guideModal.innerHTML =
-      '<div class="veil" data-guide-close></div>' +
-      '<div class="sheet guide-sheet" role="dialog" aria-modal="true" aria-label="사용 안내">' +
-      '<header><h2>사용 안내</h2>' +
-      '<span class="hs">붉은 격자를 찾아 → 눌러보고 → 시뮬레이션으로</span>' +
-      '<span class="sp"></span>' +
-      '<button class="xbtn" data-guide-close type="button" aria-label="닫기">' + icon('close', 17) + '</button></header>' +
-      '<div class="body">' + guideHero() +
-      '<div class="gsteps">' +
-      steps.map(function (s, i) {
-        return '<div class="gstep"><b><span class="gnum">' + (i + 1) + '</span>' +
-          esc(s[0]) + '</b><p>' + esc(s[1]) + '</p></div>';
+  function renderTourStep(step, i, els, refocus) {
+    if (!tour) return;
+    var PAD = 6, R = 10;
+    tour.els = els;
+    tour.rects = els.map(function (n) { return n.getBoundingClientRect(); });
+    var rects = tour.rects.map(function (r) {
+      return { x: r.left - PAD, y: r.top - PAD, w: r.width + PAD * 2, h: r.height + PAD * 2 };
+    });
+
+    /* 어둠막 — 구멍은 mask 로 냅니다. box-shadow 방식은 구멍을 하나만
+       낼 수 있어(3단계는 배치 수단 + AI 추천, 두 곳) mask 를 씁니다. */
+    tour.dim.setAttribute('viewBox', '0 0 ' + innerWidth + ' ' + innerHeight);
+    tour.dim.innerHTML =
+      '<defs><mask id="tour-mask">' +
+      '<rect width="100%" height="100%" fill="#fff"/>' +
+      rects.map(function (r) {
+        return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" rx="' + R + '" fill="#000"/>';
       }).join('') +
-      '</div>' +
-      '<p class="gfoot">786개 격자 × 4개 시간대 · 공공데이터 실측 · 승차 예측 회귀(공간 교차검증) 0.852</p>' +
+      '</mask></defs>' +
+      '<rect width="100%" height="100%" fill="rgba(9,17,32,.62)" mask="url(#tour-mask)"/>' +
+      rects.map(function (r) {
+        return '<rect x="' + r.x + '" y="' + r.y + '" width="' + r.w + '" height="' + r.h + '" rx="' + R + '" ' +
+          'fill="none" stroke="var(--brand-2)" stroke-width="2.5"/>';
+      }).join('');
+
+    /* 말풍선 — 마지막 단계는 [다음] 대신 [종료] */
+    var last = i === TOUR.length - 1;
+    tour.bubble.innerHTML =
+      '<p>' + esc(step.text) + '</p>' +
+      '<div class="tour-bt">' +
+      '<span class="tour-n">' + (i + 1) + ' / ' + TOUR.length + '</span>' +
+      (i > 0 ? '<button class="btn sm" data-tour-go="' + (i - 1) + '" type="button">이전</button>' : '') +
+      (last ? '<button class="btn sm primary" data-tour-end type="button">종료</button>'
+        : '<button class="btn sm primary" data-tour-go="' + (i + 1) + '" type="button">다음</button>') +
       '</div>';
-    document.body.appendChild(guideModal);
-    $$('[data-guide-close]', guideModal).forEach(function (b) {
-      b.addEventListener('click', closeGuide);
-    });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && guideModal.classList.contains('open')) closeGuide();
-    });
-    return guideModal;
+
+    /* 말풍선 자리 — 구멍들을 감싼 상자 아래, 안 되면 위, 그래도 안 되면 하단 고정 */
+    var U = rects.reduce(function (u, r) {
+      return {
+        x: Math.min(u.x, r.x), y: Math.min(u.y, r.y),
+        r: Math.max(u.r, r.x + r.w), b: Math.max(u.b, r.y + r.h)
+      };
+    }, { x: 1e9, y: 1e9, r: -1e9, b: -1e9 });
+    var bw = tour.bubble.offsetWidth, bh = tour.bubble.offsetHeight;
+    var left = clamp((U.x + U.r) / 2 - bw / 2, 12, innerWidth - bw - 12);
+    var top;
+    tour.bubble.classList.remove('up');
+    if (U.b + 14 + bh < innerHeight - 12) top = U.b + 14;
+    else if (U.y - 14 - bh > 12) { top = U.y - 14 - bh; tour.bubble.classList.add('up'); }
+    else top = clamp(innerHeight - bh - 16, 12, innerHeight);
+    tour.bubble.style.left = left + 'px';
+    tour.bubble.style.top = top + 'px';
+
+    /* 위치 추적으로 다시 그릴 때는 포커스를 건드리지 않습니다 — 사용자가
+       [다음]을 누르려는 순간 포커스가 튀면 클릭이 무시될 수 있어서요. */
+    if (refocus !== false) {
+      var fb = $('.btn.primary', tour.bubble);
+      if (fb) fb.focus();
+    }
   }
-  function openGuide() { buildGuide().classList.add('open'); }
-  function closeGuide() { if (guideModal) guideModal.classList.remove('open'); }
 
   /* ── KPI 미니 비교차트 (시간대별 가로 막대 + 평균 점선 눈금) ──────────
      숫자만 있던 KPI 타일에 맥락을 답니다. 세로 막대로 먼저 만들었다가
