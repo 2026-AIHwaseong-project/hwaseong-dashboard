@@ -468,8 +468,9 @@ body.chat-open .toasts{right:auto;left:16px}
 /* 사용 안내 투어 — 어둠막(svg mask 구멍) + 말풍선 + 상시 닫기 ×.
    맨 위 켜켜(300대)에 둡니다: 서랍(61)·모달(80)·토스트(90)·챗봇(55)을
    전부 덮어야 "투어 중에는 구경만 한다"가 지켜집니다.
-   어둠막이 입력을 전부 삼키고, .touring 이 문서 스크롤을 잠급니다. */
-.touring,.touring body{overflow:hidden}
+   어둠막이 입력을 전부 삼킵니다. 스크롤 잠금은 overflow 가 아니라
+   wheel·touchmove·키 차단(core.js)으로 겁니다 — overflow:hidden 은 투어가
+   대상을 화면 가운데로 끌어오는 프로그램 스크롤까지 막아 버립니다. */
 .touring .tn-drawer,.touring .tn-scrim{transition:none}
 .tour-dim{position:fixed;inset:0;width:100%;height:100%;z-index:300}
 .tour-bubble{position:fixed;z-index:302;width:min(330px,calc(100vw - 24px));

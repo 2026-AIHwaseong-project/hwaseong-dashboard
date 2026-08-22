@@ -524,7 +524,9 @@
   var TOUR = [
     { page: 'dashboard', targets: ['.mapcard'],
       text: '시간대를 변경하고 버스 공급이 부족한 지역을 찾아보세요' },
-    { page: 'dashboard', targets: ['#simLink2'], reveal: '#simLink2',
+    /* align:'center' — 1→[다음]으로 오든 3→[이전] 새로고침으로 오든 같은
+       자리에 보이도록, 이 단계는 조건 없이 항상 가운데로 스크롤합니다 */
+    { page: 'dashboard', targets: ['#simLink2'], reveal: '#simLink2', align: 'center',
       text: '정책을 적용했을 때의 변화를 시뮬레이션으로 확인해보세요' },
     { page: 'simulation', targets: ['#tools', '#btnRecommend'],
       text: '직접 수단을 배치해보거나 AI 추천 배치안을 받아 확인하고 시나리오를 저장해 보세요' },
@@ -559,6 +561,41 @@
   function tourBlockWheel(e) { e.preventDefault(); }
   function onTourResize() { if (tour && tourIdx >= 0) showTourStep(tourIdx); }
 
+  /* 단계 규칙대로 스크롤을 맞춥니다 — 진입할 때만이 아니라, 레이아웃이
+     늦게 그려지며 대상이 흘러내려 갔을 때(tourWatch)도 다시 불러 자리를
+     지킵니다. 서랍·챗봇 단계는 fixed 라 스크롤이 필요 없습니다.
+     ① 대상이 두 곳으로 갈라진 단계(3단계): 모바일에서 아래쪽(AI 추천)이
+        화면 밖으로 빠지므로, 말풍선 자리(RESERVE)와 상단 내비 머리(TOPM)를
+        뺀 공간의 가운데에 묶음을 둡니다. 넘치면 머리부터 보이게 맞춥니다.
+     ② align:'center' 단계: 진입 경로와 무관하게 항상 가운데로.
+     ③ 그 외: 벗어나 있을 때만 가운데로 끌어옵니다. */
+  function alignTourScroll(step, els) {
+    if (step.menu || !els.length) return;
+    if (els.length > 1) {
+      var u = els.reduce(function (a, n) {
+        var r = n.getBoundingClientRect();
+        return { top: Math.min(a.top, r.top), bottom: Math.max(a.bottom, r.bottom) };
+      }, { top: 1e9, bottom: -1e9 });
+      var vh = (window.visualViewport && window.visualViewport.height) || innerHeight;
+      /* 위 여백은 고정값이 아니라 상단 내비의 실제 높이로 잽니다 — 모바일은
+         막대가 줄바꿈되며 76px 보다 높아져, 고정값이면 구멍 머리가 배너
+         밑에 깔립니다. sticky 라 bottom 이 곧 화면에서 차지하는 높이입니다. */
+      var nav = $('.topnav');
+      var RESERVE = 150;
+      var TOPM = (nav ? Math.max(0, nav.getBoundingClientRect().bottom) : 60) + 16;
+      var usable = Math.max(TOPM + 120, vh - RESERVE);
+      var uh = u.bottom - u.top;
+      var want = uh <= usable - TOPM ? TOPM + (usable - TOPM - uh) / 2 : TOPM;
+      var delta = u.top - want;
+      if (Math.abs(delta) > 8) window.scrollBy(0, delta);
+    } else {
+      var r0 = els[0].getBoundingClientRect();
+      if (step.align === 'center' || r0.top < 0 || r0.bottom > innerHeight) {
+        els[0].scrollIntoView({ block: 'center' });
+      }
+    }
+  }
+
   /* 화면 이동 직후에는 데이터·폰트가 마저 그려지며 레이아웃이 움직여서,
      진입 순간에 잰 구멍 좌표가 곧 어긋납니다(특히 3단계 시뮬레이션 진입과
      [이전]으로 대시보드에 되돌아올 때). 투어가 떠 있는 동안 대상 위치를
@@ -574,7 +611,12 @@
       return Math.abs(r.left - d.left) > 1.5 || Math.abs(r.top - d.top) > 1.5 ||
         Math.abs(r.width - d.width) > 1.5 || Math.abs(r.height - d.height) > 1.5;
     });
-    if (moved) renderTourStep(TOUR[tourIdx], tourIdx, tour.els, false);
+    if (moved) {
+      /* 구멍만 따라 그리지 않고 스크롤 정렬부터 다시 — 늦게 그려진 카드가
+         대상을 화면 밖으로 밀어낸 경우(모바일 3→2, 4→3 복귀) 제자리로. */
+      alignTourScroll(TOUR[tourIdx], tour.els);
+      renderTourStep(TOUR[tourIdx], tourIdx, tour.els, false);
+    }
   }
 
   function startTour(i) {
@@ -584,7 +626,7 @@
     if (!tour) {
       var root = el('div', { 'class': 'tour' });
       root.innerHTML =
-        '<svg class="tour-dim" aria-hidden="true" preserveAspectRatio="none"></svg>' +
+        '<svg class="tour-dim" aria-hidden="true"></svg>' +
         '<div class="tour-bubble" role="dialog" aria-label="사용 안내"></div>' +
         '<button class="tour-x" type="button" aria-label="사용 안내 닫기">' + icon('close', 18) + '</button>';
       document.body.appendChild(root);
@@ -676,11 +718,7 @@
     });
     if (!els.length) { endTour(); return; }
 
-    /* 화면 밖이면 끌어온 뒤 렌더 — 서랍 단계는 fixed 라 스크롤이 필요 없다 */
-    if (!step.menu) {
-      var r0 = els[0].getBoundingClientRect();
-      if (r0.top < 0 || r0.bottom > innerHeight) els[0].scrollIntoView({ block: 'center' });
-    }
+    alignTourScroll(step, els);
     requestAnimationFrame(function () { renderTourStep(step, i, els); });
   }
 
@@ -694,8 +732,11 @@
     });
 
     /* 어둠막 — 구멍은 mask 로 냅니다. box-shadow 방식은 구멍을 하나만
-       낼 수 있어(3단계는 배치 수단 + AI 추천, 두 곳) mask 를 씁니다. */
-    tour.dim.setAttribute('viewBox', '0 0 ' + innerWidth + ' ' + innerHeight);
+       낼 수 있어(3단계는 배치 수단 + AI 추천, 두 곳) mask 를 씁니다.
+       viewBox 를 걸지 않습니다 — svg 사용자 단위가 곧 CSS px 이 되어
+       getBoundingClientRect 좌표와 1:1 로 맞습니다. viewBox 를 innerHeight
+       로 걸면 모바일에서 주소창이 접히는 순간 배율이 틀어져 구멍이
+       대상(AI 추천 버튼)에서 살짝 비껴 났습니다. */
     tour.dim.innerHTML =
       '<defs><mask id="tour-mask">' +
       '<rect width="100%" height="100%" fill="#fff"/>' +
@@ -727,13 +768,35 @@
         r: Math.max(u.r, r.x + r.w), b: Math.max(u.b, r.y + r.h)
       };
     }, { x: 1e9, y: 1e9, r: -1e9, b: -1e9 });
+    /* 높이는 innerHeight 가 아니라 visualViewport 로 잽니다 — 모바일에서
+       주소창 뒤에 가려진 영역까지 화면으로 치면 말풍선이 손이 안 닿는
+       바닥으로 내려가 [다음]을 누를 수 없게 됩니다. */
+    var vh = (window.visualViewport && window.visualViewport.height) || innerHeight;
     var bw = tour.bubble.offsetWidth, bh = tour.bubble.offsetHeight;
     var left = clamp((U.x + U.r) / 2 - bw / 2, 12, innerWidth - bw - 12);
     var top;
     tour.bubble.classList.remove('up');
-    if (U.b + 14 + bh < innerHeight - 12) top = U.b + 14;
-    else if (U.y - 14 - bh > 12) { top = U.y - 14 - bh; tour.bubble.classList.add('up'); }
-    else top = clamp(innerHeight - bh - 16, 12, innerHeight);
+    /* 구멍이 여럿일 때 그 사이가 넉넉하면 말풍선을 사이에 앉힙니다 —
+       모바일 3단계에서 위(배치 수단)·아래(AI 추천)를 다 보이게 하는 자리 */
+    var placed = false;
+    if (rects.length > 1) {
+      var sorted = rects.slice().sort(function (a, b) { return a.y - b.y; });
+      for (var g = 0; g < sorted.length - 1; g++) {
+        var gs = sorted[g].y + sorted[g].h, ge = sorted[g + 1].y;
+        if (ge - gs >= bh + 20) {
+          top = gs + (ge - gs - bh) / 2;
+          placed = true;
+          break;
+        }
+      }
+    }
+    if (!placed) {
+      if (U.b + 14 + bh < vh - 12) top = U.b + 14;
+      else if (U.y - 14 - bh > 12) { top = U.y - 14 - bh; tour.bubble.classList.add('up'); }
+      else top = vh - bh - 16;
+    }
+    /* 어떤 경우에도 말풍선(과 버튼)은 보이는 화면 안에 있어야 합니다 */
+    top = clamp(top, 12, Math.max(12, vh - bh - 12));
     tour.bubble.style.left = left + 'px';
     tour.bubble.style.top = top + 'px';
 
