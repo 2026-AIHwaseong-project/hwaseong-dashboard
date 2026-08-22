@@ -780,8 +780,12 @@
     var c = cellById(cellId);
     if (c) {
       var simPage = (HW.CONFIG.PAGES && HW.CONFIG.PAGES.simulation) || 'simulation.html';
-      $('#simLink').href = simPage + '?cell=' + encodeURIComponent(cellId) + '&period=' + encodeURIComponent(S.period);
+      var simHref = simPage + '?cell=' + encodeURIComponent(cellId) + '&period=' + encodeURIComponent(S.period);
+      $('#simLink').href = simHref;
       $('#simLink').style.display = '';
+      /* 지도 머리의 같은 링크 — 격자를 고르면 지도 안에서 바로 다음 행동으로 */
+      var l2 = $('#simLink2');
+      if (l2) { l2.href = simHref; l2.hidden = false; }
       if (linkStation && c.nearestStopId) {
         if (c.nearestStopId !== S.selectedStopId) selectStop(c.nearestStopId, focus);
         else if (focus) S.map.focusStop(c.nearestStopId);

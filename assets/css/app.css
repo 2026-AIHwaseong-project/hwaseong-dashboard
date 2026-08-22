@@ -1985,3 +1985,9 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 .ks-row2.on{background:var(--selbg);border-radius:5px}
 /* 브리핑의 핵심 숫자 — 본문 잉크와 갈라 브랜드 남색으로 */
 .brief .brief-main b{color:var(--brand-ink)}
+
+/* 지도 머리의 시뮬레이션 이동 — 행동 버튼이라 브랜드 윤곽으로 반 발 세웁니다 */
+.chead .cta{border-color:var(--brand);color:var(--brand);font-weight:700;text-decoration:none}
+.chead .cta:hover{background:var(--brand-soft)}
+/* .tbtn 의 display 가 UA 의 [hidden] 규칙을 이깁니다 — 명시적으로 잠급니다 */
+.chead .cta[hidden]{display:none}
