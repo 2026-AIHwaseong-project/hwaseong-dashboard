@@ -1896,3 +1896,42 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   /* 칩이 값 옆에 붙으면 열 폭을 밀어 B열이 잘립니다 — 값 아래 줄로 내립니다 */
   .dchip{display:block;width:max-content;margin:3px 0 0 auto;padding:1px 5px}
 }
+
+/* ===========================================================================
+ * [32] 위계 패스 — 히어로 · 디박싱 · 킥커
+ *   "모든 카드가 같은 목소리"를 고칩니다. 원칙: 한 화면 = 한 주인공.
+ *   대시보드의 주인공은 사각지대 수(히어로 타일)와 지도이고, 나머지는
+ *   한 단계 물러납니다. 위계는 장식이 아니라 크기·무게·면의 차이로만 만듭니다.
+ * ======================================================================== */
+/* 브리핑 승격 — 이미 있던 '한 줄 브리핑'(§13)이 이 화면의 3초 메시지입니다.
+   파란 상자에 갇혀 다른 카드와 같은 목소리였던 것을 상자에서 꺼내
+   리드 문장으로 키웁니다. 내용·마크업·데이터 흐름은 §13 그대로입니다. */
+.brief{background:transparent;border:0;border-radius:0;padding:2px 2px 0;margin-bottom:14px}
+.brief .brief-main{font-size:15.5px;line-height:1.55;letter-spacing:-.01em;word-break:keep-all}
+.brief .brief-main b{font-weight:800;font-variant-numeric:tabular-nums}
+.brief .brief-act{border-top:0;padding-top:2px;margin-top:5px}
+/* KPI 존 디박싱 — 카드 상자를 벗고 숫자가 바탕 위에 직접 섭니다.
+   구분은 보더 대신 타일 사이 괘선 하나로 충분합니다 */
+.kpis{background:transparent;border:0;box-shadow:none;border-radius:0;
+  grid-template-columns:1.45fr 1fr 1fr 1fr;margin-bottom:16px}
+.kpi{padding:12px 18px 12px 2px}
+.kpi + .kpi{padding-left:18px}
+/* 히어로 — 이 화면의 첫 숫자. 크기 점프(약 1.7배)와 무게 800 이 위계를 만듭니다 */
+.kpi.hero .lb{font-size:12px;font-weight:700;color:var(--ink)}
+.kpi.hero .vl{font-size:clamp(30px,2.9vw,42px);font-weight:800;letter-spacing:-.025em}
+.kpi.hero .vl small{font-size:16px}
+/* 보조 3개는 오히려 반걸음 물러납니다 — 차이가 없으면 위계도 없습니다 */
+.kpi:not(.hero) .vl{font-size:clamp(17px,1.55vw,21px);font-weight:650}
+.kpi:not(.hero) .lb{color:var(--ink3)}
+/* 사이드 카드 디박싱 — 리스트에 상자는 과합니다. 면(바탕 톤)과 킥커 제목,
+   행 사이 괘선만 남깁니다. 지도 카드는 화면의 닻이라 상자를 유지합니다 */
+.sidecard{background:transparent;border:0;box-shadow:none;border-radius:0;
+  padding:2px 2px 10px}
+/* 킥커 — 섹션 제목은 작고 조용하게, 내용이 크게. 제목이 크면 전부가 제목입니다 */
+.chead h2{font-size:11.5px;font-weight:700;letter-spacing:.055em;color:var(--ink3)}
+.mapcard .chead h2{font-size:13px;letter-spacing:.02em;color:var(--ink)}
+@media (max-width:1024px){
+  .kpis{grid-template-columns:1fr 1fr}
+  .kpi{padding:12px 14px}
+  .kpi + .kpi{padding-left:14px}
+}
