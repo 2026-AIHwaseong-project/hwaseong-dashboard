@@ -300,10 +300,37 @@
     });
   }
 
+  /* 수단 아이콘 — 서버 meta 의 글자기호(●◆▲)는 셋 다 추상 도형이라 뜻이
+     안 잡혔습니다. 각 수단의 특징을 그림으로: 정류장 = 표지판(기둥),
+     똑버스 = 호출 물결이 달린 승합차, 증편 = 버스에 + 뱃지. 색은 지도
+     배치 마커(pmk)와 같은 초록/파랑/주황이라 지도와 버튼이 이어집니다.
+     모르는 타입이면 서버 글자기호로 되돌아갑니다. */
+  var TOOL_SVG = {
+    stop: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"' +
+      ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<rect x="4.2" y="1.8" width="7.6" height="5.2" rx="1.2"/>' +
+      '<path d="M6.3 4.4h3.4M8 7v6.2M5.2 13.2h5.6"/></svg>',
+    drt: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"' +
+      ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<rect x="1.6" y="5.4" width="10.6" height="5.8" rx="1.6"/>' +
+      '<path d="M1.6 8.3h10.6M13.4 2.6a3.4 3.4 0 0 1 1.8 3"/>' +
+      '<circle cx="4.4" cy="12.6" r="1.25"/><circle cx="9.4" cy="12.6" r="1.25"/></svg>',
+    freq: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"' +
+      ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<rect x="1.6" y="6" width="9.4" height="5.4" rx="1.4"/>' +
+      '<path d="M1.6 8.7h9.4M13.2 1.9v4M11.2 3.9h4"/>' +
+      '<circle cx="4.2" cy="12.8" r="1.2"/><circle cx="8.6" cy="12.8" r="1.2"/></svg>'
+  };
+  function toolIcon(type, fallback) {
+    return TOOL_SVG[type]
+      ? '<i class="tico tico-' + esc(type) + '">' + TOOL_SVG[type] + '</i>'
+      : '<i class="tico">' + esc(fallback || '●') + '</i>';
+  }
+
   function renderToolbar(effects) {
     $('#tools').innerHTML = effects.map(function (e) {
       return '<button class="simtool" data-tool="' + esc(e.type) + '" type="button" aria-pressed="false">' +
-        '<i>' + HW.icon(e.type, 13) + '</i>' + esc(e.label) + '</button>';
+        toolIcon(e.type, e.icon) + esc(e.label) + '</button>';
     }).join('');
   }
 
@@ -930,7 +957,7 @@
       '<ul class="plist">' + S.placements.map(function (p, i) {
       var e = S.effects[p.type] || {};
       var cell = S.map.cellById(p.cellId);
-      return '<li' + (p.fromAI ? ' class="from-ai"' : '') + '><span class="ic">' + HW.icon(p.type, 14) + '</span>' +
+      return '<li' + (p.fromAI ? ' class="from-ai"' : '') + '><span class="ic">' + toolIcon(p.type, e.icon) + '</span>' +
         '<span class="tx"><b>' + esc(e.label || p.type) + (p.count > 1 ? ' ×' + p.count : '') +
         (p.fromAI ? '<span class="ai-tag">추천 ' + p.rank + '순위</span>' : '') + '</b>' +
         '<span>' + esc(cell ? cell.name : '') + ' · ' + esc(p.cellId) + ' · 반경 ' + (e.radiusKm || '?') + 'km</span>' +
