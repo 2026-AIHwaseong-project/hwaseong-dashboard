@@ -30,7 +30,9 @@
     return api.call('admin.status').then(function (st) {
       $('#loginCard').hidden = true;
       $('#console').hidden = false;
-      $('#btnLogout').hidden = false;
+      var open = st.env && st.env.authRequired === false;
+      $('#btnLogout').hidden = open;          /* 무인증이면 잠글 것이 없다 */
+      $('#openWarn').hidden = !open;
       S.status = st;
       renderStrip(st);
       renderJob(st.job);
@@ -44,10 +46,15 @@
       return loadAll();
     })['catch'](function (e) {
       var box = $('#loginErr');
+      if (e.status === 401 && !getToken()) {
+        /* 첫 진입 — 토큰 없이 두드렸는데 서버가 인증을 요구한 정상 흐름이다.
+           오류가 아니므로 붉은 문구 대신 로그인 카드만 보여준다. */
+        box.hidden = true;
+        return;
+      }
       box.hidden = false;
-      box.textContent = e.status === 503
-        ? '서버에 ADMIN_TOKEN 이 설정돼 있지 않아 관리자 기능이 닫혀 있습니다.'
-        : (e.status === 401 ? '토큰이 올바르지 않습니다.' : api.humanize(e));
+      box.textContent = e.status === 401 ? '토큰이 올바르지 않습니다.'
+        : (e.status === 503 ? '서버에서 관리자 기능이 비활성화돼 있습니다.' : api.humanize(e));
     });
   }
 
@@ -101,6 +108,7 @@
 
   function rowHtml(p) {
     var badge = p.overridden ? ' <b class="ov">[관리자 수정]</b>' : '';
+    if (p.pending) badge += ' <b class="ov">[재계산 대기]</b>';
     var meta = '기본 ' + esc(fmtVal(p, p.default)) + (p.unit ? ' ' + esc(p.unit) : '');
     if (p.overridden && p.reason) meta += ' · 사유: ' + esc(p.reason);
     var left = '<div class="plabel">' + esc(p.label) + badge +
@@ -222,7 +230,11 @@
     var body = { changes: S.dirty, reason: $('#saveReason').value, actor: 'admin' };
     $('#btnApply').disabled = true;
     api.call('admin.save', null, body).then(function (res) {
-      C.toast('적용되었습니다 — 시뮬레이션·추천에 즉시 반영됩니다');
+      if (res.requiresRefresh && res.requiresRefresh.length) {
+        C.toast('저장되었습니다 — 모델 상수는 [지표 재계산]을 실행해야 화면에 반영됩니다', '', 8000);
+      } else {
+        C.toast('적용되었습니다 — 시뮬레이션·추천에 즉시 반영됩니다');
+      }
       $('#saveReason').value = '';
       S.params = res.params || [];
       S.byKey = {};
@@ -331,7 +343,7 @@
     });
     $('#btnRecompute').addEventListener('click', function () {
       if (!global.confirm('지표 재계산은 수 분이 걸리고, 완료되면 격자 지표·우선순위 수치가 바뀔 수 있습니다.\n스테이징에서 검증을 통과한 산출물만 반영되며, 실패해도 기존 데이터는 유지됩니다.\n진행할까요?')) return;
-      startRefresh(['join', 'model', 'load', 'reload'], '관리자 콘솔 — 지표 재계산');
+      startRefresh(['join', 'model', 'validate', 'load', 'reload'], '관리자 콘솔 — 지표 재계산');
     });
   }
 
@@ -356,7 +368,10 @@
     wireAuth();
     wire();
     showServerTarget();
-    if (getToken()) tryEnter();
+    /* 토큰이 없어도 일단 두드린다 — 서버가 ADMIN_TOKEN 을 요구하지 않으면
+       그대로 들어가고, 요구하면 401 이 와서 로그인 카드가 뜬다.
+       "인증이 필요한가"는 서버가 정하고 화면은 결과를 따른다. */
+    tryEnter();
   }
 
   boot();

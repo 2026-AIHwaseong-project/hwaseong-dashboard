@@ -39,6 +39,11 @@
     </section>
 
     <main id="console" hidden>
+      <p class="admopen" id="openWarn" hidden>
+        ⚠ 이 서버는 <b>관리자 인증 없이</b> 열려 있습니다. 공개 인터넷에 노출된 서버라면
+        <code>.env</code> 에 <code>ADMIN_TOKEN</code> 을 설정하세요.
+      </p>
+
       <!-- 상태 스트립 -->
       <section class="admstrip" id="statusStrip"></section>
 
@@ -56,8 +61,8 @@
       </section>
 
       <section class="card" id="cardModel">
-        <h2>모델 상수 <span class="admtag warn">재계산 필요 · 잠김</span></h2>
-        <p class="admhint">격자 지표(D·S·MI)에 구워지는 값이라 재계산 경로가 오버라이드를 읽는 다음 단계에서 개방됩니다. 지금은 근거 열람만 됩니다.</p>
+        <h2>모델 상수 <span class="admtag warn">저장 후 재계산 필요</span></h2>
+        <p class="admhint">격자 지표에 구워지는 값입니다. 저장해도 <b>[지표 재계산]</b>을 실행하기 전에는 화면 수치가 바뀌지 않으며, 그때까지 [재계산 대기] 배지가 붙습니다. 재계산은 검증(공간 CV·정성 대조)을 함께 다시 돌립니다.</p>
         <div class="admrows" id="rowsModel"></div>
       </section>
 

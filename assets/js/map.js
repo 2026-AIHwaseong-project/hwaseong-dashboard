@@ -991,7 +991,10 @@
 
       h += '<div class="lg-body">';
       if (L.kind === 'diverging') {
-        var th = (state.scale && state.scale.miThresholds) || [-1.5, -0.75, -0.25, 0.25, 0.75, 1.5];
+        /* 임계값 정본은 서버 meta.scale 이다. 로컬 폴백 상수는 백엔드(±1.2/±0.7)와
+           값이 갈라져 있던 사본이라 제거 — meta 가 없으면 눈금 수치를 생략하고
+           색 띠만 그린다(틀린 눈금보다 없는 눈금이 낫다). */
+        var th = (state.scale && state.scale.miThresholds) || [];
         h += '<span class="lg-end">공급 여유</span>';
         h += '<div class="lg-scale"><div class="lg-sw">';
         for (var i = 0; i < L.steps; i++) h += '<i style="background:var(--' + (L.varPrefix || L.prefix) + i + ')"></i>';
