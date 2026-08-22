@@ -13,7 +13,7 @@
   var C = HW.core, CONFIG = HW.CONFIG, api = HW.api;
   var $ = C.$, esc = C.esc;
 
-  var S = { params: [], byKey: {}, dirty: {}, status: null, polling: null };
+  var S = { params: [], byKey: {}, dirty: {}, status: null, polling: null, meta: null };
 
   /* ------------------------------------------------------------ 인증 */
   function getToken() {
@@ -44,6 +44,7 @@
         $('#jobNote').hidden = false;
         poll();
       }
+      api.meta().then(function (m) { S.meta = m; })['catch'](function () { /* 보고서 맥락용 — 없어도 화면은 돈다 */ });
       return loadAll();
     })['catch'](function (e) {
       var box = $('#loginErr');
@@ -407,10 +408,20 @@
   }
 
   function boot() {
-    /* 상단 레일·서랍·테마 버튼·발행 표기를 대시보드와 같은 것으로 답니다.
-       report.js 를 안 싣는 화면이라 서랍의 [AI 보고서 생성] 버튼은
-       core.js 가 알아서 뺍니다. */
+    /* 상단 레일·서랍·테마·도움말·보고서를 다른 화면과 똑같이 답니다.
+       initTheme 을 빼면 테마 버튼이 그려지기만 하고 눌러도 안 바뀝니다
+       (dashboard.js·simulation.js 도 같은 순서로 부릅니다). */
     C.mountTopnav('admin');
+    C.initTheme();
+    C.wireHelp();
+    if (HW.report) {
+      HW.report.mount();
+      /* 관리자 화면에는 격자·우선순위 맥락이 없으므로, 보고서는 대시보드에서
+         쓰던 마지막 상태(meta·시나리오)만 넘겨 초안을 만들 수 있게 합니다. */
+      HW.report.setContextProvider(function () {
+        return { meta: S.meta || null, admin: { overrides: (S.status && S.status.overrides) || null } };
+      });
+    }
     wireAuth();
     wire();
     showServerTarget();

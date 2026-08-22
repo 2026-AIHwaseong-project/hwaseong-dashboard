@@ -141,10 +141,14 @@
   </div>
 </div>
 
-<!-- 로드 순서 주의: config → core → api → 페이지 -->
+<!-- 로드 순서 주의: config → core → api → 컴포넌트 → 페이지.
+     report·chat 도 싣습니다 — 서랍 메뉴가 다른 화면과 같아야 하고,
+     [AI 보고서 생성]·도우미가 여기서도 그대로 동작해야 합니다. -->
 <script src="assets/js/config.js"></script>
 <script src="assets/js/core.js"></script>
 <script src="assets/js/api.js"></script>
+<script src="assets/js/report.js"></script>
+<script src="assets/js/chat.js"></script>
 <script src="assets/js/admin.js"></script>
 </body>
 </html>

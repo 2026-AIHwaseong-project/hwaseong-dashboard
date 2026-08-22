@@ -420,14 +420,10 @@
          대신 관공서 서식의 발행 버튼이 그렇듯 무엇을 만드는지(주 라벨)와 무엇으로
          나오는지(부제)를 두 줄로 밝힙니다. 부제 문구는 report.js 의 실제 출력과
          맞춘 것입니다 — 클라이언트 방식에서 엑셀은 .xlsx, 한글은 .rtf 입니다. */
-      /* 보고서 생성기(report.js)를 로드하지 않는 화면(관리자 콘솔)에서는
-         이 버튼을 넣지 않습니다 — 눌러도 아무 일이 없는 문은 없는 것만 못합니다. */
-      (global.HW && global.HW.report
-        ? '<button class="btn primary tn-issue" data-report-open type="button">' +
-          icon('doc', 18) +
-          '<span class="ti-tx"><b>AI 보고서 생성</b>' +
-          '<span>초안 작성 · 한글 · 엑셀 저장</span></span></button>'
-        : '') +
+      '<button class="btn primary tn-issue" data-report-open type="button">' +
+      icon('doc', 18) +
+      '<span class="ti-tx"><b>AI 보고서 생성</b>' +
+      '<span>초안 작성 · 한글 · 엑셀 저장</span></span></button>' +
       '</nav>';
 
     var mbtn = $('[data-menu-btn]', host);
