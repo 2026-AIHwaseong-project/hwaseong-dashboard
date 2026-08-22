@@ -813,9 +813,12 @@
   /* 카드 제목·운행정보 칸은 두 모드가 나눠 쓰므로 전환을 한 곳에서 합니다.
      이걸 각 렌더러가 따로 하면 격자 모드로 돌아왔을 때 노선 운행정보가 남습니다. */
   function setRouteCardMode(title) {
-    var h = $('#routeStripTitle'), info = $('#routeInfo');
+    var h = $('#routeStripTitle'), info = $('#routeInfo'), back = $('#routeBack');
     if (h) h.textContent = title;
     if (info && title !== null) { info.hidden = true; info.innerHTML = ''; }
+    /* 격자 목록 모드(title 있음)에선 돌아갈 곳이 없으니 숨깁니다.
+       노선 상세(title === null)에서만 보입니다. */
+    if (back) back.hidden = title !== null;
   }
 
   /** cellId 가 null 이면 안내 문구로 되돌립니다 */
@@ -1085,7 +1088,15 @@
   function wireRouteStripClicks() {
     var box = document.querySelector('.routecard');
     if (!box) return;
+    var back = $('#routeBack');
+    if (back) back.innerHTML = HW.icon('arrow', 12) + ' 돌아가기';
     box.addEventListener('click', function (e) {
+      /* 노선 상세에서 이 격자의 노선 목록으로. selectedCellId 는 노선 상세에
+         들어가도 안 바뀌므로(enterRouteFocus 참고) 그대로 씁니다. */
+      if (e.target.closest('#routeBack')) {
+        if (S.selectedCellId) enterCellFocus(S.selectedCellId, true);
+        return;
+      }
       var b = e.target.closest('[data-route-id]');
       if (!b) return;
       enterRouteFocus(b.getAttribute('data-route-id'));

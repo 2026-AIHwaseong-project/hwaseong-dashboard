@@ -149,7 +149,12 @@
          모드에 맞춰 갈아끼웁니다. -->
     <section class="card routecard">
       <div class="chead">
-        <h2 id="routeStripTitle">이 격자를 지나는 노선</h2>
+        <div class="cheadtitle">
+          <!-- 노선 상세(전 구간)로 들어갔을 때만 보입니다 — 이 격자의 노선 목록으로
+               돌아갈 방법이 "다른 격자를 눌렀다가 다시 이 격자를 누르는" 것뿐이었습니다. -->
+          <button class="minib rback" id="routeBack" type="button" hidden>돌아가기</button>
+          <h2 id="routeStripTitle">이 격자를 지나는 노선</h2>
+        </div>
         <span class="hsub" id="routeStripSub">지도에서 격자를 클릭하면 그 격자를 지나는 버스와 정류장 순서가 나옵니다</span>
       </div>
       <!-- 노선 모드에서만 채웁니다(기점·종점·첫차·막차·배차·업체) -->
