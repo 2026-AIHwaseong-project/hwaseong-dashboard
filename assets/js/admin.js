@@ -30,7 +30,9 @@
     return api.call('admin.status').then(function (st) {
       $('#loginCard').hidden = true;
       $('#console').hidden = false;
-      $('#btnLogout').hidden = false;
+      var open = st.env && st.env.authRequired === false;
+      $('#btnLogout').hidden = open;          /* 무인증이면 잠글 것이 없다 */
+      $('#openWarn').hidden = !open;
       S.status = st;
       renderStrip(st);
       renderJob(st.job);
@@ -44,10 +46,15 @@
       return loadAll();
     })['catch'](function (e) {
       var box = $('#loginErr');
+      if (e.status === 401 && !getToken()) {
+        /* 첫 진입 — 토큰 없이 두드렸는데 서버가 인증을 요구한 정상 흐름이다.
+           오류가 아니므로 붉은 문구 대신 로그인 카드만 보여준다. */
+        box.hidden = true;
+        return;
+      }
       box.hidden = false;
-      box.textContent = e.status === 503
-        ? '서버에 ADMIN_TOKEN 이 설정돼 있지 않아 관리자 기능이 닫혀 있습니다.'
-        : (e.status === 401 ? '토큰이 올바르지 않습니다.' : api.humanize(e));
+      box.textContent = e.status === 401 ? '토큰이 올바르지 않습니다.'
+        : (e.status === 503 ? '서버에서 관리자 기능이 비활성화돼 있습니다.' : api.humanize(e));
     });
   }
 
@@ -361,7 +368,10 @@
     wireAuth();
     wire();
     showServerTarget();
-    if (getToken()) tryEnter();
+    /* 토큰이 없어도 일단 두드린다 — 서버가 ADMIN_TOKEN 을 요구하지 않으면
+       그대로 들어가고, 요구하면 401 이 와서 로그인 카드가 뜬다.
+       "인증이 필요한가"는 서버가 정하고 화면은 결과를 따른다. */
+    tryEnter();
   }
 
   boot();

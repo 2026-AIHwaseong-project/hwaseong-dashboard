@@ -148,7 +148,8 @@
      * ---------------------------------------------------------------- */
     PAGES: {
       dashboard: 'index.html',
-      simulation: 'simulation.html'
+      simulation: 'simulation.html',
+      admin: 'admin.html'
     },
 
     /* ------------------------------------------------------------------

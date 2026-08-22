@@ -39,6 +39,11 @@
     </section>
 
     <main id="console" hidden>
+      <p class="admopen" id="openWarn" hidden>
+        ⚠ 이 서버는 <b>관리자 인증 없이</b> 열려 있습니다. 공개 인터넷에 노출된 서버라면
+        <code>.env</code> 에 <code>ADMIN_TOKEN</code> 을 설정하세요.
+      </p>
+
       <!-- 상태 스트립 -->
       <section class="admstrip" id="statusStrip"></section>
 

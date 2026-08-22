@@ -37,6 +37,12 @@
 .admtag.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--brand-2-ink); }
 .admtag.mute { background: color-mix(in srgb, var(--ink3) 12%, transparent); color: var(--ink3); }
 
+/* 무인증 경고 배너 */
+.admopen { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: var(--brand-2-ink); padding: 10px 12px; margin: 0 0 14px; font-size: 13px; }
+.admopen[hidden] { display: none; }
+
 /* 파라미터 행 */
 .admrows { display: flex; flex-direction: column; }
 .admrow { display: grid; grid-template-columns: minmax(220px, 1.2fr) 220px 1fr;
