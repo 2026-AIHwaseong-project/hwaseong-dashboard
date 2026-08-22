@@ -971,7 +971,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   background:var(--card);display:inline-flex;align-items:center;gap:5px}
 .simtool:hover{border-color:var(--sel)}
 .simtool.on{background:var(--sel);border-color:var(--sel);color:#fff;font-weight:600}
-.simtool i{font-style:normal;font-size:10px}
+.simtool i{display:inline-flex;font-style:normal}
 .simbar .spacer{flex:1}
 .simbar .cnt{font-size:11px;color:var(--ink3);}
 .simhint{width:100%;font-size:11px;color:var(--ink3);margin-top:2px}
@@ -980,7 +980,7 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
   max-height:260px;overflow-y:auto}
 .plist li{display:grid;grid-template-columns:22px minmax(0,1fr) auto auto;gap:10px;align-items:center;
   padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
-.plist .ic{font-size:12px;color:var(--sel);text-align:center}
+.plist .ic{display:flex;align-items:center;justify-content:center;color:var(--sel)}
 .plist .tx{min-width:0}
 .plist .tx b{display:block;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* :not(.ai-tag) — 이 규칙이 span 태그 자체를 잡다 보니, .ai-tag(밑에서 흰 글씨로
@@ -1569,7 +1569,12 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 :root[data-theme="dark"] .btn.excel,
 :root[data-theme="dark"] .simtool.on,
 :root[data-theme="dark"] .cm-b.me,
+:root[data-theme="dark"] .pbtn.on,
 :root[data-theme="dark"] .help:hover{color:var(--bg)}
+/* 다크에서 --brand 가 밝은 하늘색(#5AA6EA)으로 뒤집혀 흰 글씨(2.60:1)·주황 마커
+   (1.14:1)가 둘 다 AA 미달이 됩니다. 위와 같은 처방(--bg 로 전환)을 마커에도 씁니다 —
+   '지금 여기' 표시가 주황이어야 할 이유는 없고, 안 보이는 것보다 낫습니다. */
+:root[data-theme="dark"] .pbtn.on::after{background:var(--bg)}
 /* 카카오 타일은 원래 밝은 지도라, 테마와 무관한 brightness(1.04)를 그대로 두면
    다크에서 확대했을 때 배경만 하얗게 뜹니다(육지·바다는 투명해진 상태라 더 심함). */
 :root[data-theme="dark"] .kkdetail .kakaomap{
@@ -1581,7 +1586,9 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   :root:where(:not([data-theme="light"])) .btn.excel,
   :root:where(:not([data-theme="light"])) .simtool.on,
   :root:where(:not([data-theme="light"])) .cm-b.me,
+  :root:where(:not([data-theme="light"])) .pbtn.on,
   :root:where(:not([data-theme="light"])) .help:hover{color:var(--bg)}
+  :root:where(:not([data-theme="light"])) .pbtn.on::after{background:var(--bg)}
   /* 위 명시 테마(:root[data-theme="dark"])와 같은 보정을 '자동' 에도 겁니다 */
   :root:where(:not([data-theme="light"])) .kkdetail .kakaomap{
     filter:saturate(.28) brightness(.55) contrast(1.12)}
