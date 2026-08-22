@@ -13,7 +13,10 @@
   var C = HW.core, CONFIG = HW.CONFIG, api = HW.api;
   var $ = C.$, esc = C.esc;
 
-  var S = { params: [], byKey: {}, dirty: {}, status: null, polling: null, meta: null };
+  var S = { params: [], byKey: {}, dirty: {}, status: null, polling: null, meta: null,
+            /* 확인창이 무엇을 확정하려는지 — 저장 버튼과 업로드 검증 버튼이
+               같은 [확정]을 쓰기 때문에 반드시 구분해야 한다. */
+            confirmMode: 'params', upload: null, uploading: false };
 
   /* 서버는 변경 이력의 '왜' 칸을 위해 사유 5자 이상을 요구합니다(save_params).
      화면에서는 더 이상 받지 않으므로 콘솔이 대신 채웁니다 — API 계약과 이력
@@ -85,6 +88,7 @@
       S.status = st;
       renderStrip(st);
       renderJob(st.job);
+      renderUploadBox(st);
       return st;
     });
   }
@@ -200,7 +204,9 @@
     var html = '<table><tr><th>시각</th><th>종류</th><th>내용</th></tr>';
     for (var i = 0; i < items.length; i++) {
       var ev = items[i];
-      var kind = { 'param.set': '값 변경', 'refresh.start': '갱신 시작', 'refresh.done': '갱신 완료', 'auth.fail': '인증 실패' }[ev.kind] || ev.kind;
+      var kind = { 'param.set': '값 변경', 'refresh.start': '갱신 시작', 'refresh.done': '갱신 완료',
+                   'auth.fail': '인증 실패', 'upload.accept': '파일 접수',
+                   'upload.dryrun': '검증 실행', 'upload.apply': '라이브 반영' }[ev.kind] || ev.kind;
       var body = '';
       if (ev.kind === 'param.set') {
         var parts = [];
@@ -217,6 +223,14 @@
         body = esc((ev.steps || []).join(' → ')) + (ev.reason ? ' · ' + esc(ev.reason) : '');
       } else if (ev.kind === 'auth.fail') {
         body = 'IP ' + esc(ev.ip || '-');
+      } else if (ev.kind === 'upload.accept') {
+        body = esc(ev.file || '') + ' · ' + esc(String(ev.rows || 0)) + '행 · sha ' + esc(ev.sha256 || '') +
+               (ev.reason ? '<br><i>' + esc(ev.reason) + '</i>' : '');
+      } else if (ev.kind === 'upload.dryrun') {
+        var q = (ev.result || {}).quadrantChanged;
+        body = '라이브 무변경 · 판정 변경 ' + esc(String(q == null ? '—' : q)) + '개';
+      } else if (ev.kind === 'upload.apply') {
+        body = esc(ev.file || '') + ' 반영 · 백업 <code>' + esc(ev.backup || '') + '</code>';
       }
       html += '<tr><td>' + esc(ev.ts || '') + '</td><td class="hkind">' + esc(kind) + '</td><td>' + body + '</td></tr>';
     }
@@ -264,8 +278,13 @@
         (S.dirty[k] === null ? ' (기본값 복귀)' : '') + '</td></tr>';
     }
     $('#confirmTable').innerHTML = html;
+    /* 사유 입력칸은 없앴고(콘솔이 자동으로 채웁니다), 확인 모달은 파라미터
+       저장과 업로드 리포트가 함께 쓰므로 열 때마다 모드를 되돌립니다. */
     $('#confirmReason').textContent =
       '적용하면 서버에 저장되고 변경 이력에 남습니다. 되돌리려면 [모두 기본값으로]를 쓰세요.';
+    S.confirmMode = 'params';
+    $('#confirmModal').querySelector('h2').textContent = '변경 내용 확인';
+    $('#btnConfirm').textContent = '확정';
     $('#confirmModal').hidden = false;
   }
 
@@ -296,8 +315,11 @@
   }
 
   /* --------------------------------------------------------- 최신화 */
-  function startRefresh(steps, label) {
-    api.call('admin.refresh', null, { steps: steps, reason: label, actor: 'admin' })
+  function startRefresh(steps, label, opts) {
+    var body = { reason: label, actor: 'admin' };
+    if (steps) body.steps = steps;
+    if (opts && opts.uploadId) { body.uploadId = opts.uploadId; body.apply = !!opts.apply; }
+    api.call('admin.refresh', null, body)
       .then(function () {
         $('#jobLog').hidden = false;
         $('#jobNote').hidden = false;
@@ -316,6 +338,12 @@
     var running = job.status === 'running';
     $('#btnReload').disabled = running;
     $('#btnRecompute').disabled = running;
+    /* disabled 된 input[type=file] 은 label 을 눌러도 **아무 반응 없이** 죽는다.
+       "버튼이 눌리는데 아무 일도 안 남"이 되므로 label 쪽도 함께 잠근다. */
+    var pick = $('#upPick'), sel = $('#upTarget');
+    if (pick) { pick.className = running || S.uploading ? 'btn disabled' : 'btn'; }
+    if (sel) { sel.disabled = running || S.uploading; }
+    if ($('#upFile')) { $('#upFile').disabled = running || S.uploading; }
   }
 
   function poll() {
@@ -327,7 +355,13 @@
       } else {
         S.polling = null;
         if (job.status === 'done') {
-          C.toast('갱신 완료 — 열려 있는 다른 화면은 새로고침해야 반영됩니다');
+          if (job.result && job.result.dryRun) {
+            /* 예행은 라이브를 안 바꿨다 — '갱신 완료'로 띄우면 반영된 것처럼 읽힌다. */
+            C.toast('검증 완료 — 라이브 데이터는 변경되지 않았습니다', '', 7000);
+            renderDryRun(job.result);
+          } else {
+            C.toast('갱신 완료 — 열려 있는 다른 화면은 새로고침해야 반영됩니다');
+          }
           api.clearCache();
           loadAll();
         } else if (job.status === 'failed') {
@@ -337,13 +371,149 @@
     })['catch'](function (e) {
       /* 인증이 깨졌으면(토큰 회전·서버 비활성) 재시도하지 않는다 — 오답 폴링이
          서버의 실패 잠금을 계속 재점화해 정상 토큰까지 막는 역공을 방지. */
-      if (e && (e.status === 401 || e.status === 429 || e.status === 503)) {
+      if (e && (e.status === 401 || e.status === 503)) {
         S.polling = null;
         C.toast('인증이 만료되었습니다 — 다시 로그인하세요', 'err', 8000);
         return;
       }
       S.polling = setTimeout(poll, 3000);
     });
+  }
+
+
+  /* ------------------------------------------------------ 데이터 올리기 */
+  function renderUploadBox(st) {
+    var up = (st && st.upload) || {};
+    var box = $('#uploadBox');
+    if (!box) return;
+    box.hidden = !up.enabled;
+    if (!up.enabled) return;
+    S.upload = up;
+    var sel = $('#upTarget'), targets = up.targets || [];
+    if (sel && sel.options.length !== targets.length) {
+      var opts = '';
+      for (var i = 0; i < targets.length; i++) {
+        opts += '<option value="' + esc(targets[i].id) + '">' + esc(targets[i].label) + '</option>';
+      }
+      sel.innerHTML = opts;
+    }
+    updateUpNote();
+  }
+
+  function currentTarget() {
+    var id = $('#upTarget') ? $('#upTarget').value : '';
+    var t = (S.upload && S.upload.targets) || [];
+    for (var i = 0; i < t.length; i++) if (t[i].id === id) return t[i];
+    return null;
+  }
+
+  function updateUpNote() {
+    var el = $('#upNote'), t = currentTarget();
+    if (!el) return;
+    if (!t) { el.textContent = ''; return; }
+    el.innerHTML = '<code>' + esc(t.name) + '</code> · 현재 ' +
+      esc(t.liveRows == null ? '—' : String(t.liveRows)) + '행 · 컬럼 ' +
+      esc(String(t.columns)) + '개를 순서까지 대조합니다. ' + esc(t.note || '') +
+      (S.upload && !S.upload.applyEnabled
+        ? '<br><b>이 서버는 검증까지만 열려 있습니다 — 라이브 데이터는 바뀌지 않습니다.</b>' : '');
+  }
+
+  function showUpErr(msg) {
+    var el = $('#upErr');
+    el.innerHTML = esc(msg || '올리지 못했습니다.');
+    el.hidden = false;
+  }
+
+  function uploadFile(file) {
+    var t = currentTarget();
+    if (!t || !file) return;
+    $('#upErr').hidden = true;
+    var reason = global.prompt('무엇을 올리는지 적어 주세요 (이력에 남습니다)', t.label + ' 최신본');
+    if (reason == null) return;
+    reason = String(reason).replace(/\s+/g, ' ').replace(/^\s|\s$/g, '');
+    if (reason.length < 5) { showUpErr('사유를 5자 이상 적어 주세요.'); return; }
+
+    S.uploading = true;
+    renderJob(S.status && S.status.job);
+    C.toast('올리는 중…');
+    var fr = new FileReader();
+    fr.onerror = function () {
+      S.uploading = false; showUpErr('파일을 읽지 못했습니다.');
+      renderJob(S.status && S.status.job);
+    };
+    fr.onload = function () {
+      var b64 = String(fr.result || ''), comma = b64.indexOf(',');
+      if (comma >= 0) b64 = b64.slice(comma + 1);
+      api.call('admin.upload', null,
+        { datasetId: t.id, filename: file.name, contentB64: b64, reason: reason, actor: 'admin' },
+        { timeout: 300000 }
+      ).then(function (res) {
+        S.uploading = false;
+        renderJob(S.status && S.status.job);
+        renderUploadReport(res);
+      })['catch'](function (e) {
+        S.uploading = false;
+        renderJob(S.status && S.status.job);
+        showUpErr(api.humanize(e) || e.message);
+      });
+    };
+    fr.readAsDataURL(file);
+  }
+
+  function renderUploadReport(res) {
+    S.pendingUpload = res;
+    var rows = '<tr><th>항목</th><th>내용</th></tr>';
+    function row(k, v) { rows += '<tr><td>' + esc(k) + '</td><td>' + v + '</td></tr>'; }
+    row('자료', esc(res.label || '') + ' <code>' + esc(res.name || '') + '</code>');
+    row('올린 파일', esc(res.originalFilename || '—'));
+    row('행 수', esc(res.liveRows == null ? '—' : String(res.liveRows)) +
+                 ' → <b>' + esc(String(res.rows)) + '</b>');
+    if (res.dateFrom || res.dateTo) {
+      row('기간', esc((res.dateFrom || '?') + ' ~ ' + (res.dateTo || '?')));
+    }
+    row('지문', '<code>' + esc(String(res.sha256 || '').slice(0, 10)) + '</code>');
+    if (res.encodingConverted) {
+      row('인코딩', '엑셀에서 저장한 한글 인코딩(cp949)을 자동으로 변환했습니다');
+    }
+    var w = res.warnings || [];
+    for (var i = 0; i < w.length; i++) row('확인 필요', '<b class="admerr">' + esc(w[i]) + '</b>');
+    $('#confirmTable').innerHTML = rows;
+    $('#confirmReason').textContent =
+      '이 시점까지 라이브 데이터는 한 바이트도 바뀌지 않았습니다. ' +
+      '검증을 실행하면 서버의 임시 공간에서 전 과정을 다시 계산해 결과만 비교합니다.';
+    S.confirmMode = 'upload';
+    $('#confirmModal').querySelector('h2').textContent = '올린 파일 확인';
+    $('#btnConfirm').textContent = '이 데이터로 검증 실행';
+    $('#confirmModal').hidden = false;
+  }
+
+  function startUploadDryRun() {
+    $('#confirmModal').hidden = true;
+    var up = S.pendingUpload;
+    if (!up) return;
+    startRefresh(null, '업로드 검증: ' + (up.label || ''),
+                 { uploadId: up.uploadId, apply: false });
+  }
+
+  function renderDryRun(r) {
+    var el = $('#jobNote');
+    if (!el) return;
+    var html = '<b>검증 결과 — 라이브 데이터는 변경되지 않았습니다.</b><br>';
+    if (r.quadrantChanged != null) {
+      html += '격자 판정 변경 <b>' + esc(String(r.quadrantChanged)) + '</b>개' +
+              (r.comparedCells ? ' / ' + esc(String(r.comparedCells)) + '개' : '') + '<br>';
+    }
+    var tr = r.topRegions;
+    if (tr && tr.before && tr.after) {
+      html += '우선순위 상위: ' + esc(tr.before.join(', ')) +
+              '<br>&rarr; ' + esc(tr.after.join(', ')) + '<br>';
+    }
+    var cv = r.cvLogR2;
+    if (cv && cv.before != null) {
+      html += '홀드아웃 R²: ' + esc(String(cv.before)) + ' → ' + esc(String(cv.after));
+    }
+    el.innerHTML = html;
+    el.hidden = false;
   }
 
   /* ------------------------------------------------------------ 배선 */
@@ -384,11 +554,22 @@
     /* 적용하지 않은 입력을 두고 화면을 떠나려 하면 한 번 묻습니다 —
        이 값들은 브라우저 메모리에만 있어서 떠나면 사라집니다. */
     global.addEventListener('beforeunload', function (e) {
+      if (S.uploading) { e.preventDefault(); e.returnValue = ''; return ''; }
       for (var k in S.dirty) { e.preventDefault(); e.returnValue = ''; return ''; }
     });
     $('#btnApply').addEventListener('click', openConfirm);
     $('#btnCancel').addEventListener('click', function () { $('#confirmModal').hidden = true; });
-    $('#btnConfirm').addEventListener('click', doSave);
+    $('#btnConfirm').addEventListener('click', function () {
+      if (S.confirmMode === 'upload') { startUploadDryRun(); } else { doSave(); }
+    });
+    if ($('#upFile')) {
+      $('#upFile').addEventListener('change', function (ev) {
+        var f = ev.target.files && ev.target.files[0];
+        ev.target.value = '';          // 같은 파일을 다시 골라도 change 가 오게
+        if (f) uploadFile(f);
+      });
+    }
+    if ($('#upTarget')) $('#upTarget').addEventListener('change', updateUpNote);
     $('#btnReload').addEventListener('click', function () {
       startRefresh(['reload'], '관리자 콘솔 — 화면 반영');
     });

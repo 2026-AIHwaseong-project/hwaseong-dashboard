@@ -112,3 +112,17 @@ body { padding-bottom: 72px; }
   .admrow .pval { padding-top: 0; }
   .admsavebar { flex-wrap: wrap; }
 }
+
+/* ── 데이터 파일 올리기 ──────────────────────────────────────
+   새 색·새 아이콘 없이 기존 .btn/.admhint/.admerr 만 씁니다.
+   label[for] + input[type=file] 조합이라 키보드·스크린리더가
+   그대로 동작합니다(드롭존을 만들지 않은 이유이기도 합니다). */
+.admupload { margin: 10px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line); }
+.admupload .admactions { margin-top: 0; align-items: stretch; }
+.admupload select.btn { padding-right: 26px; }
+/* display 를 새로 주는 자식이 없더라도, 이 블록은 서버가 꺼져 있으면
+   반드시 사라져야 합니다 — .admsavebar 와 같은 사고를 막는 짝 규칙. */
+.admupload[hidden] { display: none; }
+/* 잡이 도는 동안 label 은 disabled 가 안 먹습니다. 눌리는데 아무 일도
+   안 나는 상태가 가장 나쁘므로 클릭 자체를 막습니다. */
+.admupload .btn.disabled { opacity: .5; pointer-events: none; }

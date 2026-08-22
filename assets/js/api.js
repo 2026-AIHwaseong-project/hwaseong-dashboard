@@ -41,6 +41,7 @@
     'admin.params':    { method: 'GET',  path: '/admin/params' },
     'admin.save':      { method: 'POST', path: '/admin/params' },
     'admin.refresh':   { method: 'POST', path: '/admin/refresh', long: true },  // 재계산 수 분
+    'admin.upload':    { method: 'POST', path: '/admin/upload',  long: true },  // 원본 CSV 접수
     'admin.history':   { method: 'GET',  path: '/admin/history' }
   };
 
@@ -76,6 +77,9 @@
     if (err.status === 0) return '서버에 연결하지 못했습니다. 주소와 네트워크를 확인해 주세요. (config.js 의 BASE_URL)';
     if (err.status === 401 || err.status === 403) return '접근 권한이 없습니다. 인증 설정을 확인해 주세요.';
     if (err.status === 404) return '요청한 API 경로를 찾을 수 없습니다. (' + (err.opId || '') + ')';
+    if (err.status === 409) return err.message || '다른 작업이 실행 중입니다. 끝난 뒤 다시 시도해 주세요.';
+    if (err.status === 413) return err.message || '파일이 너무 큽니다.';
+    if (err.status === 429) return err.message || '잠시 후 다시 시도해 주세요.';
     if (err.status === 501) return err.message;
     if (err.status >= 500) return '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
     return err.message || '요청을 처리하지 못했습니다.';
