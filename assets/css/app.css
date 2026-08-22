@@ -1913,12 +1913,13 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 .brief .brief-main{font-size:15.5px;line-height:1.55;letter-spacing:-.01em;word-break:keep-all}
 .brief .brief-main b{font-weight:800;font-variant-numeric:tabular-nums}
 .brief .brief-act{border-top:0;padding-top:2px;margin-top:5px}
-/* KPI 존 디박싱 — 카드 상자를 벗고 숫자가 바탕 위에 직접 섭니다.
-   구분은 보더 대신 타일 사이 괘선 하나로 충분합니다 */
-.kpis{background:transparent;border:0;box-shadow:none;border-radius:0;
-  grid-template-columns:1.45fr 1fr 1fr 1fr;margin-bottom:16px}
-.kpi{padding:12px 18px 12px 2px}
-.kpi + .kpi{padding-left:18px}
+/* KPI 존 — 흰 카드 면 위에 놓습니다(팀 리뷰 반영). 완전 디박싱은 바탕과 한
+   덩어리로 읽혀 지표 띠라는 경계가 흐려졌습니다. 상자가 평평함을 만드는 게
+   아니라 상자 "안"의 무차별이 만드는 것이라, 면은 돌려주고 위계(히어로·차등)는
+   그대로 둡니다. 시뮬레이션도 같은 클래스라 함께 적용됩니다. */
+.kpis{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  overflow:hidden;grid-template-columns:1.45fr 1fr 1fr 1fr;margin-bottom:16px}
+.kpi{padding:14px 18px 13px}
 /* 히어로 — 이 화면의 첫 숫자. 크기 점프(약 1.7배)와 무게 800 이 위계를 만듭니다 */
 .kpi.hero .lb{font-size:12px;font-weight:700;color:var(--ink)}
 .kpi.hero .vl{font-size:clamp(30px,2.9vw,42px);font-weight:800;letter-spacing:-.025em}
