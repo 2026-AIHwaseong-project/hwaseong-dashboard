@@ -1,0 +1,112 @@
+/* ============================================================
+ * 관리자 콘솔 전용 — admin.html 만 로드합니다.
+ *
+ * 레이아웃·카드·버튼·KPI 띠는 app.css 의 것을 그대로 씁니다
+ * (.wrap / .top / .card / .chead / .cbody / .kpis / .btn / .pg).
+ * 여기에는 콘솔에만 있는 것 — 파라미터 행, 저장 바, 확인 모달,
+ * 진행 로그 — 만 둡니다. app.css 에 끼워 넣지 않는 이유는
+ * check-css.js 의 MUST 규칙과 다크모드 3벌 동기화를 건드리지 않기
+ * 위해서입니다.
+ * ============================================================ */
+
+/* 저장 바가 하단에 고정되므로 마지막 카드가 가리지 않게 자리를 비웁니다 */
+body { padding-bottom: 72px; }
+
+.admtop-act { display: flex; gap: 8px; align-items: center; }
+.admtop-act[hidden] { display: none; }
+
+.admform { display: flex; gap: 8px; max-width: 460px; }
+.admform input { flex: 1; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; }
+.admhint { color: var(--ink3); font-size: 12px; line-height: 1.6; margin: 8px 0 0; }
+.admerr { color: var(--bad); font-weight: 650; font-size: 13px; margin: 8px 0 0; }
+
+/* 무인증 경고 — 색만으로 말하지 않도록 문장과 함께 둡니다 */
+.admopen { border: 1px solid var(--warn); border-left-width: 3px; border-radius: 10px;
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+  color: var(--brand-2-ink); padding: 10px 13px; margin: 0 0 12px; font-size: 13px; }
+.admopen[hidden] { display: none; }
+
+/* ── 파라미터 행 ─────────────────────────────────────────────
+   이름·근거(왼쪽) / 입력(가운데) / 적용 범위(오른쪽) 세 칸.        */
+.admrows { display: flex; flex-direction: column; }
+.admrow { display: grid; grid-template-columns: minmax(200px, 1.1fr) 210px 1fr;
+  gap: 14px; align-items: start; padding: 11px 0; border-top: 1px solid var(--line); }
+.admrow:first-child { border-top: 0; padding-top: 2px; }
+.admrow.changed { background: color-mix(in srgb, var(--brand-2) 5%, transparent);
+  box-shadow: inset 3px 0 0 var(--brand-2); padding-left: 10px; margin-left: -10px; }
+
+.admrow .plabel { font-size: 13px; font-weight: 650; letter-spacing: -.01em; }
+.admrow .plabel small { display: block; color: var(--ink3); font-weight: 400;
+  font-size: 11.5px; line-height: 1.55; margin-top: 3px; }
+.admrow .ptag { font-size: 10px; font-weight: 700; letter-spacing: .02em;
+  border-radius: 5px; padding: 1px 6px; margin-left: 5px; vertical-align: 1px;
+  background: color-mix(in srgb, var(--brand-2) 14%, transparent); color: var(--brand-2-ink); }
+
+.admrow .pinput { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.admrow .pinput input[type=number] { width: 124px; padding: 6px 9px; text-align: right;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+  color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; }
+.admrow .pinput input:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+.admrow .pinput input.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
+.admrow .pinput .unit { color: var(--ink3); font-size: 11.5px; }
+.admrow .pval { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink2);
+  padding-top: 6px; }
+.admrow .pnote { color: var(--ink3); font-size: 11.5px; line-height: 1.6; }
+.admrow .pnote .ov { color: var(--brand-2-ink); font-weight: 650; }
+
+/* ── 최신화 ──────────────────────────────────────────────── */
+.admactions { display: flex; gap: 8px; margin: 12px 0 0; flex-wrap: wrap; }
+.admactions .btn { line-height: 1.3; text-align: left; }
+.admactions .btn small { display: block; font-weight: 400; font-size: 10.5px;
+  opacity: .7; margin-top: 2px; }
+#dataState table { border-collapse: collapse; font-size: 12.5px; }
+#dataState td { padding: 3px 14px 3px 0; }
+#dataState td:first-child { color: var(--ink3); }
+#dataState td:last-child { font-variant-numeric: tabular-nums; }
+#jobLog { max-height: 240px; overflow: auto; margin: 12px 0 0;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  font: 11.5px/1.6 var(--font-mono, ui-monospace, monospace);
+  white-space: pre-wrap; color: var(--ink2); }
+
+/* ── 이력 ────────────────────────────────────────────────── */
+#historyList table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+#historyList th, #historyList td { text-align: left; padding: 7px 10px 7px 0;
+  border-top: 1px solid var(--line); vertical-align: top; }
+#historyList th { color: var(--ink3); font-weight: 650; border-top: 0; font-size: 11px; }
+#historyList .hkind { white-space: nowrap; font-weight: 650; }
+#historyList .hchg { font-variant-numeric: tabular-nums; }
+#historyList i { color: var(--ink3); font-style: normal; }
+
+/* ── 저장 바 ─────────────────────────────────────────────────
+   hidden 복구 규칙이 반드시 필요합니다 — display:flex 가 UA 의
+   [hidden]{display:none} 을 이겨서 빈 바가 상시 떠 있던 사고가
+   실제로 있었습니다(app.css 의 .cm[hidden] 과 같은 이유).        */
+.admsavebar[hidden], .admmodal[hidden] { display: none; }
+
+.admsavebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 80;
+  display: flex; gap: 10px; align-items: center; padding: 11px 20px;
+  background: var(--card); border-top: 2px solid var(--brand);
+  box-shadow: 0 -4px 16px rgba(0,0,0,.07); }
+.admsavebar #saveCount { font-size: 13px; font-weight: 700; white-space: nowrap; }
+.admsavebar input { flex: 1; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; }
+
+/* ── 확인 모달 ───────────────────────────────────────────── */
+.admmodal { position: fixed; inset: 0; z-index: 90; display: flex;
+  align-items: center; justify-content: center; padding: 20px;
+  background: rgba(0,0,0,.42); }
+.admmodal-box { max-width: 560px; width: 100%; max-height: 82vh; overflow: auto; }
+.admmodal-box table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.admmodal-box td, .admmodal-box th { padding: 7px 8px; border-top: 1px solid var(--line);
+  text-align: left; font-variant-numeric: tabular-nums; }
+.admmodal-box th { border-top: 0; color: var(--ink3); font-weight: 650; font-size: 11px; }
+.admmodal-box .arrow { color: var(--brand-2-ink); font-weight: 700; text-align: center; }
+
+@media (max-width: 760px) {
+  .admrow { grid-template-columns: 1fr; gap: 6px; }
+  .admrow .pval { padding-top: 0; }
+  .admsavebar { flex-wrap: wrap; }
+  .admsavebar input { order: 3; flex-basis: 100%; }
+}

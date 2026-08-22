@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>관리자 콘솔 — 화성시 버스 수요·공급 미스매칭 대시보드</title>
+<meta name="description" content="모델·화면이 쓰는 값을 바꾸고 데이터를 다시 계산하는 운영 콘솔">
+<!-- 내비 서랍에 링크를 두지만, 접근 통제는 링크 은닉이 아니라 서버의 ADMIN_TOKEN 입니다
+     (공개 저장소라 은닉은 방어가 되지 않습니다). -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="assets/css/app.css">
+<link rel="stylesheet" href="assets/css/admin.css">
+</head>
+<body>
+
+<header class="topnav" data-topnav></header>
+
+<div class="wrap">
+
+  <div id="bootError" style="display:none;margin-bottom:12px"></div>
+
+  <header class="top">
+    <div>
+      <h1>관리자 콘솔</h1>
+      <p class="sub">모델·화면이 쓰는 값의 정본은 서버입니다. 여기서 [적용]한 값은
+        <b>서버에 저장</b>되어 시뮬레이션·추천·화면 표기에 반영되고, 누가 왜 바꿨는지가 함께 기록됩니다.
+        <span class="mono" style="font-size:11px">데이터 빌드 <span id="metaUpdated">–</span></span></p>
+    </div>
+    <div class="admtop-act" id="topAct" hidden>
+      <button type="button" class="btn" data-reset-all>모두 기본값으로</button>
+      <button type="button" class="btn" id="btnLogout" hidden>잠그기</button>
+    </div>
+  </header>
+
+  <!-- 토큰을 요구하는 서버일 때만 보입니다 -->
+  <section class="card" id="loginCard" hidden>
+    <div class="chead"><h2>관리자 인증</h2>
+      <span class="hsub">서버 .env 의 ADMIN_TOKEN</span></div>
+    <div class="cbody">
+      <form id="loginForm" class="admform">
+        <input type="password" id="tokenInput" placeholder="접근 토큰" autocomplete="off">
+        <button type="submit" class="btn primary">확인</button>
+      </form>
+      <p class="admhint" id="serverInfo"></p>
+      <p class="admerr" id="loginErr" hidden></p>
+    </div>
+  </section>
+
+  <main id="console" hidden>
+
+    <p class="admopen" id="openWarn" hidden>
+      이 서버는 <b>관리자 인증 없이</b> 열려 있습니다. 공개 인터넷에 노출된 서버라면
+      <code>.env</code> 에 <code>ADMIN_TOKEN</code> 을 설정하세요.
+    </p>
+
+    <!-- 상태 띠 — 대시보드 KPI 와 같은 구성요소를 씁니다 -->
+    <section class="kpis" id="statusStrip" aria-label="서버 상태"></section>
+
+    <section class="card">
+      <div class="chead"><h2>배차 영향력</h2>
+        <span class="hsub">저장 즉시 반영 · 시뮬레이션·추천이 요청 때마다 읽습니다</span>
+        <button type="button" class="btn sm" data-reset-group="effect">이 조 기본값</button>
+      </div>
+      <div class="cbody"><div class="admrows" id="rowsEffect"></div></div>
+    </section>
+
+    <section class="card">
+      <div class="chead"><h2>비용 · 예산</h2>
+        <span class="hsub">저장 즉시 반영 · 추천 순위와 화면 단가 표기가 함께 바뀝니다</span>
+        <button type="button" class="btn sm" data-reset-group="cost">이 조 기본값</button>
+      </div>
+      <div class="cbody"><div class="admrows" id="rowsCost"></div></div>
+    </section>
+
+    <section class="card">
+      <div class="chead"><h2>모델 상수</h2>
+        <span class="hsub">저장 후 [지표 재계산]을 실행해야 화면 수치가 바뀝니다</span>
+        <button type="button" class="btn sm" data-reset-group="model">이 조 기본값</button>
+      </div>
+      <div class="cbody"><div class="admrows" id="rowsModel"></div></div>
+    </section>
+
+    <section class="card">
+      <div class="chead"><h2>기준선 상수</h2>
+        <span class="hsub">읽기 전용 · 바꾸려면 새 기준선 발행(재계산 + 재검증)이 필요합니다</span>
+      </div>
+      <div class="cbody"><div class="admrows" id="rowsBaseline"></div></div>
+    </section>
+
+    <section class="card">
+      <div class="chead"><h2>데이터 상태 · 최신화</h2>
+        <span class="hsub">원천 기준일과 재계산</span>
+      </div>
+      <div class="cbody">
+        <div id="dataState"></div>
+        <div class="admactions">
+          <button type="button" class="btn" id="btnReload">화면 반영<small>메모리 재적재 · 약 5초</small></button>
+          <button type="button" class="btn" id="btnRecompute">지표 재계산<small>조인→모델→검증→직렬화 · 수 분</small></button>
+          <button type="button" class="btn" disabled title="원천 재수집은 API 키·수집 스크립트 정비 후 열립니다">원천 재수집<small>준비 중</small></button>
+        </div>
+        <pre id="jobLog" hidden></pre>
+        <p class="admhint" id="jobNote" hidden>완료 후, 열려 있는 대시보드·시뮬레이션 탭은 <b>새로고침</b>해야 반영됩니다.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="chead"><h2>변경 이력</h2>
+        <span class="hsub">누가 · 언제 · 왜 · 이전값 → 새값</span>
+      </div>
+      <div class="cbody"><div id="historyList"></div></div>
+    </section>
+
+  </main>
+
+  <footer class="pg">
+    <p class="issuer" data-issuer></p>
+  </footer>
+</div>
+
+<!-- 저장 바 — 아직 적용하지 않은 변경이 있을 때만 하단에 뜹니다 -->
+<div class="admsavebar" id="saveBar" hidden>
+  <span id="saveCount"></span>
+  <input type="text" id="saveReason" placeholder="변경 사유 (필수, 5자 이상) — 예: 2026년 표준운송원가 고시 반영" maxlength="200">
+  <button type="button" class="btn" id="btnRevert">되돌리기</button>
+  <button type="button" class="btn primary" id="btnApply" disabled>적용</button>
+</div>
+
+<!-- 확인 모달 -->
+<div class="admmodal" id="confirmModal" hidden>
+  <div class="admmodal-box card">
+    <div class="chead"><h2>변경 내용 확인</h2></div>
+    <div class="cbody">
+      <table id="confirmTable"></table>
+      <p id="confirmReason" class="admhint"></p>
+      <div class="admactions">
+        <button type="button" class="btn" id="btnCancel">취소</button>
+        <button type="button" class="btn primary" id="btnConfirm">확정</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 로드 순서 주의: config → core → api → 페이지 -->
+<script src="assets/js/config.js"></script>
+<script src="assets/js/core.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/admin.js"></script>
+</body>
+</html>

@@ -32,7 +32,16 @@
     'recommendations.run': { method: 'POST', path: '/recommendations', long: true },  // 최적화 계산
     'reports.draft':   { method: 'POST', path: '/reports/draft',  long: true }, // AI 호출 → 타임아웃 김
     'reports.export':  { method: 'POST', path: '/reports/export', long: true, binary: true },
-    'chat.send':       { method: 'POST', path: '/chat', long: true }            // AI 호출 → 타임아웃 김
+    'chat.send':       { method: 'POST', path: '/chat', long: true },           // AI 호출 → 타임아웃 김
+
+    /* 관리자 콘솔 (admin.html 전용 — ADMIN_TOKEN 필요, 미설정 서버는 503).
+       메서드를 GET/POST 로만 쓰는 이유: 서버 CORS allow_methods 가 GET/POST 라
+       PUT 을 쓰면 교차 출처(Pages 배포)에서 프리플라이트가 막힌다. */
+    'admin.status':    { method: 'GET',  path: '/admin/status' },
+    'admin.params':    { method: 'GET',  path: '/admin/params' },
+    'admin.save':      { method: 'POST', path: '/admin/params' },
+    'admin.refresh':   { method: 'POST', path: '/admin/refresh', long: true },  // 재계산 수 분
+    'admin.history':   { method: 'GET',  path: '/admin/history' }
   };
 
   /* 경로의 {placeholder} 를 params 값으로 치환하고, 남은 params 는 쿼리스트링으로 */
@@ -463,9 +472,12 @@
       return cached('meta', function () { return call('meta.get'); });
     },
 
-    /** 격자 목록 + 해당 시간대 KPI */
-    grid: function (period) {
-      return cached('grid:' + period, function () { return call('grid.list', { period: period }); });
+    /** 격자 목록 + 해당 시간대 KPI. daytype 은 'wd'(평일, 기본) | 'we'(주말) */
+    grid: function (period, daytype) {
+      var dt = daytype || 'wd';
+      return cached('grid:' + period + ':' + dt, function () {
+        return call('grid.list', { period: period, daytype: dt });
+      });
     },
 
     /** 정류장 목록 (캐시) */
@@ -486,10 +498,11 @@
       return cached('routes', function () { return call('routes.list'); });
     },
 
-    /** 노선 조정 우선순위 */
-    priorities: function (period, limit) {
-      return cached('pri:' + period + ':' + (limit || 10), function () {
-        return call('priorities.list', { period: period, limit: limit || 10 });
+    /** 노선 조정 우선순위. daytype 은 'wd'(평일, 기본) | 'we'(주말) */
+    priorities: function (period, limit, daytype) {
+      var dt = daytype || 'wd';
+      return cached('pri:' + period + ':' + (limit || 10) + ':' + dt, function () {
+        return call('priorities.list', { period: period, limit: limit || 10, daytype: dt });
       });
     },
 

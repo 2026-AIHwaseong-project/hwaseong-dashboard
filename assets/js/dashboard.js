@@ -21,6 +21,7 @@
     meta: null,
     period: 'am',
     periodName: '출근',
+    daytype: 'wd',
     grid: null,          // { cells, kpi, ... }
     priorities: null,
     stops: [],
@@ -44,6 +45,7 @@
     HW.report.setContextProvider(function () {
       return {
         period: S.period,
+        daytype: S.daytype,
         meta: S.meta,
         kpi: S.grid ? S.grid.kpi : null,
         priorities: S.priorities ? S.priorities.items : null,
@@ -55,6 +57,7 @@
     api.meta().then(function (meta) {
       S.meta = meta;
       renderPeriodTabs(meta.periods);
+      renderDaytypeToggle();
       renderFooter(meta);
       renderDataQuality(meta);
       /* 격자 크기는 서버 meta 를 따른다 — HTML 에 1km 를 박아두면 세분화 때 틀어진다 */
@@ -171,6 +174,29 @@
     });
   }
 
+  /* 평일/주말 전환. 시간대(4개)와 별개 축이라 토글은 따로 두되, 전환 시
+     loadPeriod 를 그대로 재사용합니다 — 격자·우선순위 재요청 로직이 같습니다. */
+  var DAYTYPE_LABEL = { wd: '평일', we: '주말' };
+  function renderDaytypeToggle() {
+    var host = $('#daytype');
+    if (!host) return;
+    host.innerHTML = ['wd', 'we'].map(function (dt) {
+      return '<button class="pbtn' + (dt === S.daytype ? ' on' : '') + '" data-daytype="' + dt +
+        '" role="tab" aria-selected="' + (dt === S.daytype) + '"><b>' + DAYTYPE_LABEL[dt] + '</b></button>';
+    }).join('');
+    host.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-daytype]');
+      if (!b || b.getAttribute('data-daytype') === S.daytype) return;
+      S.daytype = b.getAttribute('data-daytype');
+      $$('#daytype [data-daytype]').forEach(function (x) {
+        var on = x.getAttribute('data-daytype') === S.daytype;
+        x.classList.toggle('on', on);
+        x.setAttribute('aria-selected', String(on));
+      });
+      loadPeriod(S.period);
+    });
+  }
+
   /* 탭을 빠르게 연달아 누르면 먼저 보낸 요청이 늦게 도착해 이전 시간대
      데이터가 화면을 덮을 수 있습니다. 마지막 요청만 반영합니다. */
   var loadSeq = 0;
@@ -185,9 +211,9 @@
       b.classList.toggle('on', on);
       b.setAttribute('aria-selected', String(on));
     });
-    $('#pchip').textContent = p ? (p.name + ' ' + p.label) : pid;
+    $('#pchip').textContent = (DAYTYPE_LABEL[S.daytype] || '') + ' · ' + (p ? (p.name + ' ' + p.label) : pid);
 
-    return Promise.all([api.grid(pid), api.priorities(pid, 10)]).then(function (r) {
+    return Promise.all([api.grid(pid, S.daytype), api.priorities(pid, 10, S.daytype)]).then(function (r) {
       if (seq !== loadSeq) return;   // 그사이 다른 탭으로 넘어갔으면 버립니다
       clearFail();
       S.grid = r[0];
