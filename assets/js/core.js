@@ -382,15 +382,29 @@
     ];
     /* 화성특례시 공식 CI. 기관을 말하는 것은 이 이미지이고, 그 옆 서비스명이
        이 도구의 이름입니다. alt 는 기관명으로 둡니다 — 스크린리더에게 이
-       이미지의 뜻은 '화성특례시' 이지 서비스 이름이 아닙니다. */
+       이미지의 뜻은 '화성특례시' 이지 서비스 이름이 아닙니다.
+
+       CI 를 두 벌 싣습니다. 컬러 시그니처는 밝은 바탕용, 흰색 1도 반전은
+       어두운 바탕용이고 CSS 가 테마에 따라 한쪽만 보여 줍니다.
+       예전에는 한 벌만 두고 다크에서 흰 판을 깔았는데, 어두운 막대 위에
+       흰 알약이 떠 있어 배경이 비쳐야 할 자리를 막았습니다.
+
+       반전본은 alt 를 비우고 aria-hidden 을 겁니다 — 같은 기관명을 두 번
+       읽어 주면 스크린리더에서 "화성특례시 화성특례시" 가 됩니다.
+
+       전체를 <a> 로 감쌉니다. 로고를 눌러 첫 화면으로 가는 것은 웹에서
+       기대되는 동작이고, 지금은 서랍을 열어야만 이동할 수 있었습니다. */
     host.innerHTML =
       '<div class="tn-in">' +
       '<button class="tn-menu" data-menu-btn type="button" aria-label="메뉴 열기" ' +
       'aria-expanded="false" aria-controls="tn-drawer">' + icon('menu', 20) + '</button>' +
-      '<div class="brand">' +
-      '<img class="ci" src="assets/img/hwaseong-ci.png" alt="화성특례시" ' +
-      'width="512" height="151" decoding="async">' +
-      '<span class="svc">' + esc(app.navName || app.name || '') + '</span></div>' +
+      '<a class="brand" href="' + pages.dashboard + '"' +
+      (current === 'dashboard' ? ' aria-current="page"' : '') + '>' +
+      '<img class="ci ci-color" src="assets/img/hwaseong-ci.png" alt="화성특례시" ' +
+      'width="512" height="113" decoding="async">' +
+      '<img class="ci ci-reverse" src="assets/img/hwaseong-ci-dark.png" alt="" ' +
+      'aria-hidden="true" width="512" height="113" decoding="async">' +
+      '<span class="svc">' + esc(app.navName || app.name || '') + '</span></a>' +
       '<div class="tn-sp"></div>' +
       '<div class="tn-act">' +
       '<button class="btn sm" data-theme-btn type="button">테마 · 자동</button>' +
