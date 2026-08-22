@@ -1,122 +1,150 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>관리자 콘솔 — 화성시 버스 수요·공급 미스매칭 대시보드</title>
-  <!-- 내비게이션에 이 페이지로 가는 링크를 두지 않는다. 진입은 URL 직접 접근이고,
-       방어는 링크 은닉이 아니라 서버의 ADMIN_TOKEN 이다(공개 저장소라 은닉은 무의미). -->
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="assets/css/app.css">
-  <link rel="stylesheet" href="assets/css/admin.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>관리자 콘솔 — 화성시 버스 수요·공급 미스매칭 대시보드</title>
+<meta name="description" content="모델·화면이 쓰는 값을 바꾸고 데이터를 다시 계산하는 운영 콘솔">
+<!-- 내비 서랍에 링크를 두지만, 접근 통제는 링크 은닉이 아니라 서버의 ADMIN_TOKEN 입니다
+     (공개 저장소라 은닉은 방어가 되지 않습니다). -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="assets/css/app.css">
+<link rel="stylesheet" href="assets/css/admin.css">
 </head>
 <body>
-  <div class="wrap admwrap">
-    <header class="admhead">
-      <div>
-        <h1>관리자 콘솔</h1>
-        <p class="admsub">모델·화면이 쓰는 값의 정본은 서버입니다. 여기서 바꾼 값은 시뮬레이션·추천·화면 표기에 즉시 반영되고, 전부 사유와 함께 기록됩니다.</p>
-      </div>
-      <nav class="admnav">
-        <a href="index.html">← 대시보드</a>
-        <a href="simulation.html">시뮬레이션</a>
-        <button type="button" id="btnLogout" hidden>잠그기</button>
-      </nav>
-    </header>
 
-    <!-- 인증 전에는 이 카드만 보인다 -->
-    <section class="card admlogin" id="loginCard">
-      <h2>관리자 인증</h2>
-      <p>접근 토큰은 서버 <code>.env</code> 의 <code>ADMIN_TOKEN</code> 입니다.
-         서버에 설정돼 있지 않으면 관리자 기능 전체가 닫혀 있습니다.</p>
-      <form id="loginForm">
+<header class="topnav" data-topnav></header>
+
+<div class="wrap">
+
+  <div id="bootError" style="display:none;margin-bottom:12px"></div>
+
+  <header class="top">
+    <div>
+      <h1>관리자 콘솔</h1>
+      <p class="sub">모델·화면이 쓰는 값의 정본은 서버입니다. 여기서 [적용]한 값은
+        <b>서버에 저장</b>되어 시뮬레이션·추천·화면 표기에 반영되고, 누가 왜 바꿨는지가 함께 기록됩니다.
+        <span class="mono" style="font-size:11px">데이터 빌드 <span id="metaUpdated">–</span></span></p>
+    </div>
+    <div class="admtop-act" id="topAct" hidden>
+      <button type="button" class="btn" data-reset-all>모두 기본값으로</button>
+      <button type="button" class="btn" id="btnLogout" hidden>잠그기</button>
+    </div>
+  </header>
+
+  <!-- 토큰을 요구하는 서버일 때만 보입니다 -->
+  <section class="card" id="loginCard" hidden>
+    <div class="chead"><h2>관리자 인증</h2>
+      <span class="hsub">서버 .env 의 ADMIN_TOKEN</span></div>
+    <div class="cbody">
+      <form id="loginForm" class="admform">
         <input type="password" id="tokenInput" placeholder="접근 토큰" autocomplete="off">
-        <button type="submit" class="btn">확인</button>
+        <button type="submit" class="btn primary">확인</button>
       </form>
       <p class="admhint" id="serverInfo"></p>
       <p class="admerr" id="loginErr" hidden></p>
+    </div>
+  </section>
+
+  <main id="console" hidden>
+
+    <p class="admopen" id="openWarn" hidden>
+      이 서버는 <b>관리자 인증 없이</b> 열려 있습니다. 공개 인터넷에 노출된 서버라면
+      <code>.env</code> 에 <code>ADMIN_TOKEN</code> 을 설정하세요.
+    </p>
+
+    <!-- 상태 띠 — 대시보드 KPI 와 같은 구성요소를 씁니다 -->
+    <section class="kpis" id="statusStrip" aria-label="서버 상태"></section>
+
+    <section class="card">
+      <div class="chead"><h2>배차 영향력</h2>
+        <span class="hsub">저장 즉시 반영 · 시뮬레이션·추천이 요청 때마다 읽습니다</span>
+        <button type="button" class="btn sm" data-reset-group="effect">이 조 기본값</button>
+      </div>
+      <div class="cbody"><div class="admrows" id="rowsEffect"></div></div>
     </section>
 
-    <main id="console" hidden>
-      <p class="admopen" id="openWarn" hidden>
-        ⚠ 이 서버는 <b>관리자 인증 없이</b> 열려 있습니다. 공개 인터넷에 노출된 서버라면
-        <code>.env</code> 에 <code>ADMIN_TOKEN</code> 을 설정하세요.
-      </p>
+    <section class="card">
+      <div class="chead"><h2>비용 · 예산</h2>
+        <span class="hsub">저장 즉시 반영 · 추천 순위와 화면 단가 표기가 함께 바뀝니다</span>
+        <button type="button" class="btn sm" data-reset-group="cost">이 조 기본값</button>
+      </div>
+      <div class="cbody"><div class="admrows" id="rowsCost"></div></div>
+    </section>
 
-      <!-- 상태 스트립 -->
-      <section class="admstrip" id="statusStrip"></section>
+    <section class="card">
+      <div class="chead"><h2>모델 상수</h2>
+        <span class="hsub">저장 후 [지표 재계산]을 실행해야 화면 수치가 바뀝니다</span>
+        <button type="button" class="btn sm" data-reset-group="model">이 조 기본값</button>
+      </div>
+      <div class="cbody"><div class="admrows" id="rowsModel"></div></div>
+    </section>
 
-      <!-- 파라미터 카드들 (admin.js 가 채움) -->
-      <section class="card" id="cardEffect">
-        <h2>배차 영향력 <span class="admtag ok">즉시 반영</span></h2>
-        <p class="admhint">시뮬레이션·추천이 요청 시점에 읽는 값입니다. 저장하면 다음 계산부터 바로 적용됩니다.</p>
-        <div class="admrows" id="rowsEffect"></div>
-      </section>
+    <section class="card">
+      <div class="chead"><h2>기준선 상수</h2>
+        <span class="hsub">읽기 전용 · 바꾸려면 새 기준선 발행(재계산 + 재검증)이 필요합니다</span>
+      </div>
+      <div class="cbody"><div class="admrows" id="rowsBaseline"></div></div>
+    </section>
 
-      <section class="card" id="cardCost">
-        <h2>비용·예산 <span class="admtag ok">즉시 반영</span></h2>
-        <p class="admhint">단가를 바꾸면 추천 순위(비용 대비 효과)와 화면의 단가 표기가 함께 바뀝니다.</p>
-        <div class="admrows" id="rowsCost"></div>
-      </section>
-
-      <section class="card" id="cardModel">
-        <h2>모델 상수 <span class="admtag warn">저장 후 재계산 필요</span></h2>
-        <p class="admhint">격자 지표에 구워지는 값입니다. 저장해도 <b>[지표 재계산]</b>을 실행하기 전에는 화면 수치가 바뀌지 않으며, 그때까지 [재계산 대기] 배지가 붙습니다. 재계산은 검증(공간 CV·정성 대조)을 함께 다시 돌립니다.</p>
-        <div class="admrows" id="rowsModel"></div>
-      </section>
-
-      <section class="card" id="cardBaseline">
-        <h2>기준선 상수 <span class="admtag mute">읽기 전용</span></h2>
-        <p class="admhint">바꾸려면 "새 기준선 발행"(재계산 + 재검증 + 문서 갱신)이 필요한 값들입니다. 현재 서버에 실제로 적용된 값을 보여줍니다.</p>
-        <div class="admrows" id="rowsBaseline"></div>
-      </section>
-
-      <!-- 데이터 상태·최신화 -->
-      <section class="card" id="cardRefresh">
-        <h2>데이터 상태 · 최신화</h2>
+    <section class="card">
+      <div class="chead"><h2>데이터 상태 · 최신화</h2>
+        <span class="hsub">원천 기준일과 재계산</span>
+      </div>
+      <div class="cbody">
         <div id="dataState"></div>
         <div class="admactions">
-          <button type="button" class="btn" id="btnReload">화면 반영 <small>메모리 재적재 · 약 5초</small></button>
-          <button type="button" class="btn" id="btnRecompute">지표 재계산 <small>03→04→05 + 반영 · 수 분</small></button>
-          <button type="button" class="btn" disabled title="원천 재수집은 API 키·수집 스크립트 정비 후 개방됩니다">원천 재수집 <small>잠김</small></button>
+          <button type="button" class="btn" id="btnReload">화면 반영<small>메모리 재적재 · 약 5초</small></button>
+          <button type="button" class="btn" id="btnRecompute">지표 재계산<small>조인→모델→검증→직렬화 · 수 분</small></button>
+          <button type="button" class="btn" disabled title="원천 재수집은 API 키·수집 스크립트 정비 후 열립니다">원천 재수집<small>준비 중</small></button>
         </div>
         <pre id="jobLog" hidden></pre>
-        <p class="admhint" id="jobNote" hidden>⚠ 완료 후, 열려 있는 대시보드·시뮬레이션 탭은 <b>새로고침</b>해야 반영됩니다.</p>
-      </section>
+        <p class="admhint" id="jobNote" hidden>완료 후, 열려 있는 대시보드·시뮬레이션 탭은 <b>새로고침</b>해야 반영됩니다.</p>
+      </div>
+    </section>
 
-      <!-- 변경 이력 -->
-      <section class="card" id="cardHistory">
-        <h2>변경 이력</h2>
-        <div id="historyList"></div>
-      </section>
-    </main>
+    <section class="card">
+      <div class="chead"><h2>변경 이력</h2>
+        <span class="hsub">누가 · 언제 · 왜 · 이전값 → 새값</span>
+      </div>
+      <div class="cbody"><div id="historyList"></div></div>
+    </section>
 
-    <!-- 저장 바 — 변경이 있을 때만 하단 고정 -->
-    <div class="admsavebar" id="saveBar" hidden>
-      <span id="saveCount"></span>
-      <input type="text" id="saveReason" placeholder="변경 사유 (필수, 5자 이상) — 예: 2026년 표준운송원가 고시 반영" maxlength="200">
-      <button type="button" class="btn ghost" id="btnRevert">모두 되돌리기</button>
-      <button type="button" class="btn" id="btnApply" disabled>적용</button>
-    </div>
+  </main>
 
-    <!-- 확인 모달 -->
-    <div class="admmodal" id="confirmModal" hidden>
-      <div class="admmodal-box">
-        <h2>변경 내용 확인</h2>
-        <table id="confirmTable"></table>
-        <p id="confirmReason"></p>
-        <div class="admactions">
-          <button type="button" class="btn ghost" id="btnCancel">취소</button>
-          <button type="button" class="btn" id="btnConfirm">확정</button>
-        </div>
+  <footer class="pg">
+    <p class="issuer" data-issuer></p>
+  </footer>
+</div>
+
+<!-- 저장 바 — 아직 적용하지 않은 변경이 있을 때만 하단에 뜹니다 -->
+<div class="admsavebar" id="saveBar" hidden>
+  <span id="saveCount"></span>
+  <input type="text" id="saveReason" placeholder="변경 사유 (필수, 5자 이상) — 예: 2026년 표준운송원가 고시 반영" maxlength="200">
+  <button type="button" class="btn" id="btnRevert">되돌리기</button>
+  <button type="button" class="btn primary" id="btnApply" disabled>적용</button>
+</div>
+
+<!-- 확인 모달 -->
+<div class="admmodal" id="confirmModal" hidden>
+  <div class="admmodal-box card">
+    <div class="chead"><h2>변경 내용 확인</h2></div>
+    <div class="cbody">
+      <table id="confirmTable"></table>
+      <p id="confirmReason" class="admhint"></p>
+      <div class="admactions">
+        <button type="button" class="btn" id="btnCancel">취소</button>
+        <button type="button" class="btn primary" id="btnConfirm">확정</button>
       </div>
     </div>
   </div>
+</div>
 
-  <script src="assets/js/config.js"></script>
-  <script src="assets/js/core.js"></script>
-  <script src="assets/js/api.js"></script>
-  <script src="assets/js/admin.js"></script>
+<!-- 로드 순서 주의: config → core → api → 페이지 -->
+<script src="assets/js/config.js"></script>
+<script src="assets/js/core.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/admin.js"></script>
 </body>
 </html>

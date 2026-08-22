@@ -31,6 +31,7 @@
       $('#loginCard').hidden = true;
       $('#console').hidden = false;
       var open = st.env && st.env.authRequired === false;
+      $('#topAct').hidden = false;
       $('#btnLogout').hidden = open;          /* 무인증이면 잠글 것이 없다 */
       $('#openWarn').hidden = !open;
       S.status = st;
@@ -101,16 +102,19 @@
     ];
     var html = '';
     for (var i = 0; i < tiles.length; i++) {
-      html += '<div class="tile"><span>' + esc(tiles[i][0]) + '</span><b>' + esc(String(tiles[i][1])) + '</b></div>';
+      html += '<div class="kpi"><div class="lb">' + esc(tiles[i][0]) + '</div>' +
+        '<div class="vl">' + esc(String(tiles[i][1])) + '</div></div>';
     }
     $('#statusStrip').innerHTML = html;
+    var mu = $('#metaUpdated');
+    if (mu) mu.textContent = (st.data && st.data.metaUpdatedAt) || '–';
   }
 
   function rowHtml(p) {
-    var badge = p.overridden ? ' <b class="ov">[관리자 수정]</b>' : '';
-    if (p.pending) badge += ' <b class="ov">[재계산 대기]</b>';
-    var meta = '기본 ' + esc(fmtVal(p, p.default)) + (p.unit ? ' ' + esc(p.unit) : '');
-    if (p.overridden && p.reason) meta += ' · 사유: ' + esc(p.reason);
+    var badge = p.overridden ? ' <span class="ptag">관리자 수정</span>' : '';
+    if (p.pending) badge += ' <span class="ptag">재계산 대기</span>';
+    var meta = '기본값 ' + esc(fmtVal(p, p.default)) + (p.unit ? ' ' + esc(p.unit) : '');
+    if (p.overridden && p.reason) meta += '<br><span class="ov">사유</span> ' + esc(p.reason);
     var left = '<div class="plabel">' + esc(p.label) + badge +
       '<small>' + esc(p.note || '') + '</small></div>';
     var mid;
@@ -118,14 +122,35 @@
       var step = p.type === 'int' ? (p.max >= 1000000 ? 1000000 : 1) : 0.01;
       mid = '<div class="pinput">' +
         '<input type="number" data-key="' + esc(p.key) + '" value="' + esc(String(p.effective)) + '"' +
-        ' min="' + p.min + '" max="' + p.max + '" step="' + step + '">' +
+        ' min="' + p.min + '" max="' + p.max + '" step="' + step + '"' +
+        ' aria-label="' + esc(p.label) + '">' +
         '<span class="unit">' + esc(p.unit || '') + '</span>' +
-        '<button type="button" class="minib" data-reset="' + esc(p.key) + '">기본값</button></div>';
+        '<button type="button" class="btn sm" data-reset="' + esc(p.key) + '">기본값</button></div>';
     } else {
       mid = '<div class="pval">' + esc(fmtVal(p, p.effective)) + (p.unit ? ' ' + esc(p.unit) : '') + '</div>';
     }
     var right = '<div class="pnote">' + meta + '<br>' + esc(p.applies || '') + '</div>';
     return '<div class="admrow" data-row="' + esc(p.key) + '">' + left + mid + right + '</div>';
+  }
+
+  /* 한 조(카드) 또는 전체를 기본값으로 되돌립니다. 입력만 바꿀 뿐 저장은
+     하지 않습니다 — 실제 반영은 아래 저장 바의 [적용]을 거칩니다. */
+  function resetGroup(group) {
+    var n = 0;
+    for (var i = 0; i < S.params.length; i++) {
+      var p = S.params[i];
+      if (!p.editable) continue;
+      if (group && p.group !== group) continue;
+      var input = document.querySelector('input[data-key="' + p.key + '"]');
+      if (input && Number(input.value) !== p.default) {
+        input.value = p.default;
+        onInput(input);
+        n++;
+      }
+    }
+    C.toast(n ? (group ? '이 조를 기본값으로 되돌렸습니다 — [적용]을 눌러야 저장됩니다'
+                       : '전체를 기본값으로 되돌렸습니다 — [적용]을 눌러야 저장됩니다')
+              : '이미 전부 기본값입니다');
   }
 
   function renderParams() {
@@ -143,11 +168,15 @@
   function renderDataState() {
     var st = S.status || {}, d = st.data || {};
     var kpi = d.kpiAm || {};
+    var ov = st.overrides || {};
     var html = '<table>' +
       '<tr><td>서버 적재 시각</td><td>' + esc(d.loadedAt || '—') + '</td></tr>' +
       '<tr><td>화면 데이터 빌드</td><td>' + esc(d.metaUpdatedAt || '—') + '</td></tr>' +
       '<tr><td>출근 사각지대</td><td>' + esc(String(kpi.needCells != null ? kpi.needCells + '칸' : '—')) + '</td></tr>' +
-      '</table>';
+      '<tr><td>관리자 값 저장 위치</td><td>서버 <code>var/admin/params_override.json</code></td></tr>' +
+      '<tr><td>마지막 저장</td><td>' + esc(ov.updatedAt || '없음') + '</td></tr>' +
+      '</table>' +
+      '<p class="admhint">저장된 값은 <b>서버에 남습니다</b> — 화면을 옮기거나 새로고침해도, 서버를 다시 띄워도 유지되고 다른 사람에게도 같게 보입니다. 아직 [적용]하지 않은 입력은 이 화면을 벗어나면 사라집니다.</p>';
     $('#dataState').innerHTML = html;
   }
 
@@ -185,7 +214,7 @@
     for (k in S.dirty) keys.push(k);
     var bar = $('#saveBar');
     bar.hidden = keys.length === 0;
-    $('#saveCount').textContent = '변경 ' + keys.length + '건';
+    $('#saveCount').textContent = '적용 대기 ' + keys.length + '건';
     var reason = ($('#saveReason').value || '').replace(/\s+/g, ' ').replace(/^\s|\s$/g, '');
     $('#btnApply').disabled = keys.length === 0 || reason.length < 5;
   }
@@ -334,6 +363,19 @@
       S.dirty = {};
       renderParams();
       updateSaveBar();
+      C.toast('입력을 서버 저장값으로 되돌렸습니다');
+    });
+    /* 조별 [이 조 기본값] · 전체 [모두 기본값으로] */
+    document.addEventListener('click', function (ev) {
+      var g = ev.target.closest ? ev.target.closest('[data-reset-group]') : null;
+      if (g) { resetGroup(g.getAttribute('data-reset-group')); return; }
+      var a = ev.target.closest ? ev.target.closest('[data-reset-all]') : null;
+      if (a) resetGroup(null);
+    });
+    /* 적용하지 않은 입력을 두고 화면을 떠나려 하면 한 번 묻습니다 —
+       이 값들은 브라우저 메모리에만 있어서 떠나면 사라집니다. */
+    global.addEventListener('beforeunload', function (e) {
+      for (var k in S.dirty) { e.preventDefault(); e.returnValue = ''; return ''; }
     });
     $('#btnApply').addEventListener('click', openConfirm);
     $('#btnCancel').addEventListener('click', function () { $('#confirmModal').hidden = true; });
@@ -365,6 +407,10 @@
   }
 
   function boot() {
+    /* 상단 레일·서랍·테마 버튼·발행 표기를 대시보드와 같은 것으로 답니다.
+       report.js 를 안 싣는 화면이라 서랍의 [AI 보고서 생성] 버튼은
+       core.js 가 알아서 뺍니다. */
+    C.mountTopnav('admin');
     wireAuth();
     wire();
     showServerTarget();
