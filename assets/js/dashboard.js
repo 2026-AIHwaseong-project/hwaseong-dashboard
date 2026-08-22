@@ -65,7 +65,9 @@
       if (sub && meta.grid && meta.grid.sizeMeters) {
         /* 설명("~한 격자")이 아니라 행동("누르면 열립니다")을 말합니다 —
            매뉴얼 없이 쓰게 하는 건 안내문이 아니라 이런 마이크로카피입니다. */
-        sub.textContent = '붉은 칸일수록 버스가 부족합니다 — 칸을 누르면 상세가 열립니다 · 격자 ' +
+        /* '격자 1km' 는 한 단위로 묶습니다(NBSP) — 좁은 화면에서 '1km'만
+           고아로 떨어져 다음 줄에 남는 것을 막습니다. */
+        sub.textContent = '붉은 칸일수록 버스가 부족합니다 — 칸을 누르면 상세가 열립니다 · 격자\u00A0' +
           (meta.grid.sizeMeters / 1000) + 'km';
       }
       S.map = HW.createMap({
