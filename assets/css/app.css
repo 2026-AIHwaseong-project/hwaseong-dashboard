@@ -1913,12 +1913,13 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 .brief .brief-main{font-size:15.5px;line-height:1.55;letter-spacing:-.01em;word-break:keep-all}
 .brief .brief-main b{font-weight:800;font-variant-numeric:tabular-nums}
 .brief .brief-act{border-top:0;padding-top:2px;margin-top:5px}
-/* KPI 존 디박싱 — 카드 상자를 벗고 숫자가 바탕 위에 직접 섭니다.
-   구분은 보더 대신 타일 사이 괘선 하나로 충분합니다 */
-.kpis{background:transparent;border:0;box-shadow:none;border-radius:0;
-  grid-template-columns:1.45fr 1fr 1fr 1fr;margin-bottom:16px}
-.kpi{padding:12px 18px 12px 2px}
-.kpi + .kpi{padding-left:18px}
+/* KPI 존 — 흰 카드 면 위에 놓습니다(팀 리뷰 반영). 완전 디박싱은 바탕과 한
+   덩어리로 읽혀 지표 띠라는 경계가 흐려졌습니다. 상자가 평평함을 만드는 게
+   아니라 상자 "안"의 무차별이 만드는 것이라, 면은 돌려주고 위계(히어로·차등)는
+   그대로 둡니다. 시뮬레이션도 같은 클래스라 함께 적용됩니다. */
+.kpis{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  overflow:hidden;grid-template-columns:1.45fr 1fr 1fr 1fr;margin-bottom:16px}
+.kpi{padding:14px 18px 13px}
 /* 히어로 — 이 화면의 첫 숫자. 크기 점프(약 1.7배)와 무게 800 이 위계를 만듭니다 */
 .kpi.hero .lb{font-size:12px;font-weight:700;color:var(--ink)}
 .kpi.hero .vl{font-size:clamp(30px,2.9vw,42px);font-weight:800;letter-spacing:-.025em}
@@ -1926,10 +1927,8 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 /* 보조 3개는 오히려 반걸음 물러납니다 — 차이가 없으면 위계도 없습니다 */
 .kpi:not(.hero) .vl{font-size:clamp(17px,1.55vw,21px);font-weight:650}
 .kpi:not(.hero) .lb{color:var(--ink3)}
-/* 사이드 카드 디박싱 — 리스트에 상자는 과합니다. 면(바탕 톤)과 킥커 제목,
-   행 사이 괘선만 남깁니다. 지도 카드는 화면의 닻이라 상자를 유지합니다 */
-.sidecard{background:transparent;border:0;box-shadow:none;border-radius:0;
-  padding:2px 2px 10px}
+/* 사이드 카드(Top10·시나리오 등)는 .card 의 흰 면을 그대로 씁니다 — KPI 띠와
+   같은 결론(팀 리뷰): 경계는 면으로, 위계는 킥커 제목과 내용 차등으로. */
 /* 킥커 — 섹션 제목은 작고 조용하게, 내용이 크게. 제목이 크면 전부가 제목입니다 */
 .chead h2{font-size:11.5px;font-weight:700;letter-spacing:.055em;color:var(--ink3)}
 .mapcard .chead h2{font-size:13px;letter-spacing:.02em;color:var(--ink)}
@@ -1956,3 +1955,14 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 /* 지도 머리의 [사용 안내] — 부제 옆의 작은 진입점(기존 tbtn 문법 재사용) */
 .gopen{flex:none}
 @media (max-width:640px){.gopen{display:none}}
+
+/* ===========================================================================
+ * [34] 시인성 패스 — 눈이 먼저 닿는 점 세 곳
+ *   위계(§32)·직관(§33)이 소리를 줄이는 작업이었다면, 여기는 남은 자리에
+ *   정확히 세 개의 강조점을 찍습니다. 셋 다 이미 있는 상태색·선택색이라
+ *   새 색은 하나도 들어오지 않습니다.
+ * ======================================================================== */
+/* 미니차트의 '현재' 행 — 굵은 값만으론 스치기 쉬워 선택 배경면을 깝니다 */
+.ks-row2.on{background:var(--selbg);border-radius:5px}
+/* 브리핑의 핵심 숫자 — 본문 잉크와 갈라 브랜드 남색으로 */
+.brief .brief-main b{color:var(--brand-ink)}
