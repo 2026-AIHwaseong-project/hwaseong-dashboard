@@ -30,10 +30,7 @@
     return api.call('admin.status').then(function (st) {
       $('#loginCard').hidden = true;
       $('#console').hidden = false;
-      var open = st.env && st.env.authRequired === false;
       $('#topAct').hidden = false;
-      $('#btnLogout').hidden = open;          /* 무인증이면 잠글 것이 없다 */
-      $('#openWarn').hidden = !open;
       S.status = st;
       renderStrip(st);
       renderJob(st.job);
@@ -93,6 +90,17 @@
     return Number(v).toLocaleString('ko-KR');
   }
 
+  /* 값 + 단위. C.won 은 이미 '원'을 붙여 돌려주므로("4,200만 원") 단위를 그대로
+     이으면 '4,200만 원 원'이 됩니다. 단위가 '원'으로 시작하면 그 글자를 빼고
+     나머지만 잇습니다 — '원' 은 아무것도, '원/년' 은 '/년' 만. */
+  function fmtUnit(p, v) {
+    var s = fmtVal(p, v), u = p.unit || '';
+    if (!u) return s;
+    if (u.charAt(0) === '원' && /원$/.test(s)) u = u.slice(1);
+    if (!u) return s;
+    return s + (u.charAt(0) === '/' ? u : ' ' + u);
+  }
+
   function renderStrip(st) {
     var d = st.data || {}, ov = st.overrides || {}, job = st.job || {};
     var tiles = [
@@ -114,7 +122,7 @@
   function rowHtml(p) {
     var badge = p.overridden ? ' <span class="ptag">관리자 수정</span>' : '';
     if (p.pending) badge += ' <span class="ptag">재계산 대기</span>';
-    var meta = '기본값 ' + esc(fmtVal(p, p.default)) + (p.unit ? ' ' + esc(p.unit) : '');
+    var meta = '기본값 ' + esc(fmtUnit(p, p.default));
     if (p.overridden && p.reason) meta += '<br><span class="ov">사유</span> ' + esc(p.reason);
     var left = '<div class="plabel">' + esc(p.label) + badge +
       '<small>' + esc(p.note || '') + '</small></div>';
@@ -128,7 +136,7 @@
         '<span class="unit">' + esc(p.unit || '') + '</span>' +
         '<button type="button" class="btn sm" data-reset="' + esc(p.key) + '">기본값</button></div>';
     } else {
-      mid = '<div class="pval">' + esc(fmtVal(p, p.effective)) + (p.unit ? ' ' + esc(p.unit) : '') + '</div>';
+      mid = '<div class="pval">' + esc(fmtUnit(p, p.effective)) + '</div>';
     }
     var right = '<div class="pnote">' + meta + '<br>' + esc(p.applies || '') + '</div>';
     return '<div class="admrow" data-row="' + esc(p.key) + '">' + left + mid + right + '</div>';
@@ -341,10 +349,6 @@
       $('#loginErr').hidden = true;
       tryEnter();
     });
-    $('#btnLogout').addEventListener('click', function () {
-      try { sessionStorage.removeItem('hw.adminToken'); } catch (e) {}
-      global.location.reload();
-    });
     /* 파라미터 입력 — 컨테이너 위임 (행 재렌더에도 리스너 유지) */
     document.addEventListener('input', function (ev) {
       var t = ev.target;
@@ -366,7 +370,7 @@
       updateSaveBar();
       C.toast('입력을 서버 저장값으로 되돌렸습니다');
     });
-    /* 조별 [이 조 기본값] · 전체 [모두 기본값으로] */
+    /* 조별 [여기만 기본값으로] · 전체 [모두 기본값으로] */
     document.addEventListener('click', function (ev) {
       var g = ev.target.closest ? ev.target.closest('[data-reset-group]') : null;
       if (g) { resetGroup(g.getAttribute('data-reset-group')); return; }

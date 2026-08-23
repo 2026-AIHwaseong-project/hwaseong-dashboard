@@ -31,7 +31,6 @@
     </div>
     <div class="admtop-act" id="topAct" hidden>
       <button type="button" class="btn" data-reset-all>모두 기본값으로</button>
-      <button type="button" class="btn" id="btnLogout" hidden>잠그기</button>
     </div>
   </header>
 
@@ -51,18 +50,13 @@
 
   <main id="console" hidden>
 
-    <p class="admopen" id="openWarn" hidden>
-      이 서버는 <b>관리자 인증 없이</b> 열려 있습니다. 공개 인터넷에 노출된 서버라면
-      <code>.env</code> 에 <code>ADMIN_TOKEN</code> 을 설정하세요.
-    </p>
-
     <!-- 상태 띠 — 대시보드 KPI 와 같은 구성요소를 씁니다 -->
     <section class="kpis" id="statusStrip" aria-label="서버 상태"></section>
 
     <section class="card">
       <div class="chead"><h2>배차 영향력</h2>
         <span class="hsub">저장 즉시 반영 · 시뮬레이션·추천이 요청 때마다 읽습니다</span>
-        <button type="button" class="btn sm" data-reset-group="effect">이 조 기본값</button>
+        <button type="button" class="btn sm" data-reset-group="effect">여기만 기본값으로</button>
       </div>
       <div class="cbody"><div class="admrows" id="rowsEffect"></div></div>
     </section>
@@ -70,7 +64,7 @@
     <section class="card">
       <div class="chead"><h2>비용 · 예산</h2>
         <span class="hsub">저장 즉시 반영 · 추천 순위와 화면 단가 표기가 함께 바뀝니다</span>
-        <button type="button" class="btn sm" data-reset-group="cost">이 조 기본값</button>
+        <button type="button" class="btn sm" data-reset-group="cost">여기만 기본값으로</button>
       </div>
       <div class="cbody"><div class="admrows" id="rowsCost"></div></div>
     </section>
@@ -78,7 +72,7 @@
     <section class="card">
       <div class="chead"><h2>모델 상수</h2>
         <span class="hsub">저장 후 [지표 재계산]을 실행해야 화면 수치가 바뀝니다</span>
-        <button type="button" class="btn sm" data-reset-group="model">이 조 기본값</button>
+        <button type="button" class="btn sm" data-reset-group="model">여기만 기본값으로</button>
       </div>
       <div class="cbody"><div class="admrows" id="rowsModel"></div></div>
     </section>

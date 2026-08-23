@@ -25,15 +25,13 @@ body { padding-bottom: 72px; }
    테두리는 카드와 같은 균일 1px 괘선입니다 — 왼쪽만 굵은 색깔 테두리는
    DESIGN.md 가 이름까지 지목해 금지한 패턴이라("AI 가 만든 화면의 대표
    표식"), 배경 틴트 + 문장만으로 경고를 전달합니다. */
-.admopen { border: 1px solid var(--warn); border-radius: 10px;
-  background: color-mix(in srgb, var(--warn) 9%, transparent);
-  color: var(--brand-2-ink); padding: 10px 13px; margin: 0 0 12px; font-size: 13px; }
-.admopen[hidden] { display: none; }
 
 /* ── 파라미터 행 ─────────────────────────────────────────────
    이름·근거(왼쪽) / 입력(가운데) / 적용 범위(오른쪽) 세 칸.        */
 .admrows { display: flex; flex-direction: column; }
-.admrow { display: grid; grid-template-columns: minmax(200px, 1.1fr) 210px 1fr;
+/* 가운데 칸이 210px 이던 때는 입력(124px) + 단위 + [기본값] 이 다 안 들어가
+   PC 에서도 버튼이 아랫줄로 접혔습니다. 셋이 한 줄에 서도록 넓힙니다. */
+.admrow { display: grid; grid-template-columns: minmax(200px, 1.1fr) 248px 1fr;
   gap: 14px; align-items: start; padding: 11px 0; border-top: 1px solid var(--line); }
 .admrow:first-child { border-top: 0; padding-top: 2px; }
 /* 배경 틴트만으로 "바뀐 행"을 표시합니다 — 왼쪽 색깔 테두리(box-shadow 로
@@ -48,13 +46,14 @@ body { padding-bottom: 72px; }
   border-radius: 5px; padding: 1px 6px; margin-left: 5px; vertical-align: 1px;
   background: color-mix(in srgb, var(--brand-2) 14%, transparent); color: var(--brand-2-ink); }
 
-.admrow .pinput { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.admrow .pinput { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 .admrow .pinput input[type=number] { width: 124px; padding: 6px 9px; text-align: right;
   border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
   color: var(--ink); font: inherit; font-variant-numeric: tabular-nums; }
 .admrow .pinput input:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 .admrow .pinput input.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
-.admrow .pinput .unit { color: var(--ink3); font-size: 11.5px; }
+.admrow .pinput .unit { color: var(--ink3); font-size: 11.5px; white-space: nowrap; }
+.admrow .pinput .btn { flex: none; }
 .admrow .pval { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink2);
   padding-top: 6px; }
 .admrow .pnote { color: var(--ink3); font-size: 11.5px; line-height: 1.6; }
