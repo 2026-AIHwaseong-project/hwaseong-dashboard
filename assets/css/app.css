@@ -2047,3 +2047,18 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 /* 지도 배치 뱃지 속 픽토그램 — 뱃지는 수단색 채움(.pmk-*), 그림은 흰 스트로크.
    그룹의 케이싱 스트로크(--card)와 채움이 안쪽 그림에 새지 않게 끊습니다. */
 .pmk-g{fill:none;stroke:#fff;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===========================================================================
+ * [36] AI 보고서 기록 목록 — 한 시트 두 뷰
+ *   보고서 모달이 '지난 기록 목록'과 '초안'을 번갈아 보여줍니다. 시트를 두 벌
+ *   만들지 않고 같은 .sheet 안에서 한쪽을 감춥니다.
+ *   hidden 속성을 쓰지 않는 이유 — .btn{display:inline-flex} 가 UA 의
+ *   [hidden]{display:none} 을 이깁니다([10] 의 .cm[hidden] 과 같은 사고).
+ * ======================================================================== */
+.sheet[data-view="list"] [data-draft-only]{display:none}
+.sheet[data-view="draft"] [data-list-only]{display:none}
+/* .scen-list 는 시뮬레이션 사이드 패널용이라 자체 여백을 갖고 있는데,
+   여기서는 .sheet .body 가 이미 여백을 주므로 이중이 됩니다. */
+[data-list] .scen-list{padding:0}
+.rp-new{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.rp-new .hs{flex:1;min-width:170px}

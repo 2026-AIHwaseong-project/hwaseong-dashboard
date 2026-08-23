@@ -127,6 +127,14 @@
     var top = cells.filter(function (c) { return typeof c.priorityScore === 'number' && c.priorityScore > 0; })
       .sort(function (a, b) { return b.priorityScore - a.priorityScore; })
       .slice(0, 5);
+    /* 지난 기록에는 격자를 보관하지 않습니다. 그때는 meta.priorities(이미 rank
+       순 Top 목록)로 같은 막대를 그립니다 — 미리보기·한글·엑셀의 그림이 함께
+       살아납니다. 이 필드는 대시보드에서 만든 기록만 갖고 있습니다. */
+    if (!top.length) {
+      top = ((draft.meta && draft.meta.priorities) || []).filter(function (r) {
+        return r && typeof r.priorityScore === 'number' && r.priorityScore > 0;
+      }).slice(0, 5);
+    }
     if (!top.length) return [];
     var max = top[0].priorityScore;
     return top.map(function (c) { return { name: c.name, score: c.priorityScore, pct: c.priorityScore / max }; });
@@ -744,8 +752,113 @@
   /* ======================================================================
    *  F. 모달 UI
    * ==================================================================== */
+  /* ── 보고서 기록 ─────────────────────────────────────────────────
+     생성한 초안을 브라우저에 남겨 다시 열어 볼 수 있게 합니다.
+
+     격자(meta.cells, 786칸 약 400KB)는 **저장하지 않습니다** — 한 건이 브라우저
+     저장 한도의 15% 라 예닐곱 건이면 차고, 같은 원점을 쓰는 hw.scenarios 저장이
+     조용히 실패합니다. 대신 이 세션에서 만든 것만 메모리에 들고 있다가 다시 열
+     때 되붙입니다. 새로고침하면 사라지고, 그때는 엑셀의 「데이터」 시트만 빠집니다.
+
+     격자를 서버에서 다시 받아오지 않는 이유 — HW.api.grid 에는 시점 개념이 없어
+     돌려주는 것은 '그때의 격자'가 아니라 '지금의 격자'입니다. 관리자 콘솔의
+     재계산이 그 산출물을 실제로 바꾸므로, 본문 문장(생성 시점 수치)과 엑셀
+     데이터 시트(오늘 수치)가 어긋난 결재 문서가 아무 표시 없이 나갑니다. */
+  var LS_REPORTS = 'hw.reports';
+  var RP_MAX = 20;
+  var sessionCells = {};
+  var SOURCE_LABEL = { dashboard: '대시보드', simulation: '시뮬레이션', admin: '관리자' };
+
+  function loadRecords() {
+    try {
+      var v = JSON.parse(localStorage.getItem(LS_REPORTS) || '[]');
+      return Array.isArray(v) ? v : [];
+    } catch (e) { return []; }
+  }
+  function saveRecords(list) {
+    try { localStorage.setItem(LS_REPORTS, JSON.stringify(list)); return true; }
+    catch (e) {
+      C.toast('기록을 저장하지 못했습니다(브라우저 저장 공간).', 'err', 6000);
+      return false;
+    }
+  }
+
+  /** 저장용으로 격자만 떼어낸 사본. meta 의 나머지(kpi·priorities·formula·
+      dataQuality)는 엑셀 요약·산출식 시트와 차트 폴백이 실제로 읽으므로 남깁니다. */
+  function slimDraft(d) {
+    var out = {}, k, j;
+    for (k in d) if (Object.prototype.hasOwnProperty.call(d, k)) out[k] = d[k];
+    if (out.meta) {
+      var mt = {};
+      for (j in out.meta) if (Object.prototype.hasOwnProperty.call(out.meta, j)) mt[j] = out.meta[j];
+      delete mt.cells;
+      out.meta = mt;
+    }
+    return out;
+  }
+
+  /* 어느 화면에서 만든 기록인가. 페이지 3개의 contextProvider 를 고치지 않고
+     ctx 모양으로 판별합니다 — 대시보드에는 recommendation 키 자체가 없고,
+     시뮬레이션은 값이 null 이어도 키가 있으며, 관리자는 {meta, admin} 뿐입니다. */
+  function recordSource(ctx) {
+    if (ctx && 'admin' in ctx) return 'admin';
+    if (ctx && 'recommendation' in ctx) return 'simulation';
+    return 'dashboard';
+  }
+
+  function pushRecord(draft, ctx, inclSim) {
+    /* 카드 주 라벨은 title 이 아니라 subtitle 입니다 — title 은 백엔드가 못박은
+       상수("화성시 대중교통 수급 불일치 분석 및 노선 조정 검토(안)")라 목록이
+       똑같이 잘린 카드로 가득 찹니다. subtitle 은 "평일 · 출근 시간대(07–09)
+       기준"처럼 화면 상태마다 달라집니다. */
+    var id = 'rp-' + Date.now() + '-' + Math.floor(Math.random() * 1e4);
+    var rec = {
+      id: id,
+      savedAt: C.nowStamp(),
+      label: draft.subtitle || '기준 미상',
+      title: draft.title || '',
+      source: recordSource(ctx),
+      period: ctx.period || 'am',
+      daytype: ctx.daytype || 'wd',
+      inclSim: !!inclSim,
+      isAi: draft.isAiGenerated !== false,
+      draft: slimDraft(draft)
+    };
+    var list = loadRecords();
+    list.unshift(rec);
+    while (list.length > RP_MAX) list.pop();
+    /* 저장에 실패했으면 카드도 만들지 않습니다 — 메모리에만 있는 카드는
+       새로고침하면 사라져서, 저장된 것처럼 보이다 없어지는 쪽이 더 나쁩니다. */
+    if (!saveRecords(list)) return null;
+    if (ctx.cells && ctx.cells.length) sessionCells[id] = ctx.cells;
+    return id;
+  }
+
+  function updateRecord(id, draft) {
+    if (!id) return;
+    var list = loadRecords(), i;
+    for (i = 0; i < list.length; i++) {
+      if (list[i] && list[i].id === id) {
+        /* 반드시 다시 슬림화합니다 — currentDraft 에는 생성 직후 얹은 격자가
+           붙어 있어, 그냥 넣으면 채팅 편집 한 번에 400KB 가 직렬화됩니다. */
+        list[i].draft = slimDraft(draft);
+        list[i].savedAt = C.nowStamp();
+        saveRecords(list);
+        return;
+      }
+    }
+  }
+
+  function removeRecord(id) {
+    saveRecords(loadRecords().filter(function (r) { return r && r.id !== id; }));
+    delete sessionCells[id];
+  }
+
   var contextProvider = null;
   var modal = null, currentDraft = null;
+  var currentRecId = null;   /* 지금 화면의 초안이 어느 기록인가 */
+  var archive = false;       /* 지금 보고 있는 것이 '지난 기록'인가 */
+  var chatRecToken = null;   /* 채팅 지시를 보낸 시점의 기록 */
 
   function ensureModal() {
     if (modal) return modal;
@@ -756,22 +869,28 @@
     m.setAttribute('aria-labelledby', 'rp-title');
     m.innerHTML =
       '<div class="veil" data-close></div>' +
-      '<div class="sheet">' +
+      /* data-view 를 처음부터 박아 둡니다 — 비어 있으면 [36] 의 두 규칙이 모두
+         안 맞아 목록과 초안이 잠깐 함께 보입니다. */
+      '<div class="sheet" data-view="list">' +
       '<header>' +
-      '<h2 id="rp-title">AI 보고서 초안</h2>' +
-      '<span class="hs" data-status></span>' +
+      '<h2 id="rp-title">AI 보고서</h2>' +
+      '<span class="hs" data-status data-draft-only></span>' +
       '<span class="sp"></span>' +
       '<label class="hs" style="display:flex;align-items:center;gap:5px">' +
       '<input type="checkbox" data-incl-sim> 시나리오·추천안 포함</label>' +
-      '<button class="btn sm" data-regen type="button">다시 생성</button>' +
+      '<button class="btn sm" data-back type="button" data-draft-only>목록</button>' +
+      '<button class="btn sm" data-regen type="button" data-draft-only>다시 생성</button>' +
       '<button class="xbtn" data-close type="button" aria-label="닫기">' + HW.icon('close', 17) + '</button>' +
       '</header>' +
-      '<div class="body" data-body></div>' +
+      '<div class="body" data-body data-draft-only></div>' +
+      /* 기록 목록 뷰. 같은 시트 안의 형제로 두고 CSS 로 한쪽만 보입니다
+         ([36] 구획) — 시트를 두 벌 만들면 헤더·푸터 배선이 두 벌이 됩니다. */
+      '<div class="body" data-list data-list-only></div>' +
       /* 초안을 말로 고치는 줄. 본문과 내려받기 사이에 둡니다 — 읽고(본문) → 고치고
          (여기) → 내보내는(푸터) 순서가 그대로 화면 순서가 됩니다.
          초안이 없을 때는 아래 setChatEnabled 가 잠급니다. */
-      '<div class="cm cm-report" data-chat hidden></div>' +
-      '<footer>' +
+      '<div class="cm cm-report" data-chat data-draft-only hidden></div>' +
+      '<footer data-draft-only>' +
       '<span class="hs" data-foot></span>' +
       '<span class="sp"></span>' +
       '<button class="btn" data-copy type="button" disabled>본문 복사</button>' +
@@ -784,6 +903,33 @@
 
     C.$$('[data-close]', m).forEach(function (b) { b.addEventListener('click', close); });
     C.$('[data-regen]', m).addEventListener('click', function () { generate(); });
+    C.$('[data-back]', m).addEventListener('click', function () {
+      /* 목록으로 나오면 '지난 기록' 상태를 풉니다 — 안 풀면 시나리오 체크박스가
+         새로고침 전까지 회색으로 남습니다. */
+      archive = false;
+      updateArchiveUi();
+      renderList();
+      showView('list');
+    });
+    /* 목록은 매번 다시 그리므로 이벤트는 컨테이너에 한 번만 겁니다. */
+    C.$('[data-list]', m).addEventListener('click', function (ev) {
+      var gen = ev.target.closest('[data-gen-new]');
+      if (gen) { startNew(); return; }
+      var del = ev.target.closest('[data-del]');
+      if (del) {
+        var did = del.getAttribute('data-del');
+        if (global.confirm('이 기록을 삭제할까요?')) {
+          removeRecord(did);
+          /* 지운 것이 지금 화면의 기록이면 연결을 끊습니다 — 안 끊으면
+             채팅으로 고칠 때 updateRecord 가 지운 기록을 되살립니다. */
+          if (currentRecId === did) currentRecId = null;
+          renderList();
+        }
+        return;
+      }
+      var ld = ev.target.closest('[data-open]');
+      if (ld) openRecord(ld.getAttribute('data-open'));
+    });
     C.$('[data-incl-sim]', m).addEventListener('change', function () { generate(); });
     C.$('[data-dl-xlsx]', m).addEventListener('click', function () { doExport('xlsx'); });
     C.$('[data-dl-hwp]', m).addEventListener('click', function () { doExport('hwp'); });
@@ -920,12 +1066,19 @@
      늦게 도착한 옛 응답이 최신 초안을 덮을 수 있습니다. 마지막 요청만 반영합니다. */
   var genSeq = 0;
 
-  function generate() {
+  function generate(opts) {
     var m = ensureModal();
     var body = C.$('[data-body]', m);
     var ctx = contextProvider ? contextProvider() : {};
     var inclSim = C.$('[data-incl-sim]', m).checked;
     var seq = ++genSeq;
+    /* 목록의 [AI 보고서 생성]만 새 기록을 만듭니다. [다시 생성]과 시나리오
+       체크박스는 **같은 카드를 덮어씁니다** — 안 그러면 초안 하나를 다듬으려
+       세 번 누른 결과가 구별되지 않는 카드 세 장이 됩니다(저장 시각이 분
+       단위라 화면에서도 같아 보입니다). */
+    var isNew = !!(opts && opts.isNew);
+    if (isNew) currentRecId = null;
+    archive = false;
 
     currentDraft = null;
     setBusy(true, '생성 중…');
@@ -971,6 +1124,14 @@
         (CONFIG.EXPORT_MODE === 'client'
           ? '엑셀은 .xlsx, 한글은 .rtf(한컴오피스에서 열림)로 저장됩니다.'
           : '서버에서 파일을 생성합니다.');
+
+      if (currentRecId) {
+        updateRecord(currentRecId, draft);
+        if (ctx.cells && ctx.cells.length) sessionCells[currentRecId] = ctx.cells;
+      } else {
+        currentRecId = pushRecord(draft, ctx, inclSim);
+      }
+      updateArchiveUi();
     }).catch(function (err) {
       if (seq !== genSeq) return;
       setBusy(false, '');
@@ -996,6 +1157,10 @@
       placeholder: '예: 고령층 관점을 더 강조해줘 · 개요를 3문장으로 줄여줘',
       intro: '초안을 어떻게 고칠지 말로 지시하세요. 수치는 바꾸지 않고 강조·순서·어조·분량만 고칩니다.',
       getBody: function () {
+        /* 보낸 시점의 기록을 잡아 둡니다 — chat.js 에는 취소도 세대 가드도 없어
+           (send 가 응답이 오면 무조건 onDraft 를 실행합니다), 지시를 보낸 뒤
+           목록으로 나가 다른 기록을 열면 늦게 온 응답이 그 기록을 덮어씁니다. */
+        chatRecToken = currentRecId;
         return {
           period: (HW.chatActions && HW.chatActions.period && HW.chatActions.period()) || 'am',
           context: {},
@@ -1003,12 +1168,121 @@
         };
       },
       onDraft: function (d) {
+        if (chatRecToken !== currentRecId) return;   /* 그사이 다른 기록으로 옮겼습니다 */
         /* 모델이 sections 만 돌려주므로 나머지(제목·표·meta)는 지금 것을 지킵니다 */
         if (!currentDraft || !d || !Array.isArray(d.sections)) return;
         currentDraft.sections = d.sections;
         renderDraft(currentDraft);
+        if (currentRecId) updateRecord(currentRecId, currentDraft);
       }
     });
+  }
+
+  /* ── 목록 뷰 ─────────────────────────────────────────────────── */
+  function showView(v) {
+    var m = ensureModal();
+    C.$('.sheet', m).setAttribute('data-view', v);
+    C.$('#rp-title', m).textContent = v === 'list' ? 'AI 보고서' : 'AI 보고서 초안';
+  }
+
+  /** 지난 기록은 [다시 생성]으로 되살릴 수 없습니다 — generate() 는 언제나
+      **지금 화면**의 지표를 읽으므로, 시뮬레이션에서 만든 기록을 대시보드에서
+      열어 누르면 전혀 다른 초안이 그 자리에 덮입니다. 잠그고 이유를 밝힙니다. */
+  function updateArchiveUi() {
+    var m = ensureModal();
+    var rg = C.$('[data-regen]', m);
+    rg.disabled = archive || !currentDraft;
+    rg.title = archive ? '지난 기록은 다시 생성할 수 없습니다 — [목록]에서 새로 만드세요.' : '';
+    /* 한쪽으로만 잠그면 목록으로 돌아온 뒤에도 풀리지 않습니다. setBusy 와 같은
+       식으로 원래 비활성 사유(시뮬레이션 없음)를 함께 봅니다. */
+    var chk = C.$('[data-incl-sim]', m);
+    chk.disabled = archive || chk.getAttribute('data-nosim') === '1';
+  }
+
+  function renderList() {
+    var m = ensureModal();
+    var host = C.$('[data-list]', m);
+    var ctx = contextProvider ? contextProvider() : {};
+    var hint = recordSource(ctx) === 'admin'
+      ? '관리자 화면에는 격자·지표 맥락이 없어 요약 위주의 초안이 나옵니다.'
+      : '지금 화면에 보이는 지표로 새 초안을 만듭니다.';
+    var head =
+      '<div class="rp-new">' +
+      '<button class="btn primary" data-gen-new type="button">' + HW.icon('doc') +
+      'AI 보고서 생성</button>' +
+      '<span class="hs">' + esc(hint) + '</span>' +
+      '</div>';
+
+    /* draft 없는 항목은 조용히 건너뜁니다 — 옛 저장본 하나 때문에 목록 전체가
+       안 뜨면 사용자는 기록이 사라졌다고 읽습니다. */
+    var list = loadRecords().filter(function (r) { return r && r.draft; });
+    if (!list.length) {
+      host.innerHTML = head +
+        '<div class="empty">아직 만든 보고서가 없습니다.<br>' +
+        '[AI 보고서 생성]을 누르면 지금 화면의 지표로 초안을 만듭니다.</div>';
+      return;
+    }
+    host.innerHTML = head + '<div class="scen-list">' + list.map(function (r) {
+      /* 삭제 버튼을 불러오기 버튼 안에 넣지 않습니다(HTML 위반 + 키보드로 삭제 불가).
+         시뮬레이션 시나리오 카드와 같은 구조입니다. */
+      return '<div class="scen">' +
+        '<button class="sload" data-open="' + esc(r.id) + '" type="button" title="' +
+        esc(r.title || '') + '">' +
+        '<span class="snm">' + esc(r.label || '기준 미상') + '</span>' +
+        '<span class="smeta">' +
+        '<span>' + esc(r.savedAt || '') + '</span>' +
+        '<span>' + esc(SOURCE_LABEL[r.source] || '대시보드') + '</span>' +
+        '<span>' + (r.isAi === false ? '서식 초안' : 'AI') + '</span>' +
+        (r.inclSim ? '<span>시나리오 포함</span>' : '') +
+        (sessionCells[r.id] ? '' : '<span>원자료 없음</span>') +
+        '</span></button>' +
+        '<button class="sdel" data-del="' + esc(r.id) + '" type="button" ' +
+        'aria-label="이 기록 삭제">' + HW.icon('close', 14) + '</button>' +
+        '</div>';
+    }).join('') + '</div>';
+  }
+
+  function startNew() {
+    archive = false;
+    currentRecId = null;
+    if (reportChat) reportChat.reset();
+    showView('draft');
+    generate({ isNew: true });
+  }
+
+  function openRecord(id) {
+    var list = loadRecords(), rec = null, i;
+    for (i = 0; i < list.length; i++) {
+      if (list[i] && list[i].id === id) { rec = list[i]; break; }
+    }
+    if (!rec || !rec.draft) {
+      C.toast('기록을 찾지 못했습니다.', 'err');
+      renderList();
+      return;
+    }
+    /* 목록 배열 안의 원본을 채팅 편집이 제자리에서 고치지 않도록 사본을 씁니다. */
+    var d = {}, k, j;
+    for (k in rec.draft) if (Object.prototype.hasOwnProperty.call(rec.draft, k)) d[k] = rec.draft[k];
+    var hasCells = !!sessionCells[id];
+    if (hasCells) {
+      var mt = {};
+      for (j in (d.meta || {})) if (Object.prototype.hasOwnProperty.call(d.meta, j)) mt[j] = d.meta[j];
+      mt.cells = sessionCells[id];
+      d.meta = mt;
+    }
+    currentDraft = d;
+    currentRecId = id;
+    archive = true;
+    genSeq++;   /* 진행 중이던 생성 응답이 이 화면을 덮지 못하게 세대를 올립니다 */
+    renderDraft(d);
+    mountChat();
+    if (reportChat) reportChat.reset();
+    setBusy(false, '');
+    C.$('[data-foot]', ensureModal()).innerHTML = hasCells
+      ? '지난 기록입니다. 내려받기와 말로 고치기는 그대로 됩니다.'
+      : '지난 기록입니다. 원자료(격자)는 보관하지 않아 <b>엑셀의 「데이터」 시트가 빠집니다</b>.';
+    showView('draft');
+    updateArchiveUi();
   }
 
   function open() {
@@ -1022,7 +1296,13 @@
     chk.parentNode.style.opacity = hasSim ? '1' : '.45';
     chk.parentNode.title = hasSim ? '' : '시뮬레이션 화면에서 배치안을 만들면 활성화됩니다.';
     m.classList.add('open');
-    generate();
+    /* 예전에는 여기서 곧바로 generate() 를 불러, 버튼을 누르는 순간 AI 호출이
+       나갔습니다. 지금은 지난 기록을 먼저 보여주고 목록의 [AI 보고서 생성]을
+       눌러야 나갑니다 — 이 경로에서 나가는 요청은 한 건도 없습니다. */
+    archive = false;
+    currentRecId = null;
+    renderList();
+    showView('list');
   }
   function close() {
     if (modal) modal.classList.remove('open');
@@ -1048,6 +1328,13 @@
     close: close,
     setContextProvider: setContextProvider,
     /* 테스트·재사용용으로 노출 */
+    /* 기록 계층 — 프론트에 CI 가 없어 이 저장 로직만이라도 밖에서 돌려볼 수
+       있게 엽니다(쿼터 초과·격자 제외·id 처리가 조용히 틀리기 쉬운 자리입니다). */
+    _records: {
+      load: loadRecords, save: saveRecords, push: pushRecord,
+      update: updateRecord, remove: removeRecord,
+      slim: slimDraft, source: recordSource, sessionCells: sessionCells
+    },
     buildXlsx: buildXlsx,
     buildRtf: buildRtf,
     draftToSheets: draftToSheets,
