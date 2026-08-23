@@ -2062,3 +2062,14 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 [data-list] .scen-list{padding:0}
 .rp-new{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
 .rp-new .hs{flex:1;min-width:170px}
+/* 지난 기록 보관함 — 새로 만들기와 시각적으로 나뉘도록 접이식 구획으로 둡니다.
+   화살표는 기존 아이콘(arrow)을 그대로 돌려 씁니다(새 그림 안 만듭니다). */
+.rp-archive{margin-top:2px;border-top:1px solid var(--line)}
+.rp-archive summary{cursor:pointer;user-select:none;list-style:none;
+  display:flex;align-items:center;gap:7px;padding:11px 0 9px;
+  font-size:12.5px;font-weight:700;color:var(--ink2)}
+.rp-archive summary::-webkit-details-marker{display:none}
+.rp-archive summary svg{transform:rotate(90deg);transition:transform .15s}
+.rp-archive[open] summary svg{transform:rotate(-90deg)}
+.rp-archive .rp-count{color:var(--ink3);font-weight:400}
+.rp-archive .scen-list{margin-top:4px}

@@ -1225,7 +1225,13 @@
         '[AI 보고서 생성]을 누르면 지금 화면의 지표로 초안을 만듭니다.</div>';
       return;
     }
-    host.innerHTML = head + '<div class="scen-list">' + list.map(function (r) {
+    /* 만든 것(위)과 지난 기록(아래)을 나눕니다 — 계속 쌓이는 목록이 새로
+       만들기와 뒤섞이지 않게 details 로 접이식 '보관함' 구획을 둡니다.
+       기본은 열어 둡니다 — 예전엔 전부 항상 보였으니 그 동작을 지킵니다. */
+    host.innerHTML = head +
+      '<details class="rp-archive" open><summary>' + HW.icon('arrow', 11) +
+      '보관함 <span class="rp-count">' + list.length + '건</span></summary>' +
+      '<div class="scen-list">' + list.map(function (r) {
       /* 삭제 버튼을 불러오기 버튼 안에 넣지 않습니다(HTML 위반 + 키보드로 삭제 불가).
          시뮬레이션 시나리오 카드와 같은 구조입니다. */
       return '<div class="scen">' +
@@ -1242,7 +1248,7 @@
         '<button class="sdel" data-del="' + esc(r.id) + '" type="button" ' +
         'aria-label="이 기록 삭제">' + HW.icon('close', 14) + '</button>' +
         '</div>';
-    }).join('') + '</div>';
+    }).join('') + '</div></details>';
   }
 
   function startNew() {
