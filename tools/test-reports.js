@@ -111,5 +111,14 @@ R.push({ title:'T', subtitle:'<img src=x onerror=alert(1)>', sections:[], meta:{
 RP.open();
 ok('라벨을 이스케이프한다', !/<img /.test(g.__els['[data-list]'].innerHTML));
 
+/* 기록 시각은 초까지 — 연달아 만들면 분 단위로는 카드가 구별되지 않습니다.
+   시나리오 저장(사람이 이름을 붙임)은 종전대로 분 단위입니다. */
+g.localStorage.setItem('hw.reports', '[]');
+R.push({ title:'T', subtitle:'초 확인', sections:[], meta:{} }, { period:'am', cells:[] }, false);
+const stamped = R.load()[0].savedAt;
+ok('저장 시각에 초가 있다 (' + stamped + ')', /\d{2}:\d{2}:\d{2}$/.test(stamped), stamped);
+RP.open();
+ok('목록 카드에도 초가 보인다', /14:03:27/.test(g.__els['[data-list]'].innerHTML));
+
 console.log('\n최종 ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

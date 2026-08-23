@@ -45,7 +45,7 @@ const g = {
       $: (sel) => (g.__els[sel] = g.__els[sel] || el()),
       $$: () => [],
       toast: (m, t) => g.__toasts.push([m, t]),
-      nowStamp: () => '2026-08-23 14:03',
+      nowStamp: (sec) => '2026-08-23 14:03' + (sec ? ':27' : ''),
     },
     icon: () => '<svg/>',
     CONFIG: { APP: {}, EXPORT_MODE: 'client' },

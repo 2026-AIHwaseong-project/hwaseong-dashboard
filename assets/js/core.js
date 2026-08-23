@@ -46,9 +46,15 @@
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
-  function nowStamp() {
+  /** "2026-08-23 14:03" · withSeconds 를 주면 "2026-08-23 14:03:27".
+      초까지 필요한 곳은 **같은 분 안에 여러 건이 쌓이는 목록**입니다 —
+      보고서 기록이 그렇습니다(연달아 만들면 분 단위로는 구별이 안 됩니다).
+      시나리오 저장은 사람이 이름을 붙이므로 분 단위로 충분합니다. */
+  function nowStamp(withSeconds) {
     var d = new Date();
-    return todayISO() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    var p2 = function (n) { return String(n).padStart(2, '0'); };
+    return todayISO() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) +
+      (withSeconds ? ':' + p2(d.getSeconds()) : '');
   }
   /** 2026-08-06 → "2026년 8월 6일" */
   function korDate(iso) {

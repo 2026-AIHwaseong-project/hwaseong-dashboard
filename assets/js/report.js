@@ -814,7 +814,7 @@
     var id = 'rp-' + Date.now() + '-' + Math.floor(Math.random() * 1e4);
     var rec = {
       id: id,
-      savedAt: C.nowStamp(),
+      savedAt: C.nowStamp(true),
       label: draft.subtitle || '기준 미상',
       title: draft.title || '',
       source: recordSource(ctx),
@@ -842,7 +842,7 @@
         /* 반드시 다시 슬림화합니다 — currentDraft 에는 생성 직후 얹은 격자가
            붙어 있어, 그냥 넣으면 채팅 편집 한 번에 400KB 가 직렬화됩니다. */
         list[i].draft = slimDraft(draft);
-        list[i].savedAt = C.nowStamp();
+        list[i].savedAt = C.nowStamp(true);
         saveRecords(list);
         return;
       }
