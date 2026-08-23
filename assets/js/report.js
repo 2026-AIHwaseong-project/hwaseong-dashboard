@@ -946,10 +946,13 @@
     ['[data-dl-xlsx]', '[data-dl-hwp]', '[data-copy]', '[data-regen]'].forEach(function (sel) {
       C.$(sel, m).disabled = busy || (sel !== '[data-regen]' && !currentDraft);
     });
-    /* 생성 중 체크박스를 토글하면 재요청이 겹쳐 낡은 초안이 남을 수 있습니다.
-       시뮬레이션이 없어 원래 비활성인 상태(data-nosim)는 그대로 둡니다. */
+    /* busy 로는 안 잠급니다 — 체크박스의 change 가 스스로 generate() 를 부르므로,
+       여기서 잠그면 생성 중(약 14초) 다시 누른 클릭이 조용히 무시되어 "체크가
+       안 된다"는 버그가 됩니다. 겹친 요청은 genSeq(요청 순번)가 낡은 응답을
+       버리므로 잠그지 않아도 안전합니다. 시뮬레이션이 없어 원래 비활성인
+       상태(data-nosim)만 그대로 둡니다. */
     var chk = C.$('[data-incl-sim]', m);
-    if (chk) chk.disabled = busy || chk.getAttribute('data-nosim') === '1';
+    if (chk) chk.disabled = chk.getAttribute('data-nosim') === '1';
   }
 
   function renderDraft(draft) {
