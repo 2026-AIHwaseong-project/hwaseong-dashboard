@@ -31,6 +31,7 @@
     </div>
     <div class="admtop-act" id="topAct" hidden>
       <button type="button" class="btn" data-reset-all>모두 기본값으로</button>
+      <button type="button" class="btn primary" id="btnApply" disabled>적용</button>
     </div>
   </header>
 
@@ -115,11 +116,12 @@
 </div>
 
 <!-- 저장 바 — 아직 적용하지 않은 변경이 있을 때만 하단에 뜹니다 -->
+<!-- 적용은 머리(모두 기본값으로 옆)로 옮겼습니다. 이 띠는 "아직 안 넣은 변경이
+     있다"는 신호와 되돌리기만 맡습니다. -->
 <div class="admsavebar" id="saveBar" hidden>
   <span id="saveCount"></span>
-  <input type="text" id="saveReason" placeholder="변경 사유 (필수, 5자 이상) — 예: 2026년 표준운송원가 고시 반영" maxlength="200">
+  <span class="sp"></span>
   <button type="button" class="btn" id="btnRevert">되돌리기</button>
-  <button type="button" class="btn primary" id="btnApply" disabled>적용</button>
 </div>
 
 <!-- 확인 모달 -->

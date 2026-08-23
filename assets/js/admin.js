@@ -15,6 +15,12 @@
 
   var S = { params: [], byKey: {}, dirty: {}, status: null, polling: null, meta: null };
 
+  /* 서버는 변경 이력의 '왜' 칸을 위해 사유 5자 이상을 요구합니다(save_params).
+     화면에서는 더 이상 받지 않으므로 콘솔이 대신 채웁니다 — API 계약과 이력
+     형식을 그대로 두기 위해서입니다. 무엇이 어떻게 바뀌었는지는 이력이
+     이전값→새값으로 따로 기록합니다. */
+  var SAVE_REASON = '관리자 콘솔에서 수정';
+
   /* ------------------------------------------------------------ 인증 */
   function getToken() {
     try { return sessionStorage.getItem('hw.adminToken') || ''; } catch (e) { return ''; }
@@ -224,8 +230,7 @@
     var bar = $('#saveBar');
     bar.hidden = keys.length === 0;
     $('#saveCount').textContent = '적용 대기 ' + keys.length + '건';
-    var reason = ($('#saveReason').value || '').replace(/\s+/g, ' ').replace(/^\s|\s$/g, '');
-    $('#btnApply').disabled = keys.length === 0 || reason.length < 5;
+    $('#btnApply').disabled = keys.length === 0;
   }
 
   function onInput(input) {
@@ -259,13 +264,14 @@
         (S.dirty[k] === null ? ' (기본값 복귀)' : '') + '</td></tr>';
     }
     $('#confirmTable').innerHTML = html;
-    $('#confirmReason').textContent = '사유: ' + $('#saveReason').value;
+    $('#confirmReason').textContent =
+      '적용하면 서버에 저장되고 변경 이력에 남습니다. 되돌리려면 [모두 기본값으로]를 쓰세요.';
     $('#confirmModal').hidden = false;
   }
 
   function doSave() {
     $('#confirmModal').hidden = true;
-    var body = { changes: S.dirty, reason: $('#saveReason').value, actor: 'admin' };
+    var body = { changes: S.dirty, reason: SAVE_REASON, actor: 'admin' };
     $('#btnApply').disabled = true;
     api.call('admin.save', null, body).then(function (res) {
       if (res.requiresRefresh && res.requiresRefresh.length) {
@@ -273,7 +279,6 @@
       } else {
         C.toast('적용되었습니다 — 시뮬레이션·추천에 즉시 반영됩니다');
       }
-      $('#saveReason').value = '';
       S.params = res.params || [];
       S.byKey = {};
       for (var i = 0; i < S.params.length; i++) S.byKey[S.params[i].key] = S.params[i];
@@ -353,7 +358,6 @@
     document.addEventListener('input', function (ev) {
       var t = ev.target;
       if (t && t.hasAttribute && t.hasAttribute('data-key')) onInput(t);
-      if (t && t.id === 'saveReason') updateSaveBar();
     });
     document.addEventListener('click', function (ev) {
       var t = ev.target.closest ? ev.target.closest('[data-reset]') : null;

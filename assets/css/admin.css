@@ -94,8 +94,7 @@ body { padding-bottom: 72px; }
   background: var(--card); border-top: 2px solid var(--brand);
   box-shadow: 0 -4px 16px rgba(0,0,0,.07); }
 .admsavebar #saveCount { font-size: 13px; font-weight: 700; white-space: nowrap; }
-.admsavebar input { flex: 1; padding: 8px 10px; border: 1px solid var(--line);
-  border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; }
+.admsavebar .sp { flex: 1; }
 
 /* ── 확인 모달 ───────────────────────────────────────────── */
 .admmodal { position: fixed; inset: 0; z-index: 90; display: flex;
@@ -112,5 +111,4 @@ body { padding-bottom: 72px; }
   .admrow { grid-template-columns: 1fr; gap: 6px; }
   .admrow .pval { padding-top: 0; }
   .admsavebar { flex-wrap: wrap; }
-  .admsavebar input { order: 3; flex-basis: 100%; }
 }
