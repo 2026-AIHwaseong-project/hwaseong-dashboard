@@ -325,6 +325,9 @@
     var body = { reason: label, actor: 'admin' };
     if (steps) body.steps = steps;
     if (opts && opts.uploadId) { body.uploadId = opts.uploadId; body.apply = !!opts.apply; }
+    /* 새 작업이 시작되면 이전 예행의 [라이브에 반영]은 반드시 사라져야 한다.
+       남겨 두면 방금 것이 아닌 옛 uploadId 로 반영이 나갈 수 있다. */
+    if ($('#dryApply')) $('#dryApply').hidden = true;
     api.call('admin.refresh', null, body)
       .then(function () {
         $('#jobLog').hidden = false;
@@ -440,7 +443,8 @@
       esc(t.liveRows == null ? '—' : String(t.liveRows)) + '행 · 컬럼 ' +
       esc(String(t.columns)) + '개를 순서까지 대조합니다. ' + esc(t.note || '') +
       (S.upload && !S.upload.applyEnabled
-        ? '<br><b>이 서버는 검증까지만 열려 있습니다 — 라이브 데이터는 바뀌지 않습니다.</b>' : '');
+        ? '<br><b>이 서버는 검증까지만 열려 있습니다 — 라이브 데이터는 바뀌지 않습니다.</b>'
+        : '<br>올리면 먼저 <b>검증(예행)</b>만 돌고, 결과를 본 뒤 <b>[라이브에 반영]</b>을 눌러야 실제로 교체됩니다.');
   }
 
   function showUpErr(msg) {
@@ -539,6 +543,10 @@
     }
     el.innerHTML = html;
     el.hidden = false;
+    /* 여기서만 [라이브에 반영]이 열린다 — 서버가 반영을 허용하고(HW_UPLOAD_APPLY)
+       방금 검증한 업로드가 손에 있을 때. 검증 결과를 본 사람만 반영할 수 있다. */
+    var ap = $('#dryApply');
+    if (ap) ap.hidden = !((S.upload && S.upload.applyEnabled) && S.pendingUpload);
   }
 
   /* ------------------------------------------------------------ 배선 */
@@ -595,6 +603,17 @@
       });
     }
     if ($('#upTarget')) $('#upTarget').addEventListener('change', updateUpNote);
+    if ($('#btnApplyUpload')) {
+      $('#btnApplyUpload').addEventListener('click', function () {
+        var up = S.pendingUpload;
+        if (!up) return;
+        if (!global.confirm('방금 검증한 파일을 라이브에 반영합니다.\n' +
+            '원본이 교체되고 조인→모델→검증→직렬화가 다시 돌아 화면 수치가 바뀔 수 있습니다.\n' +
+            '교체 전 자동으로 백업하며, 도중에 실패하면 이미 바꾼 것까지 되돌립니다.\n진행할까요?')) return;
+        startRefresh(null, '업로드 반영: ' + (up.label || ''),
+                     { uploadId: up.uploadId, apply: true });
+      });
+    }
     $('#btnReload').addEventListener('click', function () {
       startRefresh(['reload'], '관리자 콘솔 — 화면 반영');
     });

@@ -97,6 +97,12 @@
         </div>
         <pre id="jobLog" hidden></pre>
         <p class="admhint" id="jobNote" hidden>완료 후, 열려 있는 대시보드·시뮬레이션 탭은 <b>새로고침</b>해야 반영됩니다.</p>
+        <!-- 예행이 끝난 **직후에만** 나타납니다. 검증을 건너뛰고 곧장 반영하는 경로는
+             일부러 만들지 않았습니다 — 무엇이 바뀌는지 못 본 채로 원본을 갈아끼우는
+             일이 이 도구에서 가장 되돌리기 어려운 실수입니다. -->
+        <div class="admactions" id="dryApply" hidden>
+          <button type="button" class="btn primary" id="btnApplyUpload">라이브에 반영<small>원본 교체 + 조인→모델→검증→직렬화</small></button>
+        </div>
       </div>
     </section>
 
