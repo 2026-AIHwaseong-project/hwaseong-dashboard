@@ -43,6 +43,12 @@
       S.status = st;
       renderStrip(st);
       renderJob(st.job);
+      /* 업로드 상자는 여기서도 그려야 한다. #uploadBox 의 hidden 을 푸는 곳이
+         renderUploadBox() 하나뿐인데, 그걸 부르는 것은 refreshStatus() 였고
+         refreshStatus() 는 잡이 도는 중(poll)이나 저장 직후에만 불린다. 즉 서버에서
+         HW_UPLOAD_ENABLED 를 켜도 **첫 진입 화면에는 업로드 UI 가 영원히 안 나타났다** —
+         파라미터를 한 번 저장하거나 재계산을 돌려야 비로소 보이는 상태였다. */
+      renderUploadBox(st);
       /* 잡이 진행 중인 채로 (재)진입하면 폴링을 재개한다 — startRefresh 경로에서만
          폴링을 시작하면 새로고침 후 완료 토스트·버튼 복구가 영원히 안 온다. */
       if (st.job && st.job.status === 'running') {
