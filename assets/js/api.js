@@ -34,9 +34,14 @@
     'reports.export':  { method: 'POST', path: '/reports/export', long: true, binary: true },
     'chat.send':       { method: 'POST', path: '/chat', long: true },           // AI 호출 → 타임아웃 김
 
-    /* 관리자 콘솔 (admin.html 전용 — ADMIN_TOKEN 필요, 미설정 서버는 503).
+    /* 관리자 콘솔 (admin.html 전용 — ADMIN_TOKEN 을 설정한 서버에서는 쓰기가 401).
        메서드를 GET/POST 로만 쓰는 이유: 서버 CORS allow_methods 가 GET/POST 라
-       PUT 을 쓰면 교차 출처(Pages 배포)에서 프리플라이트가 막힌다. */
+       PUT 을 쓰면 교차 출처(Pages 배포)에서 프리플라이트가 막힌다.
+
+       이 표에 없는 관리자 경로가 하나 있다: GET /admin/upload/template.
+       JSON 이 아니라 Content-Disposition: attachment 로 내려오는 파일이라
+       api.call(fetch → res.json())로 받을 수 없고, admin.js 가 <a href> 를
+       직접 만든다(CONFIG.url 로 조합). 빠뜨린 게 아니라 성격이 다른 경로다. */
     'admin.status':    { method: 'GET',  path: '/admin/status' },
     'admin.params':    { method: 'GET',  path: '/admin/params' },
     'admin.save':      { method: 'POST', path: '/admin/params' },

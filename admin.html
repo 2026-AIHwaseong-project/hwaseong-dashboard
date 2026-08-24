@@ -95,9 +95,22 @@
           <button type="button" class="btn" id="btnReload">화면 반영<small>메모리 재적재 · 약 5초</small></button>
           <button type="button" class="btn" id="btnRecompute">지표 재계산<small>조인→모델→검증→직렬화 · 수 분</small></button>
         </div>
-        <!-- 데이터 파일 올리기. 서버에서 켜져 있을 때만 나타납니다
-             (status.upload.enabled) — 꺼져 있으면 이 블록은 숨은 채로 둡니다. -->
-        <div class="admupload" id="uploadBox" hidden>
+        <pre id="jobLog" hidden></pre>
+        <p class="admhint" id="jobNote" hidden>완료 후, 열려 있는 대시보드·시뮬레이션 탭은 <b>새로고침</b>해야 반영됩니다.</p>
+      </div>
+    </section>
+
+    <!-- 원본 데이터 올리기. 서버에서 켜져 있을 때만(status.upload.enabled) 나타납니다.
+         꺼져 있으면 빈 카드가 남지 않도록 **섹션째** 숨깁니다 — 종전에는 [지표 재계산]
+         아래에 붙은 블록이라 위 카드가 그 자리를 메웠지만, 이제는 독립 카드라
+         내용만 숨기면 제목만 있는 빈 상자가 남습니다. -->
+    <section class="card" id="uploadCard" hidden>
+      <div class="chead"><h2>원본 데이터 올리기</h2>
+        <span class="hsub">CSV 접수 → 서버 임시 공간에서 검증 → 확인한 뒤에만 반영</span>
+        <a class="btn sm" id="upTemplate" href="#" download>예시 형식 내려받기</a>
+      </div>
+      <div class="cbody">
+        <div class="admupload" id="uploadBox">
           <div class="admactions">
             <select class="btn sm" id="upTarget" aria-label="올릴 자료 종류"></select>
             <label class="btn" for="upFile" id="upPick">파일 선택<small>CSV(UTF-8) · 엑셀은 CSV로 저장</small></label>
@@ -106,8 +119,6 @@
           <p class="admhint" id="upNote"></p>
           <p class="admerr" id="upErr" hidden></p>
         </div>
-        <pre id="jobLog" hidden></pre>
-        <p class="admhint" id="jobNote" hidden>완료 후, 열려 있는 대시보드·시뮬레이션 탭은 <b>새로고침</b>해야 반영됩니다.</p>
       </div>
     </section>
 

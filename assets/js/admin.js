@@ -390,9 +390,11 @@
   /* ------------------------------------------------------ 데이터 올리기 */
   function renderUploadBox(st) {
     var up = (st && st.upload) || {};
-    var box = $('#uploadBox');
-    if (!box) return;
-    box.hidden = !up.enabled;
+    /* 숨기는 대상이 #uploadBox 가 아니라 카드 전체다 — 업로드가 독립 섹션이 된
+       뒤로는 내용만 숨기면 제목만 남은 빈 카드가 화면에 남는다. */
+    var card = $('#uploadCard');
+    if (!card) return;
+    card.hidden = !up.enabled;
     if (!up.enabled) return;
     S.upload = up;
     var sel = $('#upTarget'), targets = up.targets || [];
@@ -413,8 +415,25 @@
     return null;
   }
 
+  /* 예시 양식 내려받기 — 링크만 바꿔 준다.
+     헤더 정본은 서버(DATASETS[...]["header"])에 하나뿐이므로 컬럼 이름을 프론트가
+     따로 들고 있지 않는다. 그래야 "예시대로 만들었는데 400" 이 구조적으로 안 난다.
+     api.call 이 아니라 <a href> 인 이유는 JSON 이 아니라 파일 다운로드이고,
+     서버가 Content-Disposition: attachment 로 내려주기 때문이다. */
+  function updateUpTemplate(t) {
+    var a = $('#upTemplate');
+    if (!a) return;
+    if (!t) { a.hidden = true; return; }
+    a.hidden = false;
+    a.href = CONFIG.url('/admin/upload/template?datasetId=' + encodeURIComponent(t.id));
+    a.setAttribute('download', String(t.name || 'template.csv').replace(/\.csv$/, '') + '_예시양식.csv');
+    a.title = t.name + ' — 컬럼 ' + t.columns + '개(순서 포함)와 표본 3행이 들어 있습니다. '
+            + '엑셀에서 열어 고친 뒤 그대로 올리시면 됩니다.';
+  }
+
   function updateUpNote() {
     var el = $('#upNote'), t = currentTarget();
+    updateUpTemplate(t);
     if (!el) return;
     if (!t) { el.textContent = ''; return; }
     el.innerHTML = '<code>' + esc(t.name) + '</code> · 현재 ' +

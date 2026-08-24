@@ -118,6 +118,14 @@ body { padding-bottom: 72px; }
    label[for] + input[type=file] 조합이라 키보드·스크린리더가
    그대로 동작합니다(드롭존을 만들지 않은 이유이기도 합니다). */
 .admupload { margin: 10px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line); }
+/* 업로드가 독립 카드로 나온 뒤로는 위 괘선이 필요 없습니다 — 종전에는 [지표 재계산]
+   버튼 줄 바로 아래에 붙어 있어 구분선이 그 역할을 했지만, 이제는 카드 테두리가
+   같은 일을 하고 괘선은 카드 안에 뜬금없는 선 하나로 보입니다. */
+#uploadCard .admupload { margin: 0; padding: 0; border-top: 0; }
+/* .admupload[hidden] 과 같은 짝 규칙 — .card 에는 display 선언이 없어 UA 의
+   [hidden] 이 그대로 먹지만, 나중에 .card 에 display 가 붙는 순간 카드가 조용히
+   드러납니다(.admsavebar 에서 실제로 났던 사고). 명시해 둡니다. */
+#uploadCard[hidden] { display: none; }
 .admupload .admactions { margin-top: 0; align-items: stretch; }
 .admupload select.btn { padding-right: 26px; }
 /* display 를 새로 주는 자식이 없더라도, 이 블록은 서버가 꺼져 있으면
