@@ -126,6 +126,10 @@ body { padding-bottom: 72px; }
    [hidden] 이 그대로 먹지만, 나중에 .card 에 display 가 붙는 순간 카드가 조용히
    드러납니다(.admsavebar 에서 실제로 났던 사고). 명시해 둡니다. */
 #uploadCard[hidden] { display: none; }
+/* <a> 로 만든 버튼은 브라우저 기본 밑줄이 남아, 바로 옆 <button> 들과 다르게
+   보입니다. app.css 의 .chead .cta 가 같은 이유로 text-decoration:none 을 갖고
+   있지만 그건 대시보드 전용 클래스라, 관리자 쪽에는 같은 처방을 여기 둡니다. */
+#uploadCard a.btn { text-decoration: none; }
 .admupload .admactions { margin-top: 0; align-items: stretch; }
 .admupload select.btn { padding-right: 26px; }
 /* display 를 새로 주는 자식이 없더라도, 이 블록은 서버가 꺼져 있으면
