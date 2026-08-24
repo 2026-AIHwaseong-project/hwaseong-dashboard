@@ -123,7 +123,7 @@
       ['화면 데이터 빌드', d.metaUpdatedAt || '—'],
       ['서버 데이터', (d.source === 'db' ? 'DB 모드' : 'JSON 모드') + ' · 격자 ' + (d.gridCells || 0) + '칸'],
       ['관리자 값', (ov.count || 0) + '건 적용 중'],
-      ['마지막 작업', job.finishedAt ? (job.status === 'done' ? '성공 ' : '실패 ') + job.finishedAt : '—']
+      ['마지막 작업', job.finishedAt ? (job.status === 'done' ? '성공 ' : '실패 ') + fmtTs(job.finishedAt) : '—']
     ];
     var html = '';
     for (var i = 0; i < tiles.length; i++) {
@@ -195,14 +195,24 @@
     var kpi = d.kpiAm || {};
     var ov = st.overrides || {};
     var html = '<table>' +
-      '<tr><td>서버 적재 시각</td><td>' + esc(d.loadedAt || '—') + '</td></tr>' +
+      '<tr><td>서버 적재 시각</td><td>' + esc(fmtTs(d.loadedAt) || '—') + '</td></tr>' +
       '<tr><td>화면 데이터 빌드</td><td>' + esc(d.metaUpdatedAt || '—') + '</td></tr>' +
       '<tr><td>출근 사각지대</td><td>' + esc(String(kpi.needCells != null ? kpi.needCells + '칸' : '—')) + '</td></tr>' +
       '<tr><td>관리자 값 저장 위치</td><td>서버 <code>var/admin/params_override.json</code></td></tr>' +
-      '<tr><td>마지막 저장</td><td>' + esc(ov.updatedAt || '없음') + '</td></tr>' +
+      '<tr><td>마지막 저장</td><td>' + esc(fmtTs(ov.updatedAt) || '없음') + '</td></tr>' +
       '</table>' +
       '<p class="admhint">저장된 값은 <b>서버에 남습니다</b> — 화면을 옮기거나 새로고침해도, 서버를 다시 띄워도 유지되고 다른 사람에게도 같게 보입니다. 아직 [적용]하지 않은 입력은 이 화면을 벗어나면 사라집니다.</p>';
     $('#dataState').innerHTML = html;
+  }
+
+  /* 서버가 주는 시각은 KST 오프셋이 붙은 ISO 다 — 2026-08-25T00:11:48+09:00.
+     사람이 읽는 자리에는 T 와 오프셋이 방해만 되므로 '2026-08-25 00:11:48' 로 편다.
+     오프셋을 화면에서 지우는 것이지 값을 바꾸지 않는다(브라우저 시간대로 재해석하면
+     심사위원 노트북이 다른 시간대일 때 또 어긋난다 — 서버가 준 KST 를 그대로 쓴다).
+     오프셋이 없는 옛 기록은 손대지 않고 그대로 보여 준다. */
+  function fmtTs(s) {
+    var m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}(?::\d{2})?)/.exec(String(s == null ? '' : s));
+    return m ? m[1] + ' ' + m[2] : String(s == null ? '' : s);
   }
 
   function renderHistory(items) {
@@ -238,7 +248,7 @@
       } else if (ev.kind === 'upload.apply') {
         body = esc(ev.file || '') + ' 반영 · 백업 <code>' + esc(ev.backup || '') + '</code>';
       }
-      html += '<tr><td>' + esc(ev.ts || '') + '</td><td class="hkind">' + esc(kind) + '</td><td>' + body + '</td></tr>';
+      html += '<tr><td>' + esc(fmtTs(ev.ts)) + '</td><td class="hkind">' + esc(kind) + '</td><td>' + body + '</td></tr>';
     }
     $('#historyList').innerHTML = html + '</table>';
   }
