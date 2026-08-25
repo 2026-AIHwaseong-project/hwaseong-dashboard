@@ -1020,9 +1020,9 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
    특히 배치 삭제 ×는 19x19 인데 되돌릴 수 없는 동작이고 바로 옆 금액과 6px
    밖에 안 떨어져 있어, 시연 중 빗나가면 배치가 사라집니다. */
 .plist .del,.scen .sdel,.legendbar .lg-clear,.rec-scope .rs-btn,
-.rec-tab,.zctl [data-z="reset"]{position:relative}
+.zctl [data-z="reset"]{position:relative}
 .plist .del::after,.scen .sdel::after,.legendbar .lg-clear::after,
-.rec-scope .rs-btn::after,.rec-tab::after,.zctl [data-z="reset"]::after{
+.rec-scope .rs-btn::after,.zctl [data-z="reset"]::after{
   content:"";position:absolute;left:50%;top:50%;
   min-width:24px;min-height:24px;width:100%;height:100%;
   transform:translate(-50%,-50%)}
@@ -1544,27 +1544,34 @@ button.rhead:hover .rkind{border-color:var(--brand)}
  * ======================================================================== */
 .rec-alt{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}
 .rec-alt-head{font-size:11px;font-weight:600;color:var(--ink);margin-bottom:6px}
-/* 사이드 패널은 좁습니다. 표가 넘칠 여지를 남기지 않습니다. */
-.rec-alt-wrap{max-width:100%;overflow-x:auto}
-.rec-alt-tbl{width:100%;table-layout:fixed;border-collapse:collapse;font-size:11px}
-.rec-alt-tbl th{text-align:right;font-weight:500;color:var(--ink2);
-  padding:3px 4px;border-bottom:1px solid var(--line);white-space:nowrap}
-.rec-alt-tbl th:first-child,.rec-alt-tbl td:first-child{text-align:left;width:42%}
-.rec-alt-tbl td{text-align:right;padding:5px 4px;color:var(--ink);
-  border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;
+/* 목적 고르기 — 시간대 탭(.periods/.pbtn)과 **같은 문법**을 씁니다. 이 앱에서
+   "여럿 중 하나 고르기"가 이미 그 모양이라, 여기만 새 모양을 만들면 사용자가
+   같은 뜻의 컨트롤을 두 가지로 배우게 됩니다. 다만 사이드 패널이 12칸 중
+   4칸이라 가로 4개는 안 들어가므로 2열 격자로 접습니다.
+   목적마다 다른 색을 주지 않는 이유: 바로 옆이 MI 히트맵이고 사분면 색이
+   이미 뜻을 갖고 있어, 목적별 색을 만들면 지도 범례와 경쟁합니다. 색은
+   "무엇인가"가 아니라 "지금 켜진 것"만 말합니다. */
+.rec-pick{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.rec-opt{position:relative;display:block;width:100%;text-align:left;cursor:pointer;
+  background:var(--card);border:1px solid var(--line);border-radius:9px;
+  padding:7px 8px 8px;color:var(--ink2);transition:background .12s,color .12s,border-color .12s}
+.rec-opt b{display:block;font-size:12px;font-weight:700;line-height:1.3;
+  color:var(--ink);letter-spacing:-.01em;word-break:keep-all}
+.rec-opt-num{display:block;margin-top:2px;font-size:10.5px;font-weight:600;
+  color:inherit;font-variant-numeric:tabular-nums}
+.rec-opt-mix{display:block;margin-top:1px;font-size:10px;color:var(--ink3);
   overflow-wrap:anywhere}
-.rec-alt-tbl tbody tr:last-child td{border-bottom:0}
-.rec-alt-tbl tr.is-on td{background:var(--selbg);font-weight:600}
-.rec-alt-sub{display:block;margin-top:1px;font-size:10px;font-weight:400;
-  color:var(--ink2);white-space:normal}
-.rec-tab{background:none;border:0;padding:0;font:inherit;color:var(--ink2);
-  cursor:pointer;text-align:left;border-bottom:1px dotted var(--line);
-  white-space:normal;overflow-wrap:anywhere}
-.rec-tab:hover{color:var(--ink)}
-.rec-alt-tbl tr.is-on .rec-tab{color:var(--ink);font-weight:600;
-  border-bottom:0;cursor:default}
-.rec-top{display:block;font-style:normal;font-size:10px;font-weight:500;
-  color:var(--ink2)}
+.rec-opt:hover{background:var(--brand-soft);border-color:var(--brand-line);color:var(--brand-ink)}
+.rec-opt:hover b{color:var(--brand-ink)}
+.rec-opt:hover .rec-opt-mix{color:var(--brand-ink)}
+/* 고른 칸만 공식 파랑으로 채우고, 주황은 아래 밑줄 한 줄로 '지금 여기'만
+   표시합니다 — 주황은 대비가 2.95:1 이라 글자로는 쓸 수 없습니다(.pbtn 과 동일). */
+.rec-opt.is-on,.rec-opt.is-on:hover{background:var(--brand);border-color:var(--brand);
+  color:#fff;cursor:default}
+.rec-opt.is-on b,.rec-opt.is-on:hover b{color:#fff}
+.rec-opt.is-on .rec-opt-mix,.rec-opt.is-on:hover .rec-opt-mix{color:rgba(255,255,255,.82)}
+.rec-opt.is-on::after{content:"";position:absolute;left:8px;right:8px;bottom:3px;height:2.5px;
+  border-radius:2px;background:var(--brand-2)}
 .rec-by{color:var(--ink2);font-size:11px;line-height:1.55}
 .rec-by b{color:var(--ink);font-weight:600}
 
@@ -1600,7 +1607,13 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 :root[data-theme="dark"] .simtool.on,
 :root[data-theme="dark"] .cm-b.me,
 :root[data-theme="dark"] .pbtn.on,
+:root[data-theme="dark"] .rec-opt.is-on,
+:root[data-theme="dark"] .rec-opt.is-on b,
 :root[data-theme="dark"] .help:hover{color:var(--bg)}
+/* .rec-opt 은 제목·구성 두 줄이 각각 색을 갖고 있어 부모 color 상속만으로는
+   안 덮입니다. 구성 줄은 흰색 82% 대신 어두운 글자를 같은 투명도로 얹습니다. */
+:root[data-theme="dark"] .rec-opt.is-on .rec-opt-mix{color:rgba(15,20,26,.78)}
+:root[data-theme="dark"] .rec-opt.is-on::after{background:var(--bg)}
 /* 다크에서 --brand 가 밝은 하늘색(#5AA6EA)으로 뒤집혀 흰 글씨(2.60:1)·주황 마커
    (1.14:1)가 둘 다 AA 미달이 됩니다. 위와 같은 처방(--bg 로 전환)을 마커에도 씁니다 —
    '지금 여기' 표시가 주황이어야 할 이유는 없고, 안 보이는 것보다 낫습니다. */
@@ -1617,8 +1630,12 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   :root:where(:not([data-theme="light"])) .simtool.on,
   :root:where(:not([data-theme="light"])) .cm-b.me,
   :root:where(:not([data-theme="light"])) .pbtn.on,
+  :root:where(:not([data-theme="light"])) .rec-opt.is-on,
+  :root:where(:not([data-theme="light"])) .rec-opt.is-on b,
   :root:where(:not([data-theme="light"])) .help:hover{color:var(--bg)}
   :root:where(:not([data-theme="light"])) .pbtn.on::after{background:var(--bg)}
+  :root:where(:not([data-theme="light"])) .rec-opt.is-on .rec-opt-mix{color:rgba(15,20,26,.78)}
+  :root:where(:not([data-theme="light"])) .rec-opt.is-on::after{background:var(--bg)}
   /* 위 명시 테마(:root[data-theme="dark"])와 같은 보정을 '자동' 에도 겁니다 */
   :root:where(:not([data-theme="light"])) .kkdetail .kakaomap{
     filter:saturate(.28) brightness(.55) contrast(1.12)}
@@ -1783,13 +1800,13 @@ button.rhead:hover .rkind{border-color:var(--brand)}
    전환을 갖고 있었는데, 값과 속성이 제각각이라 한 줄로 모읍니다. */
 .btn,.minib,.lbtn,.tbtn,.simtool,.pbtn,.tn-menu,.tn-drawer a,.tn-drawer .tn-item,
 .xbtn,.zctl button,.plist .del,.scen .sdel,.legendbar .lg-clear,
-.rec-scope .rs-btn,.rec-tab,.trow,.scen,.scen .sload,.rgtbl tbody tr,.rgtbl th{
+.rec-scope .rs-btn,.rec-opt,.trow,.scen,.scen .sload,.rgtbl tbody tr,.rgtbl th{
   transition:background-color .12s ease,border-color .12s ease,
              color .12s ease,box-shadow .12s ease}
 @media (prefers-reduced-motion:reduce){
   .btn,.minib,.lbtn,.tbtn,.simtool,.pbtn,.tn-menu,.tn-drawer a,.tn-drawer .tn-item,
   .xbtn,.zctl button,.plist .del,.scen .sdel,.legendbar .lg-clear,
-  .rec-scope .rs-btn,.rec-tab,.trow,.scen,.scen .sload,.rgtbl tbody tr,.rgtbl th{
+  .rec-scope .rs-btn,.rec-opt,.trow,.scen,.scen .sload,.rgtbl tbody tr,.rgtbl th{
     transition:none}
 }
 

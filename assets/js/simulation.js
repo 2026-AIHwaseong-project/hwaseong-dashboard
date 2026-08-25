@@ -650,65 +650,39 @@
     C.wireHelp(box);
   }
 
-  /* 다른 목적으로 짜면 어떻게 되는지.
-     "이 안 말고 다른 안은 없나요"에 화면에서 바로 답하기 위한 표입니다.
-     난수로 다른 답을 만드는 게 아니라, 목적을 바꾸면 답이 달라지는 것을 보여줍니다. */
+  /* 목적을 바꿔 다시 짜는 선택기.
+     "이 안 말고 다른 안은 없나요"에 화면에서 바로 답합니다. 난수로 다른 답을
+     만드는 게 아니라, 목적을 바꾸면 답이 달라지는 것을 보여줍니다.
+
+     alternatives 는 api.js 가 이미 손질해 넘겨줍니다 — 서버는 지금 고른 목적을
+     빼고 주는데(server/main.py 의 `if s == strategy: continue`), api.js 가
+     현재 추천을 selected:true 로 도로 끼우고 전략 순서대로 정렬합니다.
+     그래서 여기서는 네 칸을 그리기만 하면 됩니다.
+
+     예전에는 이걸 비교표로 그렸습니다. 숫자는 읽히는데 **고르는 물건으로는
+     안 보이는** 게 문제였습니다 — 누를 수 있는 건 칸 안의 점선 밑줄 글자
+     하나뿐이었고, 고른 칸 표시도 9% 알파 배경이라 거의 티가 안 났습니다. */
   function altTable(rec) {
     var alts = rec.alternatives;
     if (!alts || alts.length < 2) return '';
-    /* 실서버 대안에는 기대효과 수치가 없습니다(전략·건수·사업비만).
-       효과 열 없이 간이 표로 그리고, 전략 전환 탭 기능은 그대로 유지합니다. */
-    var hasEffect = alts.some(function (a) { return a.expectedResolvedTrips != null; });
-    if (!hasEffect) {
-      return '<div class="rec-alt">' +
-        '<div class="rec-alt-head">다른 목적으로 짜면' +
-          '<button class="help" data-help="strategy" type="button">?</button></div>' +
-        '<div class="rec-alt-wrap">' +
-        '<table class="rec-alt-tbl"><thead><tr>' +
-          '<th>목적</th><th>건수</th><th>사업비</th>' +
-        '</tr></thead><tbody>' +
-        alts.map(function (a) {
-          var mix = ['stop', 'drt', 'freq'].filter(function (k) { return a.mix && a.mix[k]; })
-            .map(function (k) { return TYPE_KO[k] + a.mix[k]; }).join('+') || '—';
-          return '<tr class="' + (a.selected ? 'is-on' : '') + '" data-strategy="' + a.strategy + '">' +
-            '<td><button class="rec-tab" type="button" data-strategy="' + a.strategy + '"' +
-              (a.selected ? ' aria-current="true"' : '') + '>' + esc(a.label) + '</button>' +
-              '<span class="rec-alt-sub">' + esc(mix) + '</span></td>' +
-            '<td>' + fmt(a.count) + '</td>' +
-            '<td>' + esc(won(a.totalKrw)) + '</td>' +
-            '</tr>';
-        }).join('') +
-        '</tbody></table></div>' +
-        '<div class="rec-note">' + esc((rec.strategyNote || '') + ' ' + (rec.strategyBasisNote || '')) + '</div>' +
-        '</div>';
-    }
-    var best = alts.reduce(function (a, b) {
-      return b.expectedResolvedTrips > a.expectedResolvedTrips ? b : a; });
-    var bestOld = alts.reduce(function (a, b) {
-      return b.expectedResolvedElderlyTrips > a.expectedResolvedElderlyTrips ? b : a; });
 
-    /* 사이드 패널이 좁습니다(12칸 중 4칸). 열을 늘리면 박스를 넘습니다.
-       구성·사업비는 목적 이름 아래 작은 줄로 접고, 표는 4열로 유지합니다. */
     return '<div class="rec-alt">' +
-      '<div class="rec-alt-head">다른 목적으로 짜면' +
+      '<div class="rec-alt-head">어떤 목적으로 짤까요' +
         '<button class="help" data-help="strategy" type="button">?</button></div>' +
-      '<div class="rec-alt-wrap">' +
-      '<table class="rec-alt-tbl"><thead><tr>' +
-        '<th>목적</th><th>격자</th><th>일 통행</th><th>고령</th>' +
-      '</tr></thead><tbody>' +
+      '<div class="rec-pick" role="tablist" aria-label="추천 목적 선택">' +
       alts.map(function (a) {
         var mix = ['stop', 'drt', 'freq'].filter(function (k) { return a.mix && a.mix[k]; })
           .map(function (k) { return TYPE_KO[k] + a.mix[k]; }).join('+') || '—';
-        return '<tr class="' + (a.selected ? 'is-on' : '') + '" data-strategy="' + a.strategy + '">' +
-          '<td><button class="rec-tab" type="button" data-strategy="' + a.strategy + '"' +
-            (a.selected ? ' aria-current="true"' : '') + '>' + esc(a.label) + '</button>' +
-            '<span class="rec-alt-sub">' + esc(mix) + ' · ' + esc(won(a.totalKrw)) + '</span></td>' +
-          '<td>' + fmt(a.expectedResolvedCells) + '</td>' +
-          '<td>' + fmt(a.expectedResolvedTrips) + (a === best ? '<i class="rec-top">최대</i>' : '') + '</td>' +
-          '<td>' + fmt(a.expectedResolvedElderlyTrips) + (a === bestOld ? '<i class="rec-top">최대</i>' : '') + '</td>' +
-          '</tr>';
+        return '<button class="rec-opt' + (a.selected ? ' is-on' : '') + '" type="button"' +
+          ' role="tab" aria-selected="' + (a.selected ? 'true' : 'false') + '"' +
+          (a.selected ? ' aria-current="true"' : '') +
+          ' data-strategy="' + esc(a.strategy) + '">' +
+          '<b>' + esc(a.label) + '</b>' +
+          '<span class="rec-opt-num">' + fmt(a.count) + '건 · ' + esc(won(a.totalKrw)) + '</span>' +
+          '<span class="rec-opt-mix">' + esc(mix) + '</span>' +
+          '</button>';
       }).join('') +
-      '</tbody></table></div>' +
+      '</div>' +
       '<div class="rec-note">' + esc((rec.strategyNote || '') + ' ' + (rec.strategyBasisNote || '')) + '</div>' +
       '</div>';
   }
@@ -725,7 +699,7 @@
   }
 
   function wireStrategyTabs(root) {
-    Array.prototype.forEach.call(root.querySelectorAll('.rec-tab'), function (b) {
+    Array.prototype.forEach.call(root.querySelectorAll('.rec-opt'), function (b) {
       b.addEventListener('click', function () {
         var sid = b.getAttribute('data-strategy');
         if (sid && sid !== S.recStrategy) requestRecommendation(sid);
