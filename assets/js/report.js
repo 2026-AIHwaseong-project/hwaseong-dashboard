@@ -457,7 +457,7 @@
       var s = '\\trowd\\trgaph80\\trleft0';
       for (var i = 0; i < n; i++) {
         s += '\\clbrdrt\\brdrs\\brdrw10\\clbrdrl\\brdrs\\brdrw10\\clbrdrb\\brdrs\\brdrw10\\clbrdrr\\brdrs\\brdrw10';
-        if (bold) s += '\\clcbpat15';
+        if (bold) s += '\\clcbpat3';
         s += '\\cellx' + edges[i];
       }
       for (var j = 0; j < n; j++) {
@@ -490,31 +490,63 @@
       '\n' + lines.join('\n') + '}';
   }
 
+  /** 머리 표 — [라벨][값][라벨][값] 이 한 줄. 라벨 칸만 음영을 깝니다.
+      화면의 .dmeta-tbl 과 같은 값·같은 배치라, 미리보기와 내려받은 파일이
+      같은 문서로 읽힙니다(이 둘이 갈라지면 결재 문서로 못 씁니다). */
+  function rtfMetaTable(pairs) {
+    if (!pairs || !pairs.length) return '';
+    var lw = Math.round(TWIP_USABLE * 0.16), vw = Math.round(TWIP_USABLE * 0.34), out = '';
+    for (var i = 0; i < pairs.length; i += 2) {
+      var cells = [], edges = [], acc = 0;
+      for (var k = i; k < i + 2 && k < pairs.length; k++) {
+        cells.push(pairs[k][0], pairs[k][1]);
+        acc += lw; edges.push({ x: acc, shade: true });
+        acc += vw; edges.push({ x: acc, shade: false });
+      }
+      edges[edges.length - 1].x = TWIP_USABLE;
+      out += '\\trowd\\trgaph80\\trleft0';
+      edges.forEach(function (e) {
+        out += '\\clbrdrt\\brdrs\\brdrw10\\clbrdrl\\brdrs\\brdrw10' +
+               '\\clbrdrb\\brdrs\\brdrw10\\clbrdrr\\brdrs\\brdrw10';
+        if (e.shade) out += '\\clcbpat3';
+        out += '\\cellx' + e.x;
+      });
+      cells.forEach(function (v, j) {
+        var lab = (j % 2 === 0);
+        out += '\\pard\\intbl\\fs18' + (lab ? '\\qc\\b' : '') + ' ' +
+          rtfText(v) + (lab ? '\\b0' : '') + '\\cell ';
+      });
+      out += '\\row\n';
+    }
+    return out + '\\pard\\par\n';
+  }
+
   function buildRtf(draft) {
     var b = '';
     b += '{\\rtf1\\ansi\\ansicpg949\\deff0\\uc1\n';
     b += '{\\fonttbl{\\f0\\fnil\\fcharset129 \\\'b8\\\'bc\\\'c0\\\'ba \\\'b0\\\'ed\\\'b5\\\'f1;}{\\f1\\fnil\\fcharset129 Malgun Gothic;}}\n';
-    b += '{\\colortbl;\\red0\\green0\\blue0;\\red90\\green90\\blue90;}\n';
+    b += '{\\colortbl;\\red0\\green0\\blue0;\\red90\\green90\\blue90;\\red238\\green238\\blue238;}\n';
     b += '\\paperw11906\\paperh16838\\margl1134\\margr1134\\margt1134\\margb1134\n';
     b += '\\f1\\fs20\n';
 
-    /* 제목 */
-    b += '\\pard\\qc\\b\\fs32 ' + rtfText(draft.title) + '\\b0\\par\n';
-    if (draft.subtitle) b += '\\pard\\qc\\fs20\\cf2 ' + rtfText(draft.subtitle) + '\\cf1\\par\n';
-    b += '\\pard\\qc\\fs17\\cf2 ' + rtfText((draft.org || '') + (draft.dept ? ' ' + draft.dept : '') +
-      '   |   작성일 ' + C.korDate((draft.generatedAt || '').slice(0, 10))) + '\\cf1\\par\\par\n';
+    /* 제목 — 자간을 벌리고 아래에 겹줄. 공문 첫 장의 얼개입니다.
+       부제·부서·작성일은 화면과 같은 자리(머리 표)로 옮겼습니다. */
+    b += '\\pard\\qc\\brdrb\\brdrdb\\brdrw15\\brsp60\\b\\fs36\\expndtw60 ' +
+      rtfText(draft.title) + '\\expndtw0\\b0\\par\n';
+    b += '\\pard\\par\\pard\\fs20 ' + rtfText(DOC_LEAD) + '\\par\\par\n';
+    b += rtfMetaTable(docMetaPairs(draft));
 
     /* 우선순위 막대그래프 — 미리보기와 같은 캔버스 */
     var chartItems = priorityChartItems(draft);
     if (chartItems.length) {
       var chart = drawPriorityChart(chartItems);
-      b += '\\pard\\b\\fs20 ' + rtfText('노선 조정 우선순위 Top ' + chartItems.length) + '\\b0\\par\n';
+      b += '\\pard\\b\\fs22 ' + rtfText('□ 노선 조정 우선순위 (상위 ' + chartItems.length + '개)') + '\\b0\\par\n';
       b += '\\pard\\qc ' + rtfPicture(chart) + '\\par\\par\n';
     }
 
     /* 본문 */
     (draft.sections || []).forEach(function (s) {
-      b += '\\pard\\b\\fs24 ' + rtfText(s.heading) + '\\b0\\par\n';
+      b += '\\pard\\b\\fs22 ' + rtfText('□ ' + secName(s.heading)) + '\\b0\\par\n';
       if (s.body) {
         String(s.body).split('\n').forEach(function (para) {
           if (!para.trim()) return;
@@ -522,14 +554,14 @@
         });
       }
       (s.bullets || []).forEach(function (li) {
-        b += '\\pard\\li400\\fi-200\\sa60\\fs20 \\bullet\\tab ' + rtfText(li) + '\\par\n';
+        b += '\\pard\\li600\\fi-260\\sa60\\fs20 ' + rtfText('○ ' + li) + '\\par\n';
       });
       b += '\\pard\\par\n';
     });
 
     /* 표 */
     (draft.tables || []).forEach(function (t) {
-      b += '\\pard\\b\\fs20 [' + rtfText(t.title) + ']\\b0\\par\n';
+      b += '\\pard\\b\\fs22 ' + rtfText('□ ' + t.title) + '\\b0\\par\n';
       b += rtfTable(t.columns || [], t.rows || []);
     });
 
@@ -955,6 +987,36 @@
     if (chk) chk.disabled = chk.getAttribute('data-nosim') === '1';
   }
 
+  /* ── 공문 서식 ────────────────────────────────────────────────────────────
+     이 보고서의 6장(검토 개요·현황 분석·도출된 문제점·개선 방안·기대 효과·
+     향후 조치 계획)은 서버가 강제하는 계약인데, 그게 곧 행정기관 검토보고서의
+     표준 목차입니다. 내용은 이미 공문인데 화면만 블로그 글처럼 그리고 있어서
+     서식을 내용에 맞춥니다 — 결재 라인에 그대로 올릴 수 있는 모양이어야
+     "행정 실무자용" 이라는 이 제품의 전제가 화면에서 증명됩니다.
+
+     마커는 □·○ 를 씁니다. ☐(U+2610) 같은 글자는 한글 글꼴에 없는 경우가 있는데
+     □(U+25A1)·○(U+25CB)·▶(U+25B6) 은 KS X 1001 에 들어 있어 한컴오피스·워드
+     어디서 열어도 깨지지 않습니다. RTF 로 같은 글자를 내보내는 이상 화면에서만
+     예쁜 글자를 쓸 수는 없습니다. */
+  var DOC_LEAD = '화성시 대중교통 수급 불일치 분석 결과를 정리하여 붙임과 같이 보고드림.';
+
+  /** "1. 검토 개요" → "검토 개요". 공문에서는 □ 마커가 번호를 대신합니다. */
+  function secName(h) { return String(h || '').replace(/^\s*\d+\.\s*/, ''); }
+
+  /** 머리 표에 들어갈 항목. 화면·RTF·클립보드가 **같은 값**을 쓰도록 한 곳에서
+      만듭니다. 전부 서버가 준 결정론적 값이라 AI 가 지어낼 여지가 없습니다. */
+  function docMetaPairs(draft) {
+    var how = draft.isAiGenerated === false
+      ? '규칙 기반 서식 초안 (AI 미사용)'
+      : (draft.provider || 'AI') + (draft.model ? ' · ' + draft.model : '') + ' 자동 생성';
+    return [
+      ['보고 기간', draft.subtitle || '-'],
+      ['작성일', C.korDate((draft.generatedAt || '').slice(0, 10))],
+      ['작성 부서', ((draft.org || '') + ' ' + (draft.dept || '')).trim() || '-'],
+      ['작성 방식', how]
+    ];
+  }
+
   function renderDraft(draft) {
     var m = ensureModal();
     var body = C.$('[data-body]', m);
@@ -970,35 +1032,49 @@
         '<code>ANTHROPIC_API_KEY</code>(또는 OPENAI_API_KEY · GOOGLE_API_KEY) 를 넣고 ' +
         '서버를 다시 켠 뒤 [다시 생성] 을 누르세요.</div>';
     }
-    h += '<p class="dtitle">' + esc(draft.title) + '</p>';
-    if (draft.subtitle) h += '<p class="dmeta">' + esc(draft.subtitle) + '</p>';
-    h += '<p class="dmeta">' + esc((draft.org || '') + ' ' + (draft.dept || '')) +
-      ' · 생성 ' + esc(draft.generatedAt || '') +
-      (draft.model ? ' · 모델 ' + esc(draft.model) : '') + '</p>';
+    h += '<p class="dtitle">' + esc(draft.title) + '</p><div class="drule"></div>';
+    h += '<p class="dlead">' + esc(DOC_LEAD) + '</p>';
+    /* 머리 표 — 두 칸씩 두 줄. 예전에는 이 정보가 회색 11px 한 줄로 뭉개져
+       웹 바이라인처럼 보였습니다. 표로 올리면 격식도 살지만, 무엇이 AI 가 쓴 것이고
+       무엇이 서버가 준 사실인지가 화면에서 갈라집니다. */
+    var mp = docMetaPairs(draft);
+    h += '<table class="dmeta-tbl"><tbody>';
+    for (var mi = 0; mi < mp.length; mi += 2) {
+      h += '<tr>';
+      for (var mk = mi; mk < mi + 2 && mk < mp.length; mk++) {
+        h += '<th>' + esc(mp[mk][0]) + '</th><td>' + esc(mp[mk][1]) + '</td>';
+      }
+      h += '</tr>';
+    }
+    h += '</tbody></table>';
 
     /* 본문 앞에 한눈에 보는 막대그래프 — 글을 읽기 전에 순위부터 보이게 */
     var chartItems = priorityChartItems(draft);
     if (chartItems.length) {
       var chart = drawPriorityChart(chartItems);
-      h += '<p class="dcap">노선 조정 우선순위 Top ' + chartItems.length + '</p>' +
+      h += '<h3>노선 조정 우선순위 (상위 ' + chartItems.length + '개)</h3>' +
         '<img class="dchart" src="' + chart.canvas.toDataURL('image/png') + '" ' +
         'width="' + chart.width + '" height="' + chart.height + '" alt="우선순위 막대그래프">';
     }
 
     (draft.sections || []).forEach(function (s) {
-      h += '<h3>' + esc(s.heading) + '</h3>';
+      h += '<h3>' + esc(secName(s.heading)) + '</h3>';
+      var inner = '';
       if (s.body) String(s.body).split('\n').forEach(function (p) {
-        if (p.trim()) h += '<p>' + esc(p) + '</p>';
+        if (p.trim()) inner += '<p>' + esc(p) + '</p>';
       });
       if (s.bullets && s.bullets.length) {
-        h += '<ul>' + s.bullets.map(function (li) { return '<li>' + esc(li) + '</li>'; }).join('') + '</ul>';
+        inner += '<ul>' + s.bullets.map(function (li) { return '<li>' + esc(li) + '</li>'; }).join('') + '</ul>';
       }
+      /* 첫 장(검토 개요)만 음영 상자에 넣습니다 — 공문의 '총평' 자리입니다.
+         결재자가 본문을 다 읽지 않아도 요지는 먼저 눈에 들어와야 합니다. */
+      h += (s.key === 'summary') ? '<div class="dsum">' + inner + '</div>' : inner;
     });
 
     (draft.tables || []).forEach(function (t) {
       /* AI 가 columns/rows 를 빠뜨린 표가 와도 미리보기 전체가 죽지 않게 */
       var cols = t.columns || [], trs = t.rows || [];
-      h += '<p class="dcap">[' + esc(t.title) + ']</p><div class="tblwrap" style="padding:0"><table>' +
+      h += '<h3>' + esc(t.title) + '</h3><div class="tblwrap" style="padding:0"><table>' +
         '<tr>' + cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr>' +
         trs.map(function (r) {
           return '<tr>' + (r || []).map(function (v) { return '<td>' + esc(v) + '</td>'; }).join('') + '</tr>';
@@ -1010,20 +1086,22 @@
     body.innerHTML = h;
   }
 
+  /* 클립보드 본문 — 화면과 **같은 얼개**로 냅니다. 화면은 공문인데 붙여넣으면
+     웹 글이 나오면, 결재 문서에 그대로 올린다는 이 기능의 목적이 깨집니다. */
   function draftToPlainText(draft) {
-    var out = [draft.title];
-    if (draft.subtitle) out.push(draft.subtitle);
+    var out = [draft.title, '', DOC_LEAD, ''];
+    docMetaPairs(draft).forEach(function (kv) { out.push(kv[0] + ': ' + kv[1]); });
     out.push('');
     (draft.sections || []).forEach(function (s) {
-      out.push(s.heading);
+      out.push('□ ' + secName(s.heading));
       if (s.body) out.push(s.body);
-      (s.bullets || []).forEach(function (li) { out.push('  · ' + li); });
+      (s.bullets || []).forEach(function (li) { out.push('  ○ ' + li); });
       out.push('');
     });
     (draft.tables || []).forEach(function (t) {
-      out.push('[' + t.title + ']');
-      out.push(t.columns.join('\t'));
-      t.rows.forEach(function (r) { out.push(r.join('\t')); });
+      out.push('□ ' + t.title);
+      out.push((t.columns || []).join('\t'));
+      (t.rows || []).forEach(function (r) { out.push((r || []).join('\t')); });
       out.push('');
     });
     if (draft.disclaimer) out.push('※ ' + draft.disclaimer);

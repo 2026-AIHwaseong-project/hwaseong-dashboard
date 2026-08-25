@@ -1134,15 +1134,55 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .xbtn:hover{background:var(--selbg);color:var(--ink)}
 
 .doc{font-size:13px;line-height:1.75;color:var(--ink2)}
-.doc h3{margin:18px 0 6px;font-size:13px;font-weight:700;color:var(--ink);
-  padding-bottom:4px;border-bottom:1px solid var(--line)}
+/* 마커(□·○)는 **글자가 아니라 CSS 도형**입니다. 처음엔 U+25A1·U+25CB 를
+   썼는데, 이 화면의 본문 글꼴이 Pretendard **동적 서브셋**이라 □(U+25A1)이
+   서브셋에 없어 혼자 다른 글꼴로 떨어졌습니다 — 실측 폭이 □ 8.15px 대
+   ○ 11.63px·한글 11.67px 로, 네모만 작고 베이스라인이 어긋나 깨져 보였습니다.
+   어느 글리프가 서브셋에 드는지는 우리가 정하는 값이 아니므로 글꼴에 기대지
+   않습니다. 테두리 상자로 그리면 크기·색·정렬을 우리가 쥡니다.
+   내보내기(RTF·클립보드)는 그대로 □·○ 문자를 씁니다 — 그쪽은 한컴·워드의
+   완성 글꼴이 받으므로 문제가 없고, 오히려 문자여야 편집이 됩니다. */
+.doc h3{position:relative;margin:17px 0 7px;padding-left:16px;
+  font-size:13.5px;font-weight:700;color:var(--ink);
+  padding-bottom:0;border-bottom:0}
+.doc h3::before{content:"";position:absolute;left:0;top:.42em;
+  width:8px;height:8px;border:1.5px solid var(--ink2)}
 .doc h3:first-child{margin-top:0}
 .doc p{margin:0 0 8px;white-space:pre-wrap}
-.doc ul{margin:4px 0 10px;padding-left:19px}
-.doc li{margin-bottom:3px}
-.doc .dtitle{font-size:17px;font-weight:700;color:var(--ink);text-align:center;margin:0 0 4px}
-.doc .dmeta{text-align:center;font-size:11px;color:var(--ink3);
-  margin-bottom:16px}
+.doc ul{margin:4px 0 10px;padding-left:17px;list-style:none}
+.doc li{position:relative;margin-bottom:3px;padding-left:14px}
+.doc li::before{content:"";position:absolute;left:0;top:.55em;
+  width:5px;height:5px;border:1.5px solid var(--ink3);border-radius:50%}
+/* ── 공문 서식 ──────────────────────────────────────────────────────────────
+   이 보고서의 6장은 서버가 강제하는 계약이고, 그게 곧 행정기관 검토보고서의
+   표준 목차입니다(검토 개요·현황 분석·도출된 문제점·개선 방안·기대 효과·향후
+   조치 계획). 내용은 이미 공문인데 화면만 블로그 글처럼 그리고 있었습니다.
+   결재 라인에 그대로 올릴 수 있는 모양이어야 "행정 실무자용" 이라는 전제가
+   화면에서 증명됩니다. 새 색은 만들지 않고 기존 토큰만 씁니다. */
+.doc .dtitle{font-size:19px;font-weight:700;color:var(--ink);text-align:center;
+  letter-spacing:.3em;text-indent:.3em;margin:0 0 9px;word-break:keep-all}
+/* 공문 제목 아래 겹줄. --ink 로 그어야 종이 문서의 인상이 납니다. */
+.doc .drule{border-top:3px double var(--ink);margin:0 0 13px}
+.doc .dlead{margin:0 0 13px;color:var(--ink)}
+/* 머리 표 — 라벨 칸에만 음영. table-layout:fixed 로 라벨 폭을 고정해
+   값이 길어져도 칸 비율이 흔들리지 않게 합니다. */
+.doc .dmeta-tbl{width:100%;table-layout:fixed;border-collapse:collapse;
+  margin:0 0 17px;font-size:12px}
+.doc .dmeta-tbl th{width:16%;background:var(--bg);color:var(--ink);font-weight:600;
+  text-align:center;border:1px solid var(--line);padding:7px 8px;white-space:nowrap}
+.doc .dmeta-tbl td{width:34%;color:var(--ink2);border:1px solid var(--line);
+  padding:7px 10px;overflow-wrap:anywhere}
+/* 첫 장(검토 개요) — 공문의 '총평' 자리. 결재자가 본문을 다 읽지 않아도
+   요지는 먼저 눈에 들어와야 합니다. */
+.doc .dsum{background:var(--bg);border:1px solid var(--line);border-radius:7px;
+  padding:11px 13px 4px;margin:0 0 6px}
+/* 총평 화살표도 같은 이유로 도형입니다 — ▶ 는 지금 서브셋에 들어 있지만,
+   서브셋 구성이 바뀌면 여기만 조용히 깨집니다. 셋을 같은 방식으로 둡니다. */
+.doc .dsum > p:first-child{position:relative;padding-left:15px}
+.doc .dsum > p:first-child::before{content:"";position:absolute;left:0;top:.45em;
+  width:0;height:0;border-left:6px solid var(--brand);
+  border-top:4px solid transparent;border-bottom:4px solid transparent}
+.doc .dsum ul{margin-bottom:7px}
 .doc .dnote{margin-top:16px;padding:9px 11px;border:1px dashed var(--line);border-radius:8px;
   font-size:11px;color:var(--ink3);line-height:1.65}
 /* 서버가 AI 없이 서식만 채워 보낸 초안일 때(isAiGenerated:false) 문서 맨 위에
@@ -1155,7 +1195,6 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .doc .dwarn b{display:block;margin-bottom:2px}
 .doc .dwarn code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
 .doc table{margin:2px 0 12px}
-.doc .dcap{font-size:11px;color:var(--ink3);margin:10px 0 3px;font-weight:600}
 /* 흰 배경으로 고정해 그린 캔버스라(한글·엑셀과 같은 그림) 다크모드에서도 카드를
    두르지 않고 그대로 둡니다 — 테두리만 옅게 더해 배경과 경계를 표시합니다. */
 .doc .dchart{display:block;max-width:100%;height:auto;border:1px solid var(--line);

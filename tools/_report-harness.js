@@ -46,6 +46,12 @@ const g = {
       $$: () => [],
       toast: (m, t) => g.__toasts.push([m, t]),
       nowStamp: (sec) => '2026-08-23 14:03' + (sec ? ':27' : ''),
+      /* core.js 의 korDate 와 같은 규칙 — 공문 머리 표의 '작성일' 이 이걸 씁니다.
+         스텁에 없으면 buildRtf·draftToPlainText 가 하네스에서만 죽습니다. */
+      korDate: (iso) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '2026-01-01');
+        return m ? `${m[1]}년 ${Number(m[2])}월 ${Number(m[3])}일` : String(iso || '');
+      },
     },
     icon: () => '<svg/>',
     CONFIG: { APP: {}, EXPORT_MODE: 'client' },
