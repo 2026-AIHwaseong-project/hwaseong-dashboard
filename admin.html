@@ -82,7 +82,7 @@
 
     <section class="card">
       <div class="chead"><h2>모델 상수</h2>
-        <span class="hsub">저장하면 지표 재계산(수십 초)이 자동으로 돌아 화면·시뮬에 반영됩니다</span>
+        <span class="hsub">저장하면 지표 재계산(약 20초)이 자동으로 돌아 화면·시뮬에 반영됩니다</span>
         <button type="button" class="btn sm" data-reset-group="model">여기만 기본값으로</button>
       </div>
       <div class="cbody"><div class="admrows" id="rowsModel"></div></div>
@@ -90,7 +90,7 @@
 
     <section class="card">
       <div class="chead"><h2>기준선 상수</h2>
-        <span class="hsub">수식의 자(尺) · 저장하면 재계산(수십 초)이 자동으로 돌아 새 기준선을 발행합니다 · 극단값은 need 밴드 검증이 막습니다</span>
+        <span class="hsub">수식의 자(尺) · 저장하면 재계산(약 20초)이 자동으로 돌아 새 기준선을 발행합니다 · 극단값은 need 밴드 검증이 막습니다</span>
         <button type="button" class="btn sm" data-reset-group="baseline">여기만 기본값으로</button>
       </div>
       <div class="cbody"><div class="admrows" id="rowsBaseline"></div></div>
@@ -134,7 +134,7 @@
         <div id="dataState"></div>
         <div class="admactions">
           <button type="button" class="btn" id="btnReload">화면 반영<small>메모리 재적재 · 약 5초</small></button>
-          <button type="button" class="btn" id="btnRecompute">지표 재계산<small>조인→모델→검증→직렬화 · 수 분</small></button>
+          <button type="button" class="btn" id="btnRecompute">지표 재계산<small>조인→모델→검증→직렬화 · 약 20초</small></button>
         </div>
         <pre id="jobLog" hidden></pre>
         <p class="admhint" id="jobNote" hidden>완료 후, 열려 있는 대시보드·시뮬레이션 탭은 <b>새로고침</b>해야 반영됩니다.</p>
