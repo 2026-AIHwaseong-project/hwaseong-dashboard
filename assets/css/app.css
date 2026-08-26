@@ -991,10 +991,21 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .simbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 14px 10px;padding:8px 10px;
   border:1px solid var(--line);border-radius:9px;background:var(--selbg);background:color-mix(in srgb,var(--selbg) 45%,transparent)}
 .simbar .sl{font-size:11px;color:var(--ink3);letter-spacing:.02em;margin-right:2px}
+/* min-height:44px — 배치 도구·빼기·추천 수단이 전부 이 클래스라, 실측
+   27px 높이로 손가락 탭이 어긋나기 쉬웠다(요일·시간대 탭은 이미 44px).
+   특히 [빼기]는 잘못 눌리면 배치가 사라지는 액션이라 더 문제였다. */
 .simtool{font-size:11px;padding:4px 11px;border:1px solid var(--line);border-radius:999px;color:var(--ink2);
-  background:var(--card);display:inline-flex;align-items:center;gap:5px}
+  background:var(--card);display:inline-flex;align-items:center;gap:5px;min-height:44px}
+/* [10]의 .cm[hidden] 과 같은 사고 — display:inline-flex 가 [hidden]{display:none}
+   을 출처 우선순위로 이긴다. 지금 이 클래스에 hidden 이 붙는 버튼은 없지만,
+   .minib 에서 실제로 이 사고가 터졌던 걸 보고 나서 여기도 미리 막아 둔다. */
+.simtool[hidden]{display:none}
 .simtool:hover{border-color:var(--sel)}
 .simtool.on{background:var(--sel);border-color:var(--sel);color:#fff;font-weight:600}
+/* 빼기는 되돌릴 수 없는 쪽(정확히는 [되돌리기]로 복구되지만) 조작이라, 켜졌을
+   때 놓기 도구와 같은 파랑이면 "지금 지도를 누르면 뭐가 없어진다"가 눈에 안
+   들어옵니다. 사분면·good/bad 에만 쓰던 의미색을 여기 한 곳만 빌립니다. */
+.simtool.rmtool.on{background:var(--bad);border-color:var(--bad);color:#fff}
 .simtool i{display:inline-flex;font-style:normal}
 .simbar .spacer{flex:1}
 .simbar .cnt{font-size:11px;color:var(--ink3);}
@@ -1102,7 +1113,14 @@ h1,.sub,.brief,.empty,.pcard p,.pcard li,.rec-hint,.simhint,.sidefoot{
 .ic{flex:0 0 auto;margin-top:-1px}
 .btn .ic{width:14px;height:14px}
 .btn.sm .ic{width:13px;height:13px}
-.minib{font-size:11px;padding:5px 11px;border:1px solid var(--line);border-radius:8px;color:var(--ink2);background:var(--card)}
+.minib{font-size:11px;padding:5px 11px;border:1px solid var(--line);border-radius:8px;color:var(--ink2);
+  background:var(--card);display:inline-flex;align-items:center;justify-content:center;min-height:44px}
+/* [10]의 .cm[hidden] 과 정확히 같은 사고 — 이번엔 실제로 재현됐다. 44px
+   터치 타깃을 만들려고 얹은 display:inline-flex 가 simulation.html 의
+   btnAreaDone·btnAreaClear(둘 다 hidden 으로 시작) 를 되살려서, 영역을
+   지정하지도 않았는데 [지정 완료]·[영역 해제] 가 계속 보이고 있었다
+   (모바일 스크린샷으로 실제로 확인). */
+.minib[hidden]{display:none}
 .minib:hover:not(:disabled){background:var(--selbg)}
 .minib:disabled{opacity:.45;cursor:not-allowed}
 .fld{display:flex;flex-direction:column;gap:4px}

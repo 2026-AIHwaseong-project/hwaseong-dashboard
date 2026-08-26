@@ -45,7 +45,8 @@
     recRegion: null,        // 추천 범위 읍면동 (null = 화성시 전체)
     area: null,             // 분석 영역 안 격자 ID Set (null = 화성시 전체)
     baseCells: {},          // 시간대별 기준선 격자 — 영역 KPI 를 다시 세는 데 씁니다
-    cmpPick: []             // [비교]로 고른 저장 시나리오 index — 최대 2개
+    cmpPick: [],            // [비교]로 고른 저장 시나리오 index — 최대 2개
+    removeMode: false       // [빼기] 켜짐 — 지도 클릭이 놓기 대신 빼기로 동작 (모바일엔 Shift+클릭이 없음)
   };
 
   /* =====================================================================
@@ -522,6 +523,7 @@
     S.selectedCellId = cell.id;
     S.map.select(cell.id);
     paintRecScope();   /* 선택한 격자의 동으로 추천 범위를 좁힐 수 있게 칩을 갱신 */
+    if (S.removeMode) { removeAtCell(cell.id); return; }
     if (!S.tool) {
       C.toast('먼저 상단에서 배치할 수단을 선택하세요.');
       return;
@@ -618,6 +620,29 @@
     S.placements.splice(i, 1);
     if (S.recommendation) S.recEdited = true;
     runSim();
+  }
+
+  /** [빼기] 모드에서 지도 클릭 시 호출됩니다. 그 격자가 어떤 수단인지 도구로
+      미리 안 골라도 되므로(뺄 땐 이미 있는 걸 없애는 것뿐), 배열 뒤에서부터
+      찾아 그 격자를 참조하는 가장 나중에 쌓인 배치 1건을 count -1 합니다 —
+      onCellClick 의 Shift+클릭 분기와 동일한 처리를, 도구 선택 없이도 하는 것. */
+  function removeAtCell(cellId) {
+    for (var i = S.placements.length - 1; i >= 0; i--) {
+      if (S.placements[i].cellId !== cellId) continue;
+      var p = S.placements[i];
+      var label = (S.effects[p.type] || {}).label || '배치';
+      p.count -= 1;
+      if (p.count <= 0) {
+        S.placements.splice(i, 1);
+        C.toast(label + ' 취소 — ' + esc(S.map.cellById(cellId).name));
+      } else {
+        C.toast(label + ' 1개 빼기 (남은 수량 ' + p.count + ')');
+      }
+      if (S.recommendation) S.recEdited = true;
+      runSim();
+      return;
+    }
+    C.toast('이 격자에는 뺄 배치가 없습니다.');
   }
 
   /* =====================================================================
@@ -2016,6 +2041,32 @@
     };
   }
 
+  /* 도구 선택(S.tool)과 빼기 모드(S.removeMode)는 서로 배타적입니다 — 지도
+     클릭이 동시에 두 뜻일 수 없습니다. 버튼 상태·지도 무장·힌트 문구를
+     한곳에서만 맞추도록 두 클릭 핸들러가 이 함수 하나를 공유합니다. */
+  function syncToolButtons() {
+    $$('#tools [data-tool]').forEach(function (x) {
+      var on = x.getAttribute('data-tool') === S.tool;
+      x.classList.toggle('on', on);
+      x.setAttribute('aria-pressed', String(on));
+    });
+    var rm = $('#btnRemoveMode');
+    rm.classList.toggle('on', S.removeMode);
+    rm.setAttribute('aria-pressed', String(S.removeMode));
+    var active = S.removeMode || !!S.tool;
+    S.map.setArmed(active);
+    /* 배치·빼기 모드에서는 정류장이 격자 클릭을 가로채지 않게 합니다 */
+    S.map.setStopsInteractive(!active);
+    refreshEligible();
+    var e2 = S.tool ? S.effects[S.tool] : null;
+    $('#simhint').textContent = S.removeMode
+      ? '빼기 모드 — 지도에서 배치된 격자를 누르면 가장 최근에 놓은 배치부터 1개씩 빠집니다.'
+      : e2
+      ? (e2.label + ' 모드 — 배치할 격자를 지도에서 클릭하세요. 반경 약 ' + e2.radiusKm + 'km에 파급됩니다. (단가 ' + won(e2.unitKrw) + ')' +
+         (S.tool !== 'drt' ? ' 적용 가능한 격자만 또렷하게 표시됩니다.' : ''))
+      : '수단을 고른 뒤 지도를 클릭하면 배치됩니다 — [빼기]를 켜면 지도에서 바로 뺄 수 있습니다. KPI는 기준선 대비 즉시 재계산됩니다.';
+  }
+
   function wireControls() {
     wireChatActions();
     $('#tools').addEventListener('click', function (e) {
@@ -2023,20 +2074,14 @@
       if (!b) return;
       var t = b.getAttribute('data-tool');
       S.tool = (S.tool === t) ? null : t;
-      $$('#tools [data-tool]').forEach(function (x) {
-        var on = x.getAttribute('data-tool') === S.tool;
-        x.classList.toggle('on', on);
-        x.setAttribute('aria-pressed', String(on));
-      });
-      S.map.setArmed(!!S.tool);
-      /* 배치 모드에서는 정류장이 격자 클릭을 가로채지 않게 합니다 */
-      S.map.setStopsInteractive(!S.tool);
-      refreshEligible();
-      var e2 = S.tool ? S.effects[S.tool] : null;
-      $('#simhint').textContent = e2
-        ? (e2.label + ' 모드 — 배치할 격자를 지도에서 클릭하세요. 반경 약 ' + e2.radiusKm + 'km에 파급됩니다. (단가 ' + won(e2.unitKrw) + ')' +
-           (S.tool !== 'drt' ? ' 적용 가능한 격자만 또렷하게 표시됩니다.' : ''))
-        : '수단을 고른 뒤 지도를 클릭하면 배치됩니다 — 클릭마다 1개씩 쌓이고 Shift+클릭으로 뺍니다. KPI는 기준선 대비 즉시 재계산됩니다.';
+      S.removeMode = false;
+      syncToolButtons();
+    });
+
+    $('#btnRemoveMode').addEventListener('click', function () {
+      S.removeMode = !S.removeMode;
+      if (S.removeMode) S.tool = null;
+      syncToolButtons();
     });
 
     $('#tgRoute').addEventListener('click', function (e) {

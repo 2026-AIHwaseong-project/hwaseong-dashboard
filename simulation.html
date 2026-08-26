@@ -100,6 +100,16 @@
       <div class="simbar">
         <span class="sl">배치 수단</span>
         <span id="tools" style="display:flex;gap:6px;flex-wrap:wrap"></span>
+        <!-- Shift+클릭 빼기는 손가락으로는 못 합니다(수정키 자체가 없음). 배치
+             목록의 × 로도 뺄 수 있지만, 지도가 이 화면의 주 조작면인데 '놓기'만
+             되고 '빼기'가 안 되는 건 터치에서 어색합니다 — 도구처럼 켜고 끄는
+             빼기 모드를 같은 줄에 둡니다. -->
+        <button class="simtool rmtool" id="btnRemoveMode" type="button" aria-pressed="false"
+                title="켜면 지도에서 배치된 격자를 눌러 뺍니다 — 손가락으로도 됩니다">
+          <i class="tico" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
+              stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="8" cy="8" r="6.2"></circle><path d="M5.2 8h5.6"></path>
+          </svg></i>빼기</button>
         <span class="spacer"></span>
         <button class="minib" id="btnArea" type="button" aria-pressed="false"
                 title="지도에서 끌거나 격자를 눌러 분석 영역을 고릅니다">영역 지정</button>
