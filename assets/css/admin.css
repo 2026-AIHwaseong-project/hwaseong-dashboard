@@ -144,6 +144,9 @@ body { padding-bottom: 72px; }
 .admseg{display:flex;gap:2px;border:1px solid var(--line);border-radius:11px;
   padding:3px;background:var(--card)}
 .admseg .pbtn{padding:5px 13px 6px}
+/* 시간대 탭의 주황 밑줄(.pbtn.on::after)은 '지금 보는 데이터' 표식이다 — 저장
+   위치는 데이터 축이 아니라 설정이라 같은 표식을 달면 뜻이 섞인다. 떼어낸다. */
+.admseg .pbtn.on::after{display:none}
 
 /* 사유칸 — 한 줄 입력이지만 위아래를 넉넉히: 저장 바에서 가장 자주 쓰는 칸인데
    .btn.sm 그대로면 납작해서 클릭 표적도 글자도 좁다 */

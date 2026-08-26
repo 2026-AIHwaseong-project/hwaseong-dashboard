@@ -31,7 +31,15 @@
 
   /* ------------------------------------------------------------ 인증 */
   function getToken() {
-    try { return sessionStorage.getItem('hw.adminToken') || ''; } catch (e) { return ''; }
+    /* localStorage 영속 — 매번 물어보지 않기로 한 결정(2026-08-26). 예전
+       sessionStorage 값은 마이그레이션 겸 폴백으로 읽는다. */
+    try {
+      return localStorage.getItem('hw.adminToken')
+        || sessionStorage.getItem('hw.adminToken') || '';
+    } catch (e) { return ''; }
+  }
+  function storeToken(t) {
+    try { localStorage.setItem('hw.adminToken', t.replace(/\s/g, '')); } catch (e) { /* 무시 */ }
   }
   function wireAuth() {
     CONFIG.AUTH.enabled = true;
@@ -93,17 +101,19 @@
       renderGridOverrides(rs[2]);
       renderDataState();
       updateSaveBar();
-      /* 저장 위치 복원 — 세션에 'db' 로 남아 있어도 쓰기 권한이 확인될 때만
-         켠다(토큰이 사라졌으면 조용히 로컬로 내려간다). */
+      /* 저장 위치 복원 — 'db' 로 남아 있어도 쓰기 권한이 확인될 때만 켠다
+         (토큰이 사라졌으면 조용히 로컬로 내려간다). */
       var want = 'local';
       try { want = sessionStorage.getItem('hw.adminSaveMode') || 'local'; } catch (e) { /* 무시 */ }
       S.dbMode = want === 'db' && rs[2].canWrite !== false;
       syncSaveModeUi();
-      var n = applyDraftToInputs();
-      if (n && !S.draftNoticeShown) {
-        S.draftNoticeShown = true;
-        C.toast('로컬 초안 <b>' + n + '건</b>을 불러왔습니다(이 브라우저 전용 — 서버 미반영). '
-          + '반영하려면 [DB에 저장]을 켜고 [적용]하세요.', '', 8000);
+      renderModeValues();
+      if (!S.dbMode && !S.draftNoticeShown) {
+        var dn = Object.keys(((readDraft() || {}).changes) || {}).length;
+        if (dn) {
+          S.draftNoticeShown = true;
+          C.toast('로컬 초안 값 <b>' + dn + '건</b>을 표시하고 있습니다 — 서버 값과 별개입니다.', '', 6000);
+        }
       }
     })['catch'](function (e) { C.toast(esc(api.humanize(e)), 'err'); });
   }
@@ -380,18 +390,18 @@
 
   /* --------------------------------------------------- 변경 추적·저장 */
   function updateSaveBar() {
-    var keys = [], k;
-    for (k in S.dirty) keys.push(k);
-    /* 로컬 모드에서는 초안이 화면과 다른 것도 '적용할 일'이다 — 값을 서버 값으로
-       되돌리면 dirty 는 비지만 옛 초안이 남아 있어, [적용]으로 비워야 다음 방문에
-       도로 살아나지 않는다. */
-    var stale = keys.length === 0 && draftDiffers();
-    var pending = keys.length > 0 || stale;
+    /* 기준이 모드마다 다르다 — DB 모드는 서버 값 대비, 로컬 모드는 초안 대비.
+       로컬에서 초안 값이 입력에 떠 있는 것은 '적용 완료' 상태지 대기가 아니다. */
+    var n;
+    if (S.dbMode) {
+      n = Object.keys(S.dirty).length;
+    } else {
+      n = draftDiffKeys().length;
+    }
     var bar = $('#saveBar');
-    bar.hidden = !pending;
-    $('#saveCount').textContent = stale ? '로컬 초안 정리 대기'
-      : '적용 대기 ' + keys.length + '건';
-    $('#btnApply').disabled = !pending;
+    bar.hidden = n === 0;
+    $('#saveCount').textContent = '적용 대기 ' + n + '건' + (S.dbMode ? '' : ' · 로컬 초안 기준');
+    $('#btnApply').disabled = n === 0;
   }
 
   function onInput(input) {
@@ -418,22 +428,31 @@
   }
 
   function openConfirm() {
-    /* 로컬 모드에서 입력이 전부 서버 값인데 옛 초안만 남은 경우 — 보여줄 변경
-       표가 없으므로 모달 없이 초안만 비운다. */
-    if (!S.dbMode && !Object.keys(S.dirty).length) {
-      clearDraft();
-      updateSaveBar();
-      C.toast('로컬 초안을 비웠습니다 — 입력이 전부 서버 값과 같습니다.');
-      return;
-    }
     var html = '<tr><th>항목</th><th>현재</th><th></th><th>변경 후</th></tr>';
     var k;
-    for (k in S.dirty) {
-      var p = S.byKey[k];
-      var nv = S.dirty[k] === null ? p.default : S.dirty[k];
-      html += '<tr><td>' + esc(p.label) + '</td><td>' + esc(fmtVal(p, p.effective)) +
-        '</td><td class="arrow">→</td><td>' + esc(fmtVal(p, nv)) +
-        (S.dirty[k] === null ? ' (기본값 복귀)' : '') + '</td></tr>';
+    if (!S.dbMode) {
+      /* 로컬 모드의 '현재'는 초안 값이다 — 서버 값을 현재로 보여주면 초안을
+         정리하는 적용(변경 후 = 서버 값)이 빈 표가 된다. */
+      var dc = (readDraft() || {}).changes || {};
+      var diff = draftDiffKeys();
+      for (var i = 0; i < diff.length; i++) {
+        k = diff[i];
+        var pl = S.byKey[k];
+        if (!pl) continue;
+        var cur = (k in dc) ? (dc[k] === null ? pl.default : dc[k]) : pl.effective;
+        var nxt = (k in S.dirty) ? (S.dirty[k] === null ? pl.default : S.dirty[k]) : pl.effective;
+        html += '<tr><td>' + esc(pl.label) + '</td><td>' + esc(fmtVal(pl, cur)) +
+          '</td><td class="arrow">→</td><td>' + esc(fmtVal(pl, nxt)) +
+          ((k in S.dirty) ? '' : ' (초안 정리)') + '</td></tr>';
+      }
+    } else {
+      for (k in S.dirty) {
+        var p = S.byKey[k];
+        var nv = S.dirty[k] === null ? p.default : S.dirty[k];
+        html += '<tr><td>' + esc(p.label) + '</td><td>' + esc(fmtVal(p, p.effective)) +
+          '</td><td class="arrow">→</td><td>' + esc(fmtVal(p, nv)) +
+          (S.dirty[k] === null ? ' (기본값 복귀)' : '') + '</td></tr>';
+      }
     }
     $('#confirmTable').innerHTML = html;
     /* 사유 입력칸은 하단 저장 바(적용 대기 옆)에 있습니다 — 값을 고치는 그
@@ -467,7 +486,7 @@
     if (!Object.keys(d.changes).length) {
       clearDraft();
       updateSaveBar();
-      C.toast('로컬 초안을 비웠습니다 — 입력이 전부 서버 값과 같습니다.');
+      C.toast('로컬 초안을 비웠습니다 — 입력이 전부 서버 값으로 돌아갔습니다.');
       return;
     }
     try { localStorage.setItem(LS_DRAFT, JSON.stringify(d)); }
@@ -477,16 +496,28 @@
       + '않습니다. 실제 반영은 상단 [DB에 저장]을 켜고 다시 [적용]하세요.', '', 9000);
   }
 
-  /** 로컬 초안이 지금 화면의 변경사항과 다른가 — 다르면 [적용]으로 초안을
-      갱신(또는 비우기)할 일이 남아 있는 것이다. */
-  function draftDiffers() {
-    if (S.dbMode) return false;
+  /** 로컬 모드의 '적용할 일' — 화면(S.dirty)과 초안이 다른 키 수.
+      로컬/DB 는 별개 컨텍스트라, 로컬의 기준선은 서버가 아니라 **초안**이다. */
+  function draftDiffKeys() {
     var d = readDraft();
     var dc = (d && d.changes) || {};
-    var a = Object.keys(dc), b = Object.keys(S.dirty);
-    if (a.length !== b.length) return true;
-    for (var i = 0; i < b.length; i++) if (dc[b[i]] !== S.dirty[b[i]]) return true;
-    return false;
+    var all = {}, k, out = [];
+    for (k in dc) all[k] = 1;
+    for (k in S.dirty) all[k] = 1;
+    for (k in all) {
+      if ((k in dc) !== (k in S.dirty) || dc[k] !== S.dirty[k]) out.push(k);
+    }
+    return out;
+  }
+
+  /** 현재 모드의 저장소 값을 화면에 덮어쓴다 — 전환·부팅 공용.
+      DB: 입력 = 서버 값(적용 완료 상태). 로컬: 서버 값 위에 초안을 덮는다
+      (초안이 곧 로컬의 '적용 완료' 상태라 저장 바는 뜨지 않는다). */
+  function renderModeValues() {
+    S.dirty = {};
+    renderParams();
+    if (!S.dbMode) applyDraftToInputs();
+    updateSaveBar();
   }
 
   /** 로컬 초안을 입력 칸에 되살린다(새로고침·재방문에도 초안 유지). 반환 = 건수. */
@@ -526,7 +557,7 @@
       if (ok) return true;
       var t = global.prompt('DB(서버) 저장에는 관리자 토큰이 필요합니다.\n서버 .env 의 ADMIN_TOKEN 값을 입력하세요:');
       if (!t) return false;
-      try { sessionStorage.setItem('hw.adminToken', t.replace(/\s/g, '')); } catch (e) { /* 무시 */ }
+      storeToken(t);
       return verify().then(function (ok2) {
         if (!ok2) { C.toast('토큰이 올바르지 않습니다.', 'err', 5000); return false; }
         C.toast('관리자 인증 확인 — 이제 [적용]이 서버(DB)에 저장됩니다.');
@@ -542,7 +573,8 @@
     $('#btnApply').disabled = true;
     api.call('admin.save', null, body).then(function (res) {
       $('#saveReason').value = '';
-      clearDraft();     /* 서버에 들어갔으니 로컬 초안은 소임을 다했다 */
+      /* 로컬 초안은 지우지 않는다 — 로컬/DB 는 별개 컨텍스트(전환 시 각자 값을
+         덮어쓴다)라, DB 저장이 로컬 작업본을 지우면 오히려 놀란다. */
       if (res.requiresRefresh && res.requiresRefresh.length) {
         /* 재계산이 필요한 값(모델·기준선 상수)은 저장 즉시 자동으로 재계산을
            건다 — "저장했는데 화면이 안 바뀐다"가 이 화면에서 가장 흔한 혼란이었고,
@@ -831,7 +863,7 @@
   function wire() {
     $('#loginForm').addEventListener('submit', function (ev) {
       ev.preventDefault();
-      try { sessionStorage.setItem('hw.adminToken', $('#tokenInput').value.replace(/\s/g, '')); } catch (e) {}
+      storeToken($('#tokenInput').value);
       $('#loginErr').hidden = true;
       tryEnter();
     });
@@ -850,11 +882,12 @@
       if (input) { input.value = p.default; onInput(input); }
     });
     $('#btnRevert').addEventListener('click', function () {
-      S.dirty = {};
-      clearDraft();     /* 안 비우면 다음 방문에 초안이 입력을 도로 채운다 */
-      renderParams();
-      updateSaveBar();
-      C.toast('입력을 서버 저장값으로 되돌렸습니다 (로컬 초안도 비웠습니다)');
+      /* '현재 저장소의 값'으로 복원 — 로컬 모드면 초안, DB 모드면 서버 값.
+         초안 자체를 지우는 버튼이 아니다(초안 정리는 입력을 서버 값으로 맞춘 뒤
+         [적용]이 맡는다 — 확인 표에 '초안 정리'로 나온다). */
+      renderModeValues();
+      C.toast(S.dbMode ? '입력을 서버 저장값으로 되돌렸습니다'
+                       : '입력을 로컬 초안 값으로 되돌렸습니다');
     });
     /* 조별 [여기만 기본값으로] · 전체 [모두 기본값으로] */
     document.addEventListener('click', function (ev) {
@@ -874,22 +907,32 @@
       if (!b) return;
       var wantDb = b.getAttribute('data-savemode') === 'db';
       if (wantDb === S.dbMode) return;
+      /* 전환은 곧 컨텍스트 교체다 — 편집 중이던 값을 끌고 가면 로컬과 DB 가
+         꼬인다. 각 저장소의 값을 새로 불러와 화면을 덮어쓰고 '적용 완료'
+         상태에서 시작한다. */
       if (!wantDb) {
         S.dbMode = false;
         try { sessionStorage.setItem('hw.adminSaveMode', 'local'); } catch (e) { /* 무시 */ }
         syncSaveModeUi();
-        C.toast('로컬 초안 모드 — [적용]이 이 브라우저에만 저장됩니다.');
+        renderModeValues();
+        C.toast('로컬 초안 값으로 전환 — [적용]이 이 브라우저에만 저장됩니다.');
         return;
       }
-      /* 인증이 확인될 때까지 스위치를 넘기지 않는다 */
+      /* 인증이 확인될 때까지 스위치를 넘기지 않는다 (토큰은 localStorage 에
+         남아 있어 다음부터는 묻지 않는다) */
       ensureWriteToken().then(function (ok) {
         if (!ok) { S.dbMode = false; syncSaveModeUi(); return; }
         S.dbMode = true;
         try { sessionStorage.setItem('hw.adminSaveMode', 'db'); } catch (e) { /* 무시 */ }
         syncSaveModeUi();
-        var d = readDraft();
-        var cnt = d && d.changes ? Object.keys(d.changes).length : 0;
-        if (cnt) C.toast('로컬 초안 ' + cnt + '건이 입력에 남아 있습니다 — [적용]하면 서버에 저장됩니다.');
+        /* 서버 값을 새로 받아 덮어쓴다 — 그 사이 다른 관리자가 바꿨을 수 있다 */
+        api.call('admin.params').then(function (res) {
+          S.params = res.params || [];
+          S.byKey = {};
+          for (var i = 0; i < S.params.length; i++) S.byKey[S.params[i].key] = S.params[i];
+          renderModeValues();
+          C.toast('DB(서버) 값으로 전환 — [적용]이 서버에 저장되고 이력에 남습니다.');
+        })['catch'](function (e) { C.toast(esc(api.humanize(e)), 'err'); });
       });
     });
     $('#btnApply').addEventListener('click', openConfirm);
