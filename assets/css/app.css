@@ -1611,6 +1611,16 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 .rec-opt.is-on .rec-opt-mix,.rec-opt.is-on:hover .rec-opt-mix{color:rgba(255,255,255,.82)}
 .rec-opt.is-on::after{content:"";position:absolute;left:8px;right:8px;bottom:3px;height:2.5px;
   border-radius:2px;background:var(--brand-2)}
+
+/* 주말 영향 카드 — weekendImpact 는 서버(_greedy)가 배치를 고를 때 이미 반영한
+   값을 뒤늦게 보여주는 것뿐이라(부가 계산이 아님), .rec-alt 와 같은 헤더
+   문법을 그대로 쓴다. 평일·주말 두 값을 한 줄에 나란히 두어 "같은 배치가
+   요일마다 다르다"를 한눈에 대조하게 한다. */
+.rec-we-row{display:flex;justify-content:space-between;gap:8px;
+  font-size:11.5px;color:var(--ink2);padding:3px 0}
+.rec-we-row + .rec-we-row{border-top:1px solid var(--line)}
+.rec-we-lb{color:var(--ink3);flex:0 0 auto}
+.rec-we-vl b{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
 .rec-by{color:var(--ink2);font-size:11px;line-height:1.55}
 .rec-by b{color:var(--ink);font-weight:600}
 

@@ -27,6 +27,7 @@
   var S = {
     meta: null,
     period: 'am',
+    daytype: 'wd',
     tool: null,
     placements: [],       // [{type, cellId, count}]
     budget: 0,
@@ -127,6 +128,7 @@
     HW.report.setContextProvider(function () {
       return {
         period: S.period,
+        daytype: S.daytype,
         meta: S.meta,
         kpi: currentPeriodBlock() ? currentPeriodBlock().kpi : null,
         priorities: null,
@@ -155,6 +157,7 @@
       S.budget = (meta.cost && meta.cost.defaultBudget) || 0;
       (meta.effects || []).forEach(function (e) { S.effects[e.type] = e; });
       renderPeriodTabs(meta.periods);
+      renderDaytypeToggle();
       renderToolbar(meta.effects || []);
       renderBudgetInput();
       renderFooter(meta);
@@ -307,6 +310,34 @@
         x.setAttribute('aria-selected', String(on));
       });
       paintAll();
+    });
+  }
+
+  /* 요일축 — /simulations 가 daytype 을 받아 평일/주말 기준선 중 하나로
+     전부(배치 효과·KPI·지도) 다시 계산한다(server/main.py SimRequest.daytype).
+     그래서 배치가 있어도 자유롭게 전환할 수 있다 — 대시보드와 같은 뜻의
+     컨트롤이라 같은 모양(.pbtn)을 그대로 쓴다. */
+  var DAYTYPE_LABEL = { wd: '평일', we: '주말' };
+
+  function renderDaytypeToggle() {
+    var host = $('#daytype');
+    if (!host) return;
+    host.innerHTML = ['wd', 'we'].map(function (dt) {
+      return '<button class="pbtn' + (dt === S.daytype ? ' on' : '') + '" data-daytype="' + dt +
+        '" role="tab" aria-selected="' + (dt === S.daytype) + '"><b>' + DAYTYPE_LABEL[dt] + '</b></button>';
+    }).join('');
+    host.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-daytype]');
+      if (!b) return;
+      var dt = b.getAttribute('data-daytype');
+      if (dt === S.daytype) return;
+      S.daytype = dt;
+      $$('#daytype [data-daytype]').forEach(function (x) {
+        var on = x.getAttribute('data-daytype') === S.daytype;
+        x.classList.toggle('on', on);
+        x.setAttribute('aria-selected', String(on));
+      });
+      runSim();
     });
   }
 
@@ -681,6 +712,7 @@
           '<button class="help" data-help="costBasis" type="button">?</button></div>'
         : '') +
       altTable(rec) +
+      weekendImpactCard(rec) +
       producedByNote(rec) +
       '</div>';
 
@@ -725,6 +757,33 @@
       '</div>';
   }
 
+  /* 주말 영향 — 서버(_greedy)는 이미 평일+주말을 합산해 배치를 고른다
+     (server/main.py "요일축" 주석 참고). 그런데 그 결과는 지금까지 화면에
+     한 글자도 안 보이고 AI 보고서 프롬프트에만 조용히 실려 갔다 — 담당자가
+     "이거 주말엔 어때?" 를 물어도 화면에서 답할 길이 없었다.
+     시뮬레이션 자체를 평일/주말로 나누는 대신(그러려면 서버 엔진을 요일축으로
+     확장해야 한다) 이미 계산돼 있는 이 결과를 카드로 꺼내는 쪽을 택했다 —
+     "같은 배치 하나가 두 요일에 어떤 영향을 주는지" 를 보여주는 게 목적이라,
+     쪼개서 두 개의 배치안을 만드는 것과는 다른 질문에 대한 답이다. */
+  function weekendImpactCard(rec) {
+    var wi = rec.weekendImpact;
+    if (!wi) return '';
+    var cellsWe = Math.max(0, -(wi.needCellsDelta || 0));
+    var tripsWe = Math.max(0, -(wi.potentialTripsPerDayDelta || 0));
+    var su = rec.summary || {};
+    return '<div class="rec-alt rec-we">' +
+      '<div class="rec-alt-head">주말도 함께 보면' +
+        '<button class="help" data-help="weekendImpact" type="button">?</button></div>' +
+      '<div class="rec-we-row"><span class="rec-we-lb">사각지대 해소</span>' +
+        '<span class="rec-we-vl">평일 <b>' + fmt(su.expectedResolvedCells || 0) + '</b>칸' +
+        ' · 주말 <b>' + fmt(cellsWe) + '</b>칸</span></div>' +
+      '<div class="rec-we-row"><span class="rec-we-lb">해소 통행</span>' +
+        '<span class="rec-we-vl">평일 <b>' + fmt(su.expectedResolvedTrips || 0) + '</b>통행/일' +
+        ' · 주말 <b>' + fmt(tripsWe) + '</b>통행/일</span></div>' +
+      '<div class="rec-note">' + esc(wi.note || '') + '</div>' +
+      '</div>';
+  }
+
   /* 무엇을 알고리즘이 하고 무엇을 AI 가 하는지 화면에 남깁니다.
      배치를 AI 가 고른다고 오해하면 검증 단계에서 그대로 지적당합니다. */
   function producedByNote(rec) {
@@ -766,6 +825,7 @@
     return api.runSimulation({
       name: S.name,
       period: S.period,
+      daytype: S.daytype,
       budgetKrw: S.budget,
       placements: S.placements.map(function (p) {
         return { type: p.type, cellId: p.cellId, count: p.count };
