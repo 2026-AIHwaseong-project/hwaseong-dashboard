@@ -11,7 +11,7 @@
   'use strict';
   var HW = global.HW;
   var C = HW.core, CONFIG = HW.CONFIG, api = HW.api;
-  var $ = C.$, esc = C.esc;
+  var $ = C.$, $$ = C.$$, esc = C.esc;
 
   var S = { params: [], byKey: {}, dirty: {}, status: null, polling: null, meta: null,
             /* 확인창이 무엇을 확정하려는지 — 저장 버튼과 업로드 검증 버튼이
@@ -474,10 +474,11 @@
   }
 
   function syncSaveModeUi() {
-    var box = $('#saveToDb');
-    if (box) box.checked = S.dbMode;
-    var hint = $('#saveModeHint');
-    if (hint) hint.textContent = S.dbMode ? '서버에 실제 반영' : '지금은 로컬 초안';
+    $$('#saveMode [data-savemode]').forEach(function (b) {
+      var on = (b.getAttribute('data-savemode') === 'db') === S.dbMode;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-selected', String(on));
+    });
   }
 
   /** DB 저장을 켜기 전 쓰기 권한을 확인한다. 토큰이 없으면 물어보고, 서버가
@@ -835,15 +836,19 @@
       if (S.uploading) { e.preventDefault(); e.returnValue = ''; return ''; }
       for (var k in S.dirty) { e.preventDefault(); e.returnValue = ''; return ''; }
     });
-    $('#saveToDb').addEventListener('change', function (ev) {
-      var box = ev.target;
-      if (!box.checked) {
+    $('#saveMode').addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-savemode]');
+      if (!b) return;
+      var wantDb = b.getAttribute('data-savemode') === 'db';
+      if (wantDb === S.dbMode) return;
+      if (!wantDb) {
         S.dbMode = false;
         try { sessionStorage.setItem('hw.adminSaveMode', 'local'); } catch (e) { /* 무시 */ }
         syncSaveModeUi();
+        C.toast('로컬 초안 모드 — [적용]이 이 브라우저에만 저장됩니다.');
         return;
       }
-      box.checked = false;             /* 인증이 확인될 때까지 켜지 않는다 */
+      /* 인증이 확인될 때까지 스위치를 넘기지 않는다 */
       ensureWriteToken().then(function (ok) {
         if (!ok) { S.dbMode = false; syncSaveModeUi(); return; }
         S.dbMode = true;

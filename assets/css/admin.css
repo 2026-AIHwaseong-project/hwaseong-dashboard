@@ -139,8 +139,12 @@ body { padding-bottom: 72px; }
    안 나는 상태가 가장 나쁘므로 클릭 자체를 막습니다. */
 .admupload .btn.disabled { opacity: .5; pointer-events: none; }
 
-/* 저장 위치 토글 — 상단 액션 줄. 체크 해제(기본)=로컬 초안, 체크=서버(DB) 저장 */
-.admmode{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);
-  cursor:pointer;user-select:none;padding:0 4px}
-.admmode input{accent-color:var(--brand);width:14px;height:14px;cursor:pointer}
-.admmode small{font-size:10.5px;color:var(--ink3)}
+/* 저장 위치 스위치 — 시간대 탭(.periods)과 같은 세그먼트 모양. 눌린 쪽이 현재
+   저장 위치다: 로컬(기본, 이 브라우저 초안) / DB(서버 실제 반영 — 토큰 필요) */
+.admseg{display:flex;gap:2px;border:1px solid var(--line);border-radius:11px;
+  padding:3px;background:var(--card)}
+.admseg .pbtn{padding:5px 13px 6px}
+
+/* 사유칸 — 한 줄 입력이지만 위아래를 넉넉히: 저장 바에서 가장 자주 쓰는 칸인데
+   .btn.sm 그대로면 납작해서 클릭 표적도 글자도 좁다 */
+#saveReason, #govReason{padding-top:10px;padding-bottom:10px;font-size:13px}
