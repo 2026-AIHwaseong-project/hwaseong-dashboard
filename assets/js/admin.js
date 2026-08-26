@@ -491,6 +491,10 @@
     }
     try { localStorage.setItem(LS_DRAFT, JSON.stringify(d)); }
     catch (e) { C.toast('초안을 저장하지 못했습니다(브라우저 저장 공간).', 'err'); return; }
+    /* 저장했으니 미적용 변경이 아니다 — 안 비우면 이탈 경고(beforeunload)가
+       S.dirty 를 보고 "저장 안 된 변경이 있다"고 뜬다. 저장 바는 이미
+       draftDiffKeys() 기준이라 0건인데 경고만 뜨는 불일치였다. */
+    S.dirty = {};
     updateSaveBar();
     C.toast('이 브라우저에 <b>초안으로만</b> 저장했습니다 — 서버·화면 계산에는 반영되지 '
       + '않습니다. 실제 반영은 상단 [DB에 저장]을 켜고 다시 [적용]하세요.', '', 9000);

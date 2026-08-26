@@ -1340,7 +1340,9 @@
     var doc = { format: SCEN_FILE_FORMAT, version: 1, exportedAt: C.nowStamp(),
                 scenarios: list };
     C.downloadBlob(new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' }),
-      '화성-시나리오-' + new Date().toISOString().slice(0, 10) + '.json');
+      /* toISOString 은 UTC — KST 오전 9시 이전에 내보내면 파일명만 전날이 됩니다.
+         화면의 저장시각(C.nowStamp)과 같은 로컬 기준 헬퍼를 씁니다. */
+      '화성-시나리오-' + C.todayISO() + '.json');
     C.toast('시나리오 <b>' + list.length + '건</b>을 파일로 내보냈습니다.');
   }
 
@@ -1495,6 +1497,10 @@
     return api.runSimulation({
       name: s.name,
       period: s.period || S.period,
+      /* 요일축을 빼먹으면 서버가 평일(SimRequest.daytype 기본 'wd')로 계산해,
+         주말 저장본이 카드 불러오기(46개)와 비교 모달(30개)에서 다른 수를
+         말합니다 — 저장·불러오기·공유는 daytype 을 다루는데 비교만 빠져 있었습니다. */
+      daytype: s.daytype || 'wd',
       budgetKrw: s.budgetKrw,
       placements: (s.placements || []).map(function (p) {
         return { type: p.type, cellId: p.cellId, count: p.count };
@@ -1577,8 +1583,10 @@
       var sa = sanePlacements(A.placements), sb = sanePlacements(B.placements);
       /* 수선본으로 계산하고 표시도 수선본 기준으로 — 표의 배치 구성과 서버
          계산이 서로 다른 배치를 말하면 안 됩니다. */
-      var A2 = { name: A.name, period: A.period, budgetKrw: A.budgetKrw, placements: sa.placements };
-      var B2 = { name: B.name, period: B.period, budgetKrw: B.budgetKrw, placements: sb.placements };
+      var A2 = { name: A.name, period: A.period, daytype: A.daytype,
+                 budgetKrw: A.budgetKrw, placements: sa.placements };
+      var B2 = { name: B.name, period: B.period, daytype: B.daytype,
+                 budgetKrw: B.budgetKrw, placements: sb.placements };
       return Promise.all([simOf(A2), simOf(B2)]).then(function (r) {
         /* 기다리다 닫았으면 조용히 버립니다 — 닫힌 모달을 다시 채우지 않습니다 */
         if (!cmpModal.classList.contains('open')) return;
