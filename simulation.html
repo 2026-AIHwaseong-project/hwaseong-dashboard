@@ -138,6 +138,12 @@
           <b>저장된 시나리오</b>
           <span class="hsub">클릭하면 불러옵니다 · [비교]를 두 개 고르면 나란히 봅니다</span>
           <span class="spacer" style="flex:1"></span>
+          <!-- 파일 경로 — 공유 링크(서버)와 별개로 PC 이동·백업·오프라인 전달용 -->
+          <button class="minib" id="btnScenImport" type="button"
+                  title="다른 PC에서 내보낸 시나리오 파일(.json)을 이 브라우저에 추가합니다">가져오기</button>
+          <button class="minib" id="btnScenExport" type="button"
+                  title="저장된 시나리오 전부를 파일로 내려받습니다">내보내기</button>
+          <input type="file" id="scenFile" accept=".json,application/json" hidden>
           <button class="minib primary" id="btnCompare" type="button" hidden>비교하기</button>
         </div>
         <div class="scen-floor-list" id="scenList"></div>

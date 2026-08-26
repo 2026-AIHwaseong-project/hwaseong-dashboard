@@ -341,6 +341,17 @@
     });
   }
 
+  /** 토글 버튼을 S.daytype 에 맞춥니다 — 시나리오 불러오기·공유 링크처럼
+      코드가 요일을 바꾸는 경로용. renderDaytypeToggle() 을 다시 부르면
+      클릭 리스너가 중복으로 쌓이므로 표시만 따로 맞춥니다. */
+  function syncDaytypeTabs() {
+    $$('#daytype [data-daytype]').forEach(function (x) {
+      var on = x.getAttribute('data-daytype') === S.daytype;
+      x.classList.toggle('on', on);
+      x.setAttribute('aria-selected', String(on));
+    });
+  }
+
   /* 수단 아이콘 — 서버 meta 의 글자기호(●◆▲)는 셋 다 추상 도형이라 뜻이
      안 잡혔습니다. 각 수단의 특징을 그림으로: 정류장 = 표지판(기둥),
      똑버스 = 호출 물결이 달린 승합차, 증편 = 버스에 + 뱃지. 색은 지도
@@ -1261,6 +1272,92 @@
     catch (e) { C.toast('시나리오를 저장하지 못했습니다(브라우저 저장 공간).', 'err'); }
   }
 
+  /* ── 시나리오 파일 내보내기/가져오기 ─────────────────────────────────
+     공유 링크(서버 저장)와 별개의 **파일 경로**입니다. localStorage 는 이
+     브라우저에 갇히고 공유 링크는 서버가 살아 있어야 열립니다 — 시연 PC 이동·
+     백업·오프라인 전달은 파일이 맡습니다. */
+  var SCEN_FILE_FORMAT = 'hw.scenarios';
+
+  function exportScenarios() {
+    var list = loadScenarios();
+    if (!list.length) {
+      C.toast('내보낼 저장 시나리오가 없습니다 — 먼저 [시나리오 저장]을 누르세요.');
+      return;
+    }
+    var doc = { format: SCEN_FILE_FORMAT, version: 1, exportedAt: C.nowStamp(),
+                scenarios: list };
+    C.downloadBlob(new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' }),
+      '화성-시나리오-' + new Date().toISOString().slice(0, 10) + '.json');
+    C.toast('시나리오 <b>' + list.length + '건</b>을 파일로 내보냈습니다.');
+  }
+
+  /** 파일에서 온 항목을 저장 목록 모양으로 걸러 만듭니다. localStorage 와 같은
+      신뢰 수준(사용자 소유 데이터)이지만, 형태가 깨진 항목 하나가 목록 렌더·
+      불러오기를 통째로 죽이면 안 되므로 키를 화이트리스트로 옮겨 담습니다. */
+  function saneImported(x) {
+    if (!x || typeof x !== 'object' || !x.name || !Array.isArray(x.placements)) return null;
+    var pls = x.placements.map(function (p) {
+      return p && p.cellId ? {
+        type: String(p.type || 'stop'), cellId: String(p.cellId),
+        /* 상한 20 = 서버 MAX_COUNT — 파일을 손으로 고쳐 999 를 넣어도 400 대신 여기서 잘립니다 */
+        count: Math.max(1, Math.min(20, Math.round(Number(p.count) || 1))),
+        fromAI: !!p.fromAI, rank: p.rank, rationale: p.rationale
+      } : null;
+    }).filter(Boolean);
+    if (!pls.length) return null;
+    return {
+      name: String(x.name).slice(0, 40),
+      savedAt: typeof x.savedAt === 'string' ? x.savedAt.slice(0, 32) : C.nowStamp(),
+      period: ['am', 'day', 'pm', 'night'].indexOf(x.period) >= 0 ? x.period : 'am',
+      daytype: x.daytype === 'we' ? 'we' : 'wd',
+      budgetKrw: Math.max(0, Math.round(Number(x.budgetKrw) || 0)),
+      placements: pls,
+      recommendation: (x.recommendation && typeof x.recommendation === 'object') ? x.recommendation : null,
+      summary: (x.summary && typeof x.summary === 'object') ? x.summary : null
+    };
+  }
+
+  function importScenarios(file) {
+    var rd = new FileReader();
+    rd.onload = function () {
+      var doc;
+      try { doc = JSON.parse(String(rd.result)); }
+      catch (e) {
+        C.toast('JSON 파일이 아닙니다 — [내보내기]로 받은 파일을 고르세요.', 'err', 6000);
+        return;
+      }
+      var arr = (doc && doc.format === SCEN_FILE_FORMAT && Array.isArray(doc.scenarios))
+        ? doc.scenarios
+        : (Array.isArray(doc) ? doc : null);   /* 손으로 만든 맨 배열도 받아줍니다 */
+      if (!arr) {
+        C.toast('시나리오 파일 형식이 아닙니다 — format: "' + SCEN_FILE_FORMAT + '" 문서나 배열이어야 합니다.', 'err', 7000);
+        return;
+      }
+      var list = loadScenarios();
+      var names = {};
+      list.forEach(function (s) { names[s.name] = 1; });
+      var added = 0, dup = 0, broken = 0, over = 0;
+      for (var i = 0; i < arr.length; i++) {
+        var s = saneImported(arr[i]);
+        if (!s) { broken++; continue; }
+        if (names[s.name]) { dup++; continue; }        /* 같은 이름은 기존 것을 지킵니다 */
+        if (list.length >= 12) { over++; continue; }   /* 저장 상한 — 기존 것을 밀어내지 않습니다 */
+        names[s.name] = 1;
+        list.push(s);   /* 목록 앞자리는 이 브라우저의 최근 저장이 지킵니다 */
+        added++;
+      }
+      if (added) saveScenarios(list);
+      renderScenarioList();
+      var parts = [added ? '<b>' + added + '건</b> 가져옴' : '가져온 시나리오가 없습니다'];
+      if (dup) parts.push(dup + '건은 같은 이름이 있어 건너뜀');
+      if (over) parts.push(over + '건은 저장 상한(12개) 초과로 제외');
+      if (broken) parts.push(broken + '건은 형식이 깨져 제외');
+      C.toast(parts.join(' · '), added ? null : 'err', 7000);
+    };
+    rd.onerror = function () { C.toast('파일을 읽지 못했습니다.', 'err', 5000); };
+    rd.readAsText(file);
+  }
+
   function saveCurrent() {
     if (!S.result) return;
     var list = loadScenarios();
@@ -1282,6 +1379,7 @@
       name: S.name,
       savedAt: C.nowStamp(),
       period: S.period,
+      daytype: S.daytype,      /* 요일 토글 도입 전 저장본은 이 키가 없음 → 'wd' */
       budgetKrw: S.budget,
       placements: S.placements.map(function (p) {
         return { type: p.type, cellId: p.cellId, count: p.count,
@@ -1678,6 +1776,7 @@
     api.saveScenario({
       name: S.name,
       period: S.period,
+      daytype: S.daytype,
       budgetKrw: S.budget,
       placements: S.placements.map(function (p) {
         return { type: p.type, cellId: p.cellId, count: p.count };
@@ -1715,6 +1814,7 @@
   function applySharedScenario(doc) {
     S.name = doc.name || '';
     S.period = doc.period || S.period;
+    S.daytype = doc.daytype || 'wd';
     S.budget = doc.budgetKrw || S.budget;
     var sane = sanePlacements(doc.placements);
     S.placements = sane.placements.map(function (p) {
@@ -1727,6 +1827,7 @@
       x.classList.toggle('on', on);
       x.setAttribute('aria-selected', String(on));
     });
+    syncDaytypeTabs();
     if (sane.repaired || sane.dropped) {
       C.toast('격자 개편 전 공유본 — ' +
         (sane.repaired ? '배치 ' + sane.repaired + '건을 지금 격자로 옮기고 ' : '') +
@@ -1749,6 +1850,7 @@
     if (rbtn) rbtn.innerHTML = HW.icon('spark') + (S.recommendation ? '추천 다시 받기' : 'AI 추천 배치안');
     S.name = s.name;
     S.period = s.period || S.period;
+    S.daytype = s.daytype || 'wd';   /* 토글 도입 전 저장본은 평일 기준이었다 */
     S.budget = s.budgetKrw || S.budget;
     /* 영역이 켜져 있으면 영역 밖 배치는 복원하지 않습니다. guardFor 의 영역
        제약은 지도 클릭 경로에만 걸려서, 그대로 되살리면 예산은 쓰였는데 영역
@@ -1778,6 +1880,7 @@
       x.classList.toggle('on', on);
       x.setAttribute('aria-selected', String(on));
     });
+    syncDaytypeTabs();
     runSim();
     C.toast('시나리오 <b>' + esc(s.name) + '</b> 을(를) 불러왔습니다.');
   }
@@ -1802,6 +1905,9 @@
   function wireChatActions() {
     HW.chatActions = {
       period: function () { return S.period; },
+      /* 요일 토글이 생기면서 챗봇도 화면과 같은 요일축을 알아야 합니다 —
+         없으면 주말 기준선을 보며 물어도 <사실> 팩이 평일 수치로 답합니다. */
+      daytype: function () { return S.daytype; },
       setPeriod: function (pid) {
         S.period = pid;
         $$('#periods [data-period]').forEach(function (x) {
@@ -1925,6 +2031,13 @@
     });
     $('#btnSave').addEventListener('click', saveCurrent);
     $('#btnShare').addEventListener('click', shareCurrent);
+    $('#btnScenExport').addEventListener('click', exportScenarios);
+    $('#btnScenImport').addEventListener('click', function () { $('#scenFile').click(); });
+    $('#scenFile').addEventListener('change', function (ev) {
+      var f = ev.target.files && ev.target.files[0];
+      ev.target.value = '';          /* 같은 파일을 다시 골라도 change 가 오게 */
+      if (f) importScenarios(f);
+    });
     $('#btnCompare').addEventListener('click', runCompare);
 
     $('#scenList').addEventListener('click', function (e) {
