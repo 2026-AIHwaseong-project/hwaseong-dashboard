@@ -18,11 +18,10 @@
                같은 [확정]을 쓰기 때문에 반드시 구분해야 한다. */
             confirmMode: 'params', upload: null, uploading: false };
 
-  /* 서버는 변경 이력의 '왜' 칸을 위해 사유 5자 이상을 요구합니다(save_params).
-     화면에서는 더 이상 받지 않으므로 콘솔이 대신 채웁니다 — API 계약과 이력
-     형식을 그대로 두기 위해서입니다. 무엇이 어떻게 바뀌었는지는 이력이
-     이전값→새값으로 따로 기록합니다. */
-  var SAVE_REASON = '관리자 콘솔에서 수정';
+  /* 사유는 **선택**입니다(2026-08-26 — 한때 서버가 5자 이상을 요구해 콘솔이
+     '관리자 콘솔에서 수정'으로 자동 채웠는데, 그 문구는 이력에서 아무것도
+     설명하지 못했습니다). 비워도 적용되고, 적으면 이력의 '왜' 칸에 남습니다.
+     무엇이 어떻게 바뀌었는지는 이력이 이전값→새값으로 따로 기록합니다. */
 
   /* ------------------------------------------------------------ 인증 */
   function getToken() {
@@ -305,7 +304,6 @@
     var err = $('#govErr');
     err.hidden = true;
     if (!body.gridId) { err.hidden = false; err.textContent = '격자 ID 를 입력하세요 — 대시보드에서 격자를 클릭하면 ID 가 보입니다.'; return; }
-    if (body.reason.length < 5) { err.hidden = false; err.textContent = '사유를 5자 이상 적으세요 — "왜 모델 값을 사람이 고쳤는가"는 반드시 남아야 합니다.'; return; }
     if (spec.kind === 'num' && !isFinite(value)) { err.hidden = false; err.textContent = '점수 값을 숫자로 입력하세요.'; return; }
     var btn = $('#govSave');
     btn.disabled = true;
@@ -406,8 +404,11 @@
         (S.dirty[k] === null ? ' (기본값 복귀)' : '') + '</td></tr>';
     }
     $('#confirmTable').innerHTML = html;
-    /* 사유 입력칸은 없앴고(콘솔이 자동으로 채웁니다), 확인 모달은 파라미터
-       저장과 업로드 리포트가 함께 쓰므로 열 때마다 모드를 되돌립니다. */
+    /* 확인 모달은 파라미터 저장과 업로드 리포트가 함께 쓰므로 열 때마다
+       모드를 되돌리고, 사유칸은 파라미터 모드에서만 보입니다(업로드는 접수
+       시점에 자기 사유를 이미 받았습니다). */
+    $('#saveReasonRow').hidden = false;
+    $('#saveReason').value = '';
     $('#confirmReason').textContent =
       '적용하면 서버에 저장되고 변경 이력에 남습니다. 되돌리려면 [모두 기본값으로]를 쓰세요.';
     S.confirmMode = 'params';
@@ -418,7 +419,7 @@
 
   function doSave() {
     $('#confirmModal').hidden = true;
-    var body = { changes: S.dirty, reason: SAVE_REASON, actor: 'admin' };
+    var body = { changes: S.dirty, reason: $('#saveReason').value.trim(), actor: 'admin' };
     $('#btnApply').disabled = true;
     api.call('admin.save', null, body).then(function (res) {
       if (res.requiresRefresh && res.requiresRefresh.length) {
@@ -633,6 +634,7 @@
       '이 시점까지 라이브 데이터는 한 바이트도 바뀌지 않았습니다. ' +
       '검증을 실행하면 서버의 임시 공간에서 전 과정을 다시 계산해 결과만 비교합니다.';
     S.confirmMode = 'upload';
+    $('#saveReasonRow').hidden = true;
     $('#confirmModal').querySelector('h2').textContent = '올린 파일 확인';
     $('#btnConfirm').textContent = '이 데이터로 검증 실행';
     $('#confirmModal').hidden = false;

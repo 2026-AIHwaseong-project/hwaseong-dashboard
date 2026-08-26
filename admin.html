@@ -91,7 +91,7 @@
          같이 움직이고, 재계산(batch)이 돌아도 사람이 고친 값은 살아남습니다. -->
     <section class="card">
       <div class="chead"><h2>격자 판정 수정</h2>
-        <span class="hsub">저장 즉시 반영 · 재계산에도 살아남음 · 사유 필수 · 되돌리기는 이력에 남습니다</span>
+        <span class="hsub">저장 즉시 반영 · 재계산에도 살아남음 · 사유는 선택 · 되돌리기는 이력에 남습니다</span>
       </div>
       <div class="cbody">
         <div class="admactions" id="gridOvForm">
@@ -106,7 +106,7 @@
           <input class="btn sm" id="govValueNum" type="number" step="0.01" min="0"
                  placeholder="점수" aria-label="새 값" hidden style="width:100px">
           <input class="btn sm" id="govReason" type="text" maxlength="200"
-                 placeholder="사유 — 5자 이상 필수 (예: 현장 실사 결과 …)"
+                 placeholder="사유 (선택) — 예: 현장 실사 결과 …"
                  aria-label="사유" style="flex:1;min-width:200px">
           <button type="button" class="btn primary" id="govSave">저장</button>
         </div>
@@ -187,6 +187,13 @@
     <div class="chead"><h2>변경 내용 확인</h2></div>
     <div class="cbody">
       <table id="confirmTable"></table>
+      <!-- 사유는 선택입니다 — 비워도 적용됩니다. 적으면 변경 이력의 '왜' 칸에 남아
+           "왜 모델 값을 사람이 고쳤는가"에 답할 수 있습니다(심사 단골 질문). -->
+      <div class="admactions" id="saveReasonRow">
+        <input class="btn sm" id="saveReason" type="text" maxlength="200"
+               placeholder="사유 (선택) — 예: 2027년 표준운송원가 반영" style="flex:1"
+               aria-label="변경 사유 (선택)">
+      </div>
       <p id="confirmReason" class="admhint"></p>
       <div class="admactions">
         <button type="button" class="btn" id="btnCancel">취소</button>
