@@ -24,11 +24,10 @@
     'meta.get':        { method: 'GET',  path: '/meta' },
     'grid.list':       { method: 'GET',  path: '/grid' },                       // ?period=am
     'stops.list':      { method: 'GET',  path: '/stops' },
-    'stops.profile':   { method: 'GET',  path: '/stops/{stopId}/profile' },     // ?period=am&date=
+    'stops.profile':   { method: 'GET',  path: '/stops/{stopId}/profile' },     // 경로 파라미터만 — 응답은 전 시간대(5~23시)
     'routes.list':     { method: 'GET',  path: '/routes' },
     'priorities.list': { method: 'GET',  path: '/priorities' },                 // ?period=am&limit=10
     'simulations.run': { method: 'POST', path: '/simulations' },
-    'simulations.get': { method: 'GET',  path: '/simulations/{id}' },
     'recommendations.run': { method: 'POST', path: '/recommendations', long: true },  // 최적화 계산
     'reports.draft':   { method: 'POST', path: '/reports/draft',  long: true }, // AI 호출 → 타임아웃 김
     'reports.export':  { method: 'POST', path: '/reports/export', long: true, binary: true },
@@ -338,16 +337,16 @@
       res.cost.breakdown = aggregateBreakdown(res.cost.breakdown);
     }
 
-    /* 서버 버전에 따라 delta 에 needCells·avgMi 가 빠져 오기도 한다.
-       kpi−baseline 으로 보충하지 않으면 상세 표의 .toFixed 가 undefined 로 죽는다. */
+    /* 서버 버전에 따라 delta 에 needCells 가 빠져 오기도 한다.
+       kpi−baseline 으로 보충하지 않으면 상세 표의 .toFixed 가 undefined 로 죽는다.
+       avgMi 보충은 지웠다 — 서버가 avgMi 를 의도적으로 뺐고(시간대별 z 라 평균이
+       항상 ≈0 인 항등식) kpi.avgMi 가 절대 오지 않아 조건이 항상 거짓이었다.
+       화면 쪽 방어는 simulation.js 가 이미 하고 있다. */
     res.periods.forEach(function (blk) {
       var k = blk.kpi || {}, b = blk.baseline || {};
       blk.delta = blk.delta || {};
       if (blk.delta.needCells == null && k.needCells != null && b.needCells != null) {
         blk.delta.needCells = k.needCells - b.needCells;
-      }
-      if (blk.delta.avgMi == null && k.avgMi != null && b.avgMi != null) {
-        blk.delta.avgMi = +(k.avgMi - b.avgMi).toFixed(4);
       }
     });
 
@@ -494,11 +493,13 @@
       return cached('stops', function () { return call('stops.list'); });
     },
 
-    /** 정류장 시간대별 승하차 프로파일 */
-    stopProfile: function (stopId, period) {
-      /* 캐시 키에 period 가 빠지면 다른 시간대의 프로파일이 재사용됩니다 */
-      return cached('stopProfile:' + stopId + ':' + period, function () {
-        return call('stops.profile', { stopId: stopId, period: period });
+    /** 정류장 시간대별 승하차 프로파일 — 응답이 전 시간대(5~23시)라 period 를
+        보내지 않습니다. 예전에는 ?period= 를 실어 보내고 캐시 키도 시간대별로
+        갈랐는데, 서버가 그 파라미터를 받지 않아(경로 파라미터만 — API_SPEC §6)
+        같은 응답이 시간대 수만큼 중복 캐시되기만 했습니다. */
+    stopProfile: function (stopId) {
+      return cached('stopProfile:' + stopId, function () {
+        return call('stops.profile', { stopId: stopId });
       });
     },
 

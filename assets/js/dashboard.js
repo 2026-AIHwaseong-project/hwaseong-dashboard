@@ -644,7 +644,7 @@
       if (cid) enterCellFocus(cid, true);
       else if (S.map.focusStop) S.map.focusStop(stopId);
     }
-    api.stopProfile(stopId, S.period).then(function (p) {
+    api.stopProfile(stopId).then(function (p) {
       /* 느린 이전 응답이 최신 선택을 덮지 않게 합니다 */
       if (S.selectedStopId !== stopId) return;
       S.profile = p;
@@ -1246,6 +1246,7 @@
   function wireChatActions() {
     HW.chatActions = {
       period: function () { return S.period; },
+      daytype: function () { return S.daytype; },
       setPeriod: loadPeriod,
       setLayer: function (k) {
         S.map.setLayer(k);
@@ -1267,6 +1268,7 @@
         return {
           현재화면: '대시보드',
           시간대: S.periodName,
+          요일유형: DAYTYPE_LABEL[S.daytype] || S.daytype,
           지도기준: S.map ? S.map.getLayer() : null,
           선택한격자: c ? { id: c.id, name: c.name, region: c.region, mi: c.mi,
                             demand: c.demand, supply: c.supply, coverage: c.coverage,

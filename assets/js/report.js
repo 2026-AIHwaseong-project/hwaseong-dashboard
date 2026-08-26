@@ -1244,6 +1244,7 @@
         chatRecToken = currentRecId;
         return {
           period: (HW.chatActions && HW.chatActions.period && HW.chatActions.period()) || 'am',
+          daytype: (HW.chatActions && HW.chatActions.daytype && HW.chatActions.daytype()) || 'wd',
           context: {},
           draft: currentDraft
         };

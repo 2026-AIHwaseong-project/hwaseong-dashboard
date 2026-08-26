@@ -509,8 +509,10 @@
       if (!confirm('현재 배치 ' + S.placements.length + '건이 추천안으로 교체됩니다. 계속할까요?')) return;
     }
     if (strategy) S.recStrategy = strategy;
-    /* 동 범위에서 '지역 균형'(동별 1건 상한)은 성립하지 않습니다 */
-    if (S.recRegion && S.recStrategy === 'balance') S.recStrategy = 'efficiency';
+    /* 동 범위·지도 영역에서 '지역 균형'(동별 1건 상한)은 성립하지 않습니다.
+       영역(cellIds)을 빼먹으면 서버가 조용히 efficiency 로 바꿔 계산하는데 화면
+       상태는 balance 로 남아, 응답의 strategy 와 버튼 표시가 서로 다른 말을 합니다. */
+    if ((S.area || S.recRegion) && S.recStrategy === 'balance') S.recStrategy = 'efficiency';
     var btn = $('#btnRecommend');
     btn.disabled = true;
     btn.textContent = '계산 중…';

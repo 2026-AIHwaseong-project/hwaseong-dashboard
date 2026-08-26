@@ -168,6 +168,9 @@
       var body = {
         mode: opt.mode,
         period: extra.period || 'am',
+        /* 요일축 — 안 실으면 서버 <사실> 팩이 평일 키만 읽어, 주말 화면을 보며
+           물어도 평일 수치로 답합니다(needCells 30 vs 47 같은 조용한 불일치). */
+        daytype: extra.daytype || 'wd',
         messages: msgs,
         context: extra.context || {}
       };
@@ -298,7 +301,10 @@
         ].filter(Boolean).join(' · ') || '없음 — 답변만 하세요';
         ctx.다른화면_이동 = 'nav 액션 가능 — 지금 화면에 없는 기능을 물으면 이걸로 그 화면에 옮겨 놓고, ' +
           '필요하면 도착해서 이어 할 액션(after)도 같이 실으세요';
-        return { period: h.period ? h.period() : 'am', context: ctx };
+        /* daytype 핸들러는 대시보드에만 있습니다(시뮬레이션 화면엔 요일 토글이
+           없어 undefined → 'wd'). report.js 의 getBody 와 같은 규칙입니다. */
+        return { period: h.period ? h.period() : 'am',
+                 daytype: h.daytype ? h.daytype() : 'wd', context: ctx };
       }
     });
     helpPanel = p;
