@@ -128,6 +128,7 @@
     HW.report.setContextProvider(function () {
       return {
         period: S.period,
+        daytype: S.daytype,
         meta: S.meta,
         kpi: currentPeriodBlock() ? currentPeriodBlock().kpi : null,
         priorities: null,
