@@ -72,7 +72,7 @@
 
     <section class="card">
       <div class="chead"><h2>모델 상수</h2>
-        <span class="hsub">저장 후 [지표 재계산]을 실행해야 화면 수치가 바뀝니다</span>
+        <span class="hsub">저장 후 [지표 재계산](수십 초)을 실행해야 화면·시뮬에 반영됩니다</span>
         <button type="button" class="btn sm" data-reset-group="model">여기만 기본값으로</button>
       </div>
       <div class="cbody"><div class="admrows" id="rowsModel"></div></div>
@@ -80,7 +80,8 @@
 
     <section class="card">
       <div class="chead"><h2>기준선 상수</h2>
-        <span class="hsub">읽기 전용 · 바꾸려면 새 기준선 발행(재계산 + 재검증)이 필요합니다</span>
+        <span class="hsub">수식의 자(尺) · 저장 후 [지표 재계산](수십 초)으로 새 기준선 발행 · 극단값은 need 밴드 검증이 막습니다</span>
+        <button type="button" class="btn sm" data-reset-group="baseline">여기만 기본값으로</button>
       </div>
       <div class="cbody"><div class="admrows" id="rowsBaseline"></div></div>
     </section>
@@ -177,6 +178,10 @@
      있다"는 신호와 되돌리기만 맡습니다. -->
 <div class="admsavebar" id="saveBar" hidden>
   <span id="saveCount"></span>
+  <!-- 사유는 선택 — 비워도 적용되고, 적으면 변경 이력의 '왜' 칸에 남습니다 -->
+  <input class="btn sm" id="saveReason" type="text" maxlength="200"
+         placeholder="사유 (선택) — 예: 2027년 표준운송원가 반영"
+         aria-label="변경 사유 (선택)" style="flex:1;min-width:220px">
   <span class="sp"></span>
   <button type="button" class="btn" id="btnRevert">되돌리기</button>
 </div>
@@ -187,13 +192,6 @@
     <div class="chead"><h2>변경 내용 확인</h2></div>
     <div class="cbody">
       <table id="confirmTable"></table>
-      <!-- 사유는 선택입니다 — 비워도 적용됩니다. 적으면 변경 이력의 '왜' 칸에 남아
-           "왜 모델 값을 사람이 고쳤는가"에 답할 수 있습니다(심사 단골 질문). -->
-      <div class="admactions" id="saveReasonRow">
-        <input class="btn sm" id="saveReason" type="text" maxlength="200"
-               placeholder="사유 (선택) — 예: 2027년 표준운송원가 반영" style="flex:1"
-               aria-label="변경 사유 (선택)">
-      </div>
       <p id="confirmReason" class="admhint"></p>
       <div class="admactions">
         <button type="button" class="btn" id="btnCancel">취소</button>

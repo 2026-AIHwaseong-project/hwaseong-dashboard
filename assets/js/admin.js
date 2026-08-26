@@ -404,11 +404,9 @@
         (S.dirty[k] === null ? ' (기본값 복귀)' : '') + '</td></tr>';
     }
     $('#confirmTable').innerHTML = html;
-    /* 확인 모달은 파라미터 저장과 업로드 리포트가 함께 쓰므로 열 때마다
-       모드를 되돌리고, 사유칸은 파라미터 모드에서만 보입니다(업로드는 접수
-       시점에 자기 사유를 이미 받았습니다). */
-    $('#saveReasonRow').hidden = false;
-    $('#saveReason').value = '';
+    /* 사유 입력칸은 하단 저장 바(적용 대기 옆)에 있습니다 — 값을 고치는 그
+       자리에서 바로 적게 하기 위해서입니다. 확인 모달은 파라미터 저장과 업로드
+       리포트가 함께 쓰므로 열 때마다 모드를 되돌립니다. */
     $('#confirmReason').textContent =
       '적용하면 서버에 저장되고 변경 이력에 남습니다. 되돌리려면 [모두 기본값으로]를 쓰세요.';
     S.confirmMode = 'params';
@@ -422,6 +420,7 @@
     var body = { changes: S.dirty, reason: $('#saveReason').value.trim(), actor: 'admin' };
     $('#btnApply').disabled = true;
     api.call('admin.save', null, body).then(function (res) {
+      $('#saveReason').value = '';
       if (res.requiresRefresh && res.requiresRefresh.length) {
         C.toast('저장되었습니다 — 모델 상수는 [지표 재계산]을 실행해야 화면에 반영됩니다', '', 8000);
       } else {
@@ -634,7 +633,6 @@
       '이 시점까지 라이브 데이터는 한 바이트도 바뀌지 않았습니다. ' +
       '검증을 실행하면 서버의 임시 공간에서 전 과정을 다시 계산해 결과만 비교합니다.';
     S.confirmMode = 'upload';
-    $('#saveReasonRow').hidden = true;
     $('#confirmModal').querySelector('h2').textContent = '올린 파일 확인';
     $('#btnConfirm').textContent = '이 데이터로 검증 실행';
     $('#confirmModal').hidden = false;
