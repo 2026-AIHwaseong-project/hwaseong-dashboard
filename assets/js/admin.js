@@ -382,10 +382,16 @@
   function updateSaveBar() {
     var keys = [], k;
     for (k in S.dirty) keys.push(k);
+    /* 로컬 모드에서는 초안이 화면과 다른 것도 '적용할 일'이다 — 값을 서버 값으로
+       되돌리면 dirty 는 비지만 옛 초안이 남아 있어, [적용]으로 비워야 다음 방문에
+       도로 살아나지 않는다. */
+    var stale = keys.length === 0 && draftDiffers();
+    var pending = keys.length > 0 || stale;
     var bar = $('#saveBar');
-    bar.hidden = keys.length === 0;
-    $('#saveCount').textContent = '적용 대기 ' + keys.length + '건';
-    $('#btnApply').disabled = keys.length === 0;
+    bar.hidden = !pending;
+    $('#saveCount').textContent = stale ? '로컬 초안 정리 대기'
+      : '적용 대기 ' + keys.length + '건';
+    $('#btnApply').disabled = !pending;
   }
 
   function onInput(input) {
@@ -412,6 +418,14 @@
   }
 
   function openConfirm() {
+    /* 로컬 모드에서 입력이 전부 서버 값인데 옛 초안만 남은 경우 — 보여줄 변경
+       표가 없으므로 모달 없이 초안만 비운다. */
+    if (!S.dbMode && !Object.keys(S.dirty).length) {
+      clearDraft();
+      updateSaveBar();
+      C.toast('로컬 초안을 비웠습니다 — 입력이 전부 서버 값과 같습니다.');
+      return;
+    }
     var html = '<tr><th>항목</th><th>현재</th><th></th><th>변경 후</th></tr>';
     var k;
     for (k in S.dirty) {
@@ -443,17 +457,36 @@
     try { localStorage.removeItem(LS_DRAFT); } catch (e) { /* 무시 */ }
   }
 
-  /** 로컬 초안 저장 — 서버를 건드리지 않는다. 입력·적용 대기 표시는 그대로
-      남는다("서버엔 아직"이라는 신호). 기존 초안 위에 이번 변경을 덮는다. */
+  /** 로컬 초안 저장 — 서버를 건드리지 않는다. 초안은 **지금 화면의 변경사항
+      그대로**(스냅샷)다. 예전에는 기존 초안 위에 병합했는데, 그러면 값을 서버
+      값으로 되돌려도 옛 초안 항목이 지워지지 않아 다음 방문에 도로 살아났다 —
+      "기본값으로 되돌리려는데 적용이 안 된다"는 그 버그다. */
   function saveDraftLocal() {
     var d = { savedAt: C.nowStamp(), reason: $('#saveReason').value.trim(), changes: {} };
-    var prev = readDraft();
-    if (prev && prev.changes) for (var pk in prev.changes) d.changes[pk] = prev.changes[pk];
     for (var k in S.dirty) d.changes[k] = S.dirty[k];
+    if (!Object.keys(d.changes).length) {
+      clearDraft();
+      updateSaveBar();
+      C.toast('로컬 초안을 비웠습니다 — 입력이 전부 서버 값과 같습니다.');
+      return;
+    }
     try { localStorage.setItem(LS_DRAFT, JSON.stringify(d)); }
     catch (e) { C.toast('초안을 저장하지 못했습니다(브라우저 저장 공간).', 'err'); return; }
+    updateSaveBar();
     C.toast('이 브라우저에 <b>초안으로만</b> 저장했습니다 — 서버·화면 계산에는 반영되지 '
       + '않습니다. 실제 반영은 상단 [DB에 저장]을 켜고 다시 [적용]하세요.', '', 9000);
+  }
+
+  /** 로컬 초안이 지금 화면의 변경사항과 다른가 — 다르면 [적용]으로 초안을
+      갱신(또는 비우기)할 일이 남아 있는 것이다. */
+  function draftDiffers() {
+    if (S.dbMode) return false;
+    var d = readDraft();
+    var dc = (d && d.changes) || {};
+    var a = Object.keys(dc), b = Object.keys(S.dirty);
+    if (a.length !== b.length) return true;
+    for (var i = 0; i < b.length; i++) if (dc[b[i]] !== S.dirty[b[i]]) return true;
+    return false;
   }
 
   /** 로컬 초안을 입력 칸에 되살린다(새로고침·재방문에도 초안 유지). 반환 = 건수. */
