@@ -450,6 +450,7 @@
     /* 새 작업이 시작되면 이전 예행의 [라이브에 반영]은 반드시 사라져야 한다.
        남겨 두면 방금 것이 아닌 옛 uploadId 로 반영이 나갈 수 있다. */
     if ($('#dryApply')) $('#dryApply').hidden = true;
+    if ($('#dryResult')) $('#dryResult').hidden = true;
     api.call('admin.refresh', null, body)
       .then(function () {
         $('#jobLog').hidden = false;
@@ -647,7 +648,9 @@
   }
 
   function renderDryRun(r) {
-    var el = $('#jobNote');
+    /* 업로드 카드의 전용 박스에 그린다. 예전에는 #jobNote(새로고침 안내 공용)를
+       덮어써서, 다음 일반 재계산 때 낡은 검증 결과가 안내문 자리에 되살아났다. */
+    var el = $('#dryResult');
     if (!el) return;
     var html = '<b>검증 결과 — 라이브 데이터는 변경되지 않았습니다.</b><br>';
     if (r.quadrantChanged != null) {
