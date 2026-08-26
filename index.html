@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>화성시 버스 수요·공급 미스매칭 대시보드</title>
-<meta name="description" content="교통카드 실현수요와 거주인구 기반 잠재수요를 격자 단위로 대조해 대중교통 사각지대와 노선 조정 우선순위를 도출하는 분석 대시보드">
+<meta name="description" content="교통카드 이용과 거주인구 기반 추정 통행을 격자 단위로 대조해 버스 부족 지역과 노선 조정 우선순위를 보여주는 분석 대시보드">
 <!-- Pretendard 를 app.css 보다 **먼저** 부릅니다.
      예전에는 app.css 안의 @import 로 불렀는데, 그 @import 가 스타일 규칙
      뒤에 있어 CSS 파서가 통째로 버렸습니다(@import 는 @charset·@layer 외
@@ -16,9 +16,9 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="icon" type="image/png" href="assets/img/favicon.png">
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
-<link rel="stylesheet" href="assets/css/app.css">
+<link rel="stylesheet" href="assets/css/app.css?v=20260827-ux">
 </head>
-<body>
+<body data-view="summary">
 <!--
   IMPECCABLE DIRECTION CONTRACT · seed 3b0d0c43 · scope direction · mode operate
   THESIS: 화성특례시가 실제로 운영하는 행정 도구로 읽히는 격자 분석 콘솔.
@@ -46,7 +46,7 @@
   <header class="top">
     <div>
       <h1>버스 수요·공급 미스매칭 대시보드</h1>
-      <p class="sub">교통카드 실현수요 × 거주인구 기반 잠재수요를 같은 격자에서 대조해,
+      <p class="sub">교통카드 실현수요 × 거주인구 기반 추정 통행을 같은 격자에서 대조해,
         어디에 버스가 부족한지와 노선 조정 우선순위를 산출합니다.
         <span class="mono" style="font-size:11px">최종 갱신 <span id="updatedAt">–</span></span></p>
     </div>
@@ -56,34 +56,46 @@
     </div>
   </header>
 
+  <!-- 기본은 판단에 필요한 내용만, 근거가 필요할 때 전체 분석을 펼칩니다. -->
+  <section class="viewbar" aria-label="대시보드 정보량">
+    <div class="viewcopy">
+      <b>먼저 결론만 확인하세요</b>
+      <span id="viewModeHint">핵심 지표와 우선 검토 지역 5곳을 보여줍니다.</span>
+    </div>
+    <div class="view-switch" role="group" aria-label="화면 보기 방식">
+      <button class="view-btn on" data-dashboard-view="summary" type="button" aria-pressed="true">요약 보기</button>
+      <button class="view-btn" data-dashboard-view="detail" type="button" aria-pressed="false">상세 분석</button>
+    </div>
+  </section>
+
   <!-- ───────────────────── 한 줄 브리핑 ───────────────────── -->
   <section class="brief" id="brief" aria-label="현황 요약"></section>
 
   <!-- ─────────────────────────── KPI ─────────────────────────── -->
   <section class="kpis" aria-label="핵심 지표">
     <div class="kpi hero">
-      <div class="lb">고수요·저공급 격자
+      <div class="lb">버스 부족 지역 <span class="term">고수요·저공급 격자</span>
         <button class="help" data-help="need" type="button">?</button></div>
       <div class="vl pending" id="k1">–</div>
       <div class="sb" id="k1s">–</div>
       <div class="kspark" id="kc1" aria-label="시간대별 비교"></div>
     </div>
     <div class="kpi">
-      <div class="lb">사각지대 잠재수요
+      <div class="lb">영향받는 추정 통행 <span class="term">잠재수요</span>
         <button class="help" data-help="potential" type="button">?</button></div>
       <div class="vl pending" id="k2">–</div>
       <div class="sb" id="k2s">–</div>
       <div class="kspark" id="kc2" aria-label="시간대별 비교"></div>
     </div>
     <div class="kpi">
-      <div class="lb">사각지대 고령 통행
+      <div class="lb">고령층 영향 통행
         <button class="help" data-help="elderly" type="button">?</button></div>
       <div class="vl pending" id="k3">–</div>
       <div class="sb" id="k3s">–</div>
       <div class="kspark" id="kc3" aria-label="시간대별 비교"></div>
     </div>
-    <div class="kpi">
-      <div class="lb">DRT(똑버스) 후보 격자
+    <div class="kpi detail-only">
+      <div class="lb">똑버스 우선 검토 지역 <span class="term">DRT 후보</span>
         <button class="help" data-help="drt" type="button">?</button></div>
       <div class="vl pending" id="k4">–</div>
       <div class="sb">저수요·저공급 — 노선 신설 대신 수요응답형</div>
@@ -98,7 +110,7 @@
     <!-- ─────────────────────── 지도 ─────────────────────── -->
     <section class="card mapcard">
       <div class="chead">
-        <h2>격자 미스매칭 지도
+        <h2>버스 부족도 지도
           <button class="help" data-help="mi" type="button">?</button></h2>
         <span class="hsub" id="mapSub">붉은 칸일수록 버스가 부족합니다 — 칸을 누르면 상세가 열립니다</span>
         <!-- 격자를 고른 순간 다음 행동이 눈앞에 있게 — 상세 카드까지 안 내려가도 됩니다 -->
@@ -108,9 +120,9 @@
       </div>
       <div class="mtools">
         <div class="lset" id="layers" role="tablist" aria-label="지도 레이어">
-          <button class="lbtn on" data-layer="mi" type="button" title="미스매칭 지수 MI — 수요 대비 공급 부족 정도">버스 부족도</button>
-          <button class="lbtn" data-layer="demand" type="button" title="잠재수요 D">수요</button>
-          <button class="lbtn" data-layer="supply" type="button" title="공급 지수 S">공급</button>
+          <button class="lbtn on" data-layer="mi" type="button" title="버스 부족도 — 전문 지표: 미스매칭 지수 MI">버스 부족도</button>
+          <button class="lbtn" data-layer="demand" type="button" title="수요 수준 — 전문 지표: D">수요</button>
+          <button class="lbtn" data-layer="supply" type="button" title="공급 수준 — 전문 지표: S">공급</button>
           <button class="lbtn" data-layer="flow" type="button">유동인구</button>
         </div>
         <div class="tset">
@@ -147,7 +159,7 @@
          두 모드로 씁니다 — 격자를 클릭하면 그 격자를 지나는 노선들(기본),
          버스 번호를 검색하면 그 노선 하나의 전 구간. 제목·부제는 dashboard.js 가
          모드에 맞춰 갈아끼웁니다. -->
-    <section class="card routecard">
+    <section class="card routecard detail-only">
       <div class="chead">
         <div class="cheadtitle">
           <!-- 노선 상세(전 구간)로 들어갔을 때만 보입니다 — 이 격자의 노선 목록으로
@@ -165,10 +177,10 @@
     <!-- ───────────────────── 우선순위 ───────────────────── -->
     <section class="card sidecard">
       <div class="chead">
-        <h2>노선 조정 우선순위 Top 10</h2>
+        <h2>노선 조정 우선순위 <span id="priorityLimit">Top 5</span></h2>
         <!-- 점수·막대가 무엇인지 밝힙니다. 예전에는 MI 를 크게 찍어 두고
              정렬은 다른 값으로 해서 순위가 뒤죽박죽으로 보였습니다. -->
-        <span class="hsub">점수 = MI⁺ × 수요규모 × 교통약자 가중 (1위 100)</span>
+        <span class="hsub">점수 = 버스 부족도(MI) × 수요규모 × 교통약자 가중 (1위 100)</span>
       </div>
       <div class="t10" id="t10"></div>
       <div class="sidefoot">
@@ -182,15 +194,15 @@
     </section>
 
     <!-- ───────────────────── 산점도 ───────────────────── -->
-    <section class="card sc-card">
+    <section class="card sc-card detail-only">
       <div class="chead">
         <h2>수요–공급 4분면</h2>
-        <span class="hsub">점 1개 = 격자 1개 · 색 = MI
+        <span class="hsub">점 1개 = 격자 1개 · 색 = 버스 부족도(MI)
           <button class="help" data-help="demand" type="button">?</button></span>
         <span class="pchip" id="pchip">–</span>
       </div>
       <svg id="scatter" class="chart" viewBox="0 0 520 420" role="img"
-           aria-label="가로축 공급지수, 세로축 수요지수 산점도. 왼쪽 위가 공급 부족 구간입니다."></svg>
+           aria-label="가로축 공급 수준, 세로축 수요 수준 산점도. 왼쪽 위가 버스 공급 부족 구간입니다."></svg>
       <details class="tbl">
         <summary>격자 데이터 표 보기 (미스매칭 상위 40)</summary>
         <div class="tblwrap"><table id="celltbl"></table></div>
@@ -198,7 +210,7 @@
     </section>
 
     <!-- ─────────────── 정류장 프로파일 ─────────────── -->
-    <section class="card st-card">
+    <section class="card st-card detail-only">
       <div class="chead">
         <h2>정류장 시간대 프로파일
           <span class="dq-badge" id="stEstimated" style="display:none">추정치</span>
@@ -228,7 +240,7 @@
     </section>
 
     <!-- ─────────────────── 권역별 요약 ─────────────────── -->
-    <section class="card span12">
+    <section class="card span12 detail-only">
       <div class="chead">
         <h2>권역별 요약</h2>
         <span class="hsub">읍면동 단위로 어디를 먼저 봐야 하는지 · 행을 클릭하면 지도에서 해당 권역만 강조됩니다</span>
@@ -249,11 +261,11 @@
 
 <!-- 로드 순서 주의: config → core → api → 컴포넌트 → 페이지 -->
 <script src="assets/js/config.js"></script>
-<script src="assets/js/core.js"></script>
-<script src="assets/js/api.js"></script>
-<script src="assets/js/map.js"></script>
+<script src="assets/js/core.js?v=20260827-ux"></script>
+<script src="assets/js/api.js?v=20260827-ux"></script>
+<script src="assets/js/map.js?v=20260827-ux"></script>
 <script src="assets/js/report.js"></script>
 <script src="assets/js/chat.js"></script>
-<script src="assets/js/dashboard.js"></script>
+<script src="assets/js/dashboard.js?v=20260827-ux"></script>
 </body>
 </html>

@@ -418,7 +418,7 @@
           budgetUsedPct: budget > 0 ? +(100 * used / budget).toFixed(1) : 0,
           krwPerTrip: (sim && sim.effectiveness) ? sim.effectiveness.krwPerTripPerDay : null,
           stoppedBecause: stopped,
-          /* 서버 그리디는 총사업비 1원당 개선량으로 순위를 매깁니다 */
+          /* 서버 그리디는 총사업비 1원당 예측 승차 증가량으로 순위를 매깁니다 */
           costCompareLabel: '총사업비 기준',
           costCompareNote: '예산 한도와 같은 기준(총사업비)으로 비교했습니다. '
             + '똑버스·증편은 이듬해에도 같은 예산이 필요합니다.'
@@ -429,7 +429,12 @@
         su.expectedResolvedCells = blk ? Math.max(0, -(blk.delta.needCells || 0)) : 0;
       }
       if (su.expectedResolvedTrips == null) {
-        su.expectedResolvedTrips = blk ? Math.max(0, -(blk.delta.potentialTripsPerDay || 0)) : 0;
+        su.expectedResolvedTrips = (sim && sim.effectiveness)
+          ? Math.max(0, sim.effectiveness.resolvedTripsPerDay || 0) : 0;
+      }
+      if (su.expectedResolvedPotentialTrips == null) {
+        su.expectedResolvedPotentialTrips = blk
+          ? Math.max(0, -(blk.delta.potentialTripsPerDay || 0)) : 0;
       }
       if (su.expectedResolvedElderlyTrips == null) {
         su.expectedResolvedElderlyTrips = blk ? Math.max(0, -(blk.delta.elderlyTripsPerDay || 0)) : 0;
@@ -438,6 +443,17 @@
       if (rec.methodLabel == null) rec.methodLabel = '예산 제약 하 한계효과 최대화';
       if (rec.methodNote == null) rec.methodNote = rec.note || '';
       if (rec.strategyNote == null) rec.strategyNote = rec.note || '';
+      /* 구버전 서버 문구도 화면에서는 현재 지표 정의와 같은 말로 보입니다.
+         실제 최적화 목적함수는 B-hat(예측 승차 증가)이므로, 잠재수요 감소와
+         혼동되던 이전 명칭만 호환 계층에서 바로잡습니다. */
+      rec.methodNote = String(rec.methodNote)
+        .replace(/미해결 통행량을 사업비 1원당 가장 많이 줄이는/g,
+          '사업비 1원당 예측 승차 증가량이 가장 큰')
+        .replace(/미해결 통행량/g, '예측 승차 증가량')
+        .replace(/해소 통행량/g, '예측 승차 증가량');
+      rec.strategyNote = String(rec.strategyNote)
+        .replace(/미해결 통행량/g, '예측 승차 증가량')
+        .replace(/해소 통행량/g, '예측 승차 증가량');
       if (rec.strategyBasisNote == null) rec.strategyBasisNote = '';
       if (rec.region === undefined) rec.region = (body && body.region) || null;
       /* 배치를 AI 가 고른다고 오해하면 검증 단계에서 그대로 지적당합니다 */

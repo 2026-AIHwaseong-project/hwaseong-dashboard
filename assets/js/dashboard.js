@@ -41,6 +41,7 @@
     C.mountTopnav('dashboard');
     C.initTheme();
     C.wireHelp();
+    wireDashboardView();
     HW.report.mount();
     HW.report.setContextProvider(function () {
       return {
@@ -134,6 +135,36 @@
       var pending = HW.chat && HW.chat.consumePending && HW.chat.consumePending();
       if (pending) HW.chat.runAction(pending);
     }).catch(fail);
+  }
+
+  /* 첫 진입은 판단에 필요한 결론만 보여 주고, 근거가 필요한 사용자가 같은
+     화면에서 전체 분석을 펼칩니다. 숨김은 CSS 한 곳에서 맡겨 지도·선택 상태를
+     잃지 않고 보기 방식만 바뀌게 합니다. */
+  function wireDashboardView() {
+    var buttons = $$('[data-dashboard-view]');
+    var hint = $('#viewModeHint');
+    var limit = $('#priorityLimit');
+
+    function setView(mode) {
+      mode = mode === 'detail' ? 'detail' : 'summary';
+      document.body.setAttribute('data-view', mode);
+      buttons.forEach(function (button) {
+        var on = button.getAttribute('data-dashboard-view') === mode;
+        button.classList.toggle('on', on);
+        button.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      if (hint) hint.textContent = mode === 'summary'
+        ? '핵심 지표와 우선 검토 지역 5곳을 보여줍니다.'
+        : '시간대 비교, 노선, 차트와 권역별 표를 모두 보여줍니다.';
+      if (limit) limit.textContent = mode === 'summary' ? 'Top 5' : 'Top 10';
+    }
+
+    buttons.forEach(function (button) {
+      button.addEventListener('click', function () {
+        setView(button.getAttribute('data-dashboard-view'));
+      });
+    });
+    setView(document.body.getAttribute('data-view'));
   }
 
   function fail(err) {
@@ -257,11 +288,11 @@
       (top ? ' · 최우선 ' + top.name : '');
 
     $('#k2').innerHTML = C.fmt1(k.potentialTripsPerDay / 10000) + '<small>만 통행/일</small>';
-    $('#k2s').textContent = '고수요·저공급 격자의 잠재수요 합(거주인구 기반 추정)';
+    $('#k2s').textContent = '버스 부족 지역의 거주인구 기반 추정 통행';
 
     $('#k3').innerHTML = fmt(k.elderlyTripsPerDay) + '<small>통행/일</small>';
     var share = k.potentialTripsPerDay > 0 ? (100 * k.elderlyTripsPerDay / k.potentialTripsPerDay) : 0;
-    $('#k3s').textContent = '사각지대 잠재수요의 ' + share.toFixed(1) + '% · 교통약자 가중 근거';
+    $('#k3s').textContent = '영향받는 추정 통행의 ' + share.toFixed(1) + '% · 교통약자 가중 근거';
 
     $('#k4').innerHTML = fmt(k.drtCells) + '<small>개</small>';
 
@@ -336,7 +367,7 @@
 
     var lines = [];
     lines.push('<b>' + esc(periodLabel) + '</b> 기준, 전체 ' + fmt(k.totalCells) + '개 격자 중 ' +
-      '<b>고수요·저공급이 ' + fmt(k.needCells) + '개</b>(' + k.needShare + '%)입니다.');
+      '<b>버스 부족 지역이 ' + fmt(k.needCells) + '곳</b>(' + k.needShare + '%)입니다.');
 
     /* "몰려 있다" 임계는 셀 수에 비례 — 1km(786셀)면 예전처럼 2개, 500m(~3천 셀)면 8개 */
     var clusterMin = Math.max(2, Math.round(S.grid.cells.length * 0.0025));
@@ -347,7 +378,7 @@
       lines.push('최우선 대상은 <b>' + esc(items[0].name) + '</b>(' + esc(items[0].cellId) + ')이며 ' +
         esc(items[0].actionLabel) + ' 검토가 필요합니다.');
     }
-    lines.push('사각지대 잠재수요는 일 ' + fmt(k.potentialTripsPerDay) + '통행, ' +
+    lines.push('영향받는 추정 통행은 일 ' + fmt(k.potentialTripsPerDay) + '통행, ' +
       '이 중 고령층 추정이 ' + fmt(k.elderlyTripsPerDay) + '통행입니다.');
 
     /* 상위 격자의 조치 유형 분포 → 무엇을 몇 건 검토해야 하는지 */
@@ -395,7 +426,7 @@
       var r = by[k];
       r.elderlyRatio = r.eldSum / r.cells;
       r.action = Object.keys(r.actions).sort(function (a, b) { return r.actions[b] - r.actions[a]; })[0] ||
-        (r.drt > 0 ? 'DRT 검토' : '—');
+        (r.drt > 0 ? '똑버스 검토' : '—');
       return r;
     });
     return sortRegions(list);
@@ -419,10 +450,10 @@
        실제로는 사각지대 격자만 더한 값이라, 사각지대가 없는 권역의 0 이
        '수요가 없다' 로 읽혔습니다. KPI 카드도 '사각지대 잠재수요' 라고 씁니다. */
     var head = [
-      ['name', '권역', 'left'], ['cells', '격자', ''], ['need', '사각지대', ''],
-      ['drt', 'DRT 후보', ''], ['tripsAll', '권역 잠재수요', ''],
-      ['trips', '사각지대 잠재수요', ''],
-      ['elderly', '사각지대 고령통행', ''], ['elderlyRatio', '고령비', '']
+      ['name', '권역', 'left'], ['cells', '격자', ''], ['need', '버스 부족', ''],
+      ['drt', '똑버스 검토', ''], ['tripsAll', '권역 추정 통행', ''],
+      ['trips', '영향받는 추정 통행', ''],
+      ['elderly', '고령층 영향 통행', ''], ['elderlyRatio', '고령비', '']
     ];
     var html = '<table class="rgtbl"><thead><tr>' +
       head.map(function (h) {
@@ -498,7 +529,7 @@
     var items = S.priorities.items;
     var host = $('#t10');
     if (!items.length) {
-      host.innerHTML = '<div class="empty">현재 시간대에 고수요·저공급 격자가 없습니다.<br>다른 시간대를 확인해 보세요.</div>';
+      host.innerHTML = '<div class="empty">현재 시간대에 버스 부족 지역이 없습니다.<br>다른 시간대를 확인해 보세요.</div>';
       return;
     }
     var mx = items[0].priorityScore || 1;
@@ -514,8 +545,8 @@
            1위를 100 으로 둔 상대 점수를 올리고 MI 는 옆에 보조로 둡니다. */
         '<span class="pscore">' + Math.round(100 * r.priorityScore / mx) +
         '<small>점</small></span>' +
-        '<span class="sub2"><span>MI +' + r.mi.toFixed(2) + '</span>' +
-        '<span>잠재 ' + fmt(r.flowTripsPerDay) + '통행/일</span>' +
+        '<span class="sub2"><span>버스 부족도 +' + r.mi.toFixed(2) + '</span>' +
+        '<span>추정 통행 ' + fmt(r.flowTripsPerDay) + '건/일</span>' +
         /* 고령비가 높을 때만 색을 씁니다 — 전부 빨강이면 색이 값을 안 나릅니다.
            20% 는 화성시 전체 고령비(약 11%)의 두 배 수준입니다. */
         '<em' + (r.elderlyRatio >= 0.2 ? ' class="hi"' : '') + '>고령 ' +
@@ -543,9 +574,9 @@
     });
     h += '<line class="zl" x1="' + sx(0) + '" y1="' + SC.t + '" x2="' + sx(0) + '" y2="' + (SC.h - SC.b) + '"/>';
     h += '<line class="zl" x1="' + SC.l + '" y1="' + sy(0) + '" x2="' + (SC.w - SC.r) + '" y2="' + sy(0) + '"/>';
-    h += '<text class="axlab" x="' + ((SC.l + SC.w - SC.r) / 2) + '" y="' + (SC.h - 10) + '" text-anchor="middle">공급지수 S (z)</text>';
+    h += '<text class="axlab" x="' + ((SC.l + SC.w - SC.r) / 2) + '" y="' + (SC.h - 10) + '" text-anchor="middle">공급 수준 S (z)</text>';
     h += '<text class="axlab" transform="rotate(-90 14 ' + ((SC.t + SC.h - SC.b) / 2) + ')" x="14" y="' +
-      ((SC.t + SC.h - SC.b) / 2) + '" text-anchor="middle">수요지수 D (z)</text>';
+      ((SC.t + SC.h - SC.b) / 2) + '" text-anchor="middle">수요 수준 D (z)</text>';
 
     /* 점 크기는 셀 수에 맞춰 줄입니다 — 격자 세분화(500m, ~3천 셀) 시 과밀 대응 */
     var dotR = cells.length > 1500 ? 2.2 : 3.8;
@@ -556,9 +587,9 @@
     /* 사분면 라벨은 **점 뒤에** 그립니다. SVG 에는 z-index 가 없어 문서 순서가
        곧 쌓임 순서인데, 예전에는 라벨을 먼저 찍어 우상단 라벨이 점 무더기에
        완전히 덮였습니다 — 사분면이 셋뿐인 것처럼 보였습니다. */
-    h += '<text class="qlab hot" x="' + (SC.l + 6) + '" y="' + (SC.t + 14) + '">고수요·저공급 → 증차·신설</text>';
+    h += '<text class="qlab hot" x="' + (SC.l + 6) + '" y="' + (SC.t + 14) + '">수요 많음·공급 부족 → 증차·신설</text>';
     h += '<text class="qlab" x="' + (SC.w - SC.r - 6) + '" y="' + (SC.t + 14) + '" text-anchor="end">고수요·고공급 · 적정</text>';
-    h += '<text class="qlab" x="' + (SC.l + 6) + '" y="' + (SC.h - SC.b - 8) + '">저수요·저공급 → DRT 검토</text>';
+    h += '<text class="qlab" x="' + (SC.l + 6) + '" y="' + (SC.h - SC.b - 8) + '">수요 적음·공급 부족 → 똑버스 검토</text>';
     h += '<text class="qlab" x="' + (SC.w - SC.r - 6) + '" y="' + (SC.h - SC.b - 8) + '" text-anchor="end">저수요·고공급 → 효율화</text>';
     h += '<circle class="scatring" data-scatring r="7" cx="-99" cy="-99" visibility="hidden"/>';
     $('#scatter').innerHTML = h;
@@ -878,7 +909,7 @@
           ? '정류장은 ' + inCell.length + '개 있지만 경유 노선 정보가 없습니다.'
           : '이 격자 안에 정류장이 없습니다.') +
         '<br><span class="mono" style="font-size:10.5px">' +
-        '사각지대 후보 — 도보권 밖이거나 노선이 닿지 않는 구역입니다.</span></div>';
+        '버스 부족 후보 — 도보권 밖이거나 노선이 닿지 않는 구역입니다.</span></div>';
       return;
     }
 
@@ -1109,7 +1140,7 @@
     return '<b>' + esc(c.name) + '</b> <span class="mono">' + esc(c.id) + '</span><br>' +
       '수요 D <b>' + c.demand + '</b> · 공급 S <b>' + c.supply + '</b> · MI <b>' +
       (c.mi >= 0 ? '+' : '') + c.mi.toFixed(2) + '</b><br>' +
-      '잠재수요 ' + fmt(c.flowTripsPerDay) + '통행/일 · 고령비 <b>' + Math.round(c.elderlyRatio * 100) + '%</b><br>' +
+      '추정 통행 ' + fmt(c.flowTripsPerDay) + '통행/일 · 고령비 <b>' + Math.round(c.elderlyRatio * 100) + '%</b><br>' +
       '<span class="tag ' + qc + '">' + esc(c.quadrantLabel) + '</span>' + adj;
   }
 

@@ -208,7 +208,7 @@
           S.recRegion = fromCell.region;
           S.map.zoomToRegion(fromCell.region);   /* 그 동이 화면을 채우게 확대 */
           C.toast('대시보드에서 <b>' + esc(fromCell.region) + '</b>(' + esc(cellId) +
-            ') 격자를 가져왔습니다. AI 추천도 <b>' + esc(fromCell.region) + '</b> 범위로 짭니다.');
+            ') 격자를 가져왔습니다. 최적화 추천도 <b>' + esc(fromCell.region) + '</b> 범위로 짭니다.');
         } else {
           C.toast('대시보드에서 <b>' + esc(cellId) + '</b> 격자를 가져왔습니다. 수단을 골라 지도를 클릭하세요.');
         }
@@ -664,7 +664,7 @@
       if (!rec.placements.length) {
         /* 빈 추천으로 기존 작업을 덮지 않습니다 — 이전 상태를 그대로 복원 */
         btn.disabled = false;
-        btn.innerHTML = HW.icon('spark') + (S.recommendation ? '추천 다시 받기' : 'AI 추천 배치안');
+        btn.innerHTML = HW.icon('spark') + (S.recommendation ? '추천 다시 받기' : '최적화 추천 받기');
         paintRecBox();
         C.toast(rec.summary && rec.summary.stoppedBecause === 'budget_too_small'
           ? '예산이 최소 단가보다 작아 배치할 수 없습니다. 예산을 늘려 보세요.'
@@ -701,7 +701,7 @@
       runSim();
     }).catch(function (err) {
       btn.disabled = false;
-      btn.innerHTML = HW.icon('spark') + 'AI 추천 배치안';
+      btn.innerHTML = HW.icon('spark') + '최적화 추천 받기';
       $('#recBox').innerHTML = '';
       C.toast('추천을 받지 못했습니다 — ' + esc(api.humanize(err)), 'err', 6000);
     });
@@ -758,16 +758,16 @@
 
     box.innerHTML =
       '<div class="rec-box">' +
-      '<div class="rec-head"><span class="rec-badge">AI 추천</span>' +
+      '<div class="rec-head"><span class="rec-badge">최적화 추천</span>' +
       esc(rec.methodLabel) +
       (rec.region ? '<span class="rec-scope-tag">' + esc(rec.region) + '</span>' : '') +
       (S.recEdited ? '<span class="rec-edited">사용자 수정됨</span>' : '') + '</div>' +
       '<div class="rec-nums">' +
       '<span><b>' + su.count + '</b>건</span>' +
       '<span><b>' + esc(won(su.totalKrw)) + '</b> (예산의 ' + su.budgetUsedPct + '%)</span>' +
-      '<span>사각지대 <b>' + fmt(su.expectedResolvedCells) + '</b>칸 해소</span>' +
-      '<span>일 <b>' + fmt(su.expectedResolvedTrips) + '</b>통행</span>' +
-      (su.krwPerTrip ? '<span><b>' + fmt(su.krwPerTrip) + '</b>원/통행</span>' : '') +
+      '<span>버스 부족 지역 <b>' + fmt(su.expectedResolvedCells) + '</b>곳 감소</span>' +
+      '<span>예상 승차 <b>+' + fmt(su.expectedResolvedTrips) + '</b>명/일</span>' +
+      (su.krwPerTrip ? '<span>승차 1건당 <b>' + fmt(su.krwPerTrip) + '</b>원</span>' : '') +
       '</div>' +
       '<div class="rec-note">' + esc(rec.methodNote) + ' (' + esc(reasonText) + ')</div>' +
       (su.costCompareLabel
@@ -835,14 +835,15 @@
     var cellsWe = Math.max(0, -(wi.needCellsDelta || 0));
     var tripsWe = Math.max(0, -(wi.potentialTripsPerDayDelta || 0));
     var su = rec.summary || {};
+    var tripsWd = Math.max(0, su.expectedResolvedPotentialTrips || 0);
     return '<div class="rec-alt rec-we">' +
       '<div class="rec-alt-head">주말도 함께 보면' +
         '<button class="help" data-help="weekendImpact" type="button">?</button></div>' +
-      '<div class="rec-we-row"><span class="rec-we-lb">사각지대 해소</span>' +
+      '<div class="rec-we-row"><span class="rec-we-lb">버스 부족 지역 감소</span>' +
         '<span class="rec-we-vl">평일 <b>' + fmt(su.expectedResolvedCells || 0) + '</b>칸' +
         ' · 주말 <b>' + fmt(cellsWe) + '</b>칸</span></div>' +
-      '<div class="rec-we-row"><span class="rec-we-lb">해소 통행</span>' +
-        '<span class="rec-we-vl">평일 <b>' + fmt(su.expectedResolvedTrips || 0) + '</b>통행/일' +
+      '<div class="rec-we-row"><span class="rec-we-lb">영향 통행 감소</span>' +
+        '<span class="rec-we-vl">평일 <b>' + fmt(tripsWd) + '</b>통행/일' +
         ' · 주말 <b>' + fmt(tripsWe) + '</b>통행/일</span></div>' +
       '<div class="rec-note">' + esc(wi.note || '') + '</div>' +
       '</div>';
@@ -875,7 +876,7 @@
     S.recommendation = null;
     S.recEdited = false;
     var btn = $('#btnRecommend');
-    if (btn) btn.innerHTML = HW.icon('spark') + 'AI 추천 배치안';
+    if (btn) btn.innerHTML = HW.icon('spark') + '최적화 추천 받기';
     runSim();
   }
 
@@ -980,7 +981,7 @@
     var rtrips = eff.resolvedTripsPerDay || 0;
     var MIN_TRIPS_FOR_UNIT = 10;
     $('#k4').innerHTML = (eff.krwPerTripPerDay != null && rtrips >= MIN_TRIPS_FOR_UNIT)
-      ? fmt(eff.krwPerTripPerDay) + '<small>원/통행</small>'
+      ? fmt(eff.krwPerTripPerDay) + '<small>원/건</small>'
       : '<span style="color:var(--ink3)">' + (rtrips > 0 ? '산출 보류' : '–') + '</span>';
     $('#k4d').className = 'dl';
     $('#k4d').textContent = has ? ('총 사업비 ' + won(S.result.cost.totalKrw)) : '기준선';
@@ -988,9 +989,9 @@
        영역이 켜져 있으면 영역 기준이라, 표기가 없으면 서로 다른 모수의 숫자를
        나란히 읽게 됩니다("영역에 3,000억 써서 통행당 880원"). 기준을 적습니다. */
     $('#k4s').textContent = rtrips >= MIN_TRIPS_FOR_UNIT
-      ? ('전 시간대 합계 ' + fmt(rtrips) + '통행 해소 기준' + (S.area ? ' · 화성시 전체' : ''))
+      ? ('전 시간대 예상 승차 증가 ' + fmt(rtrips) + '명/일 기준' + (S.area ? ' · 화성시 전체' : ''))
       : (rtrips > 0
-          ? ('해소 ' + fmt(rtrips) + '통행/일 — 단가를 논하기엔 표본이 작습니다')
+          ? ('예상 승차 증가 ' + fmt(rtrips) + '명/일 — 단가를 논하기엔 표본이 작습니다')
           : '배치를 추가하면 산출됩니다');
   
     paintKsparks();
@@ -1058,10 +1059,10 @@
           return Math.max(0, -(b.delta.potentialTripsPerDay || 0));
         }),
         current: S.period,
-        unit: ' 통행/일 해소',
+        unit: ' 통행/일 감소',
         fmt: ksFmt,
         avgLine: false,
-        head: hasPl ? '시간대별 해소 통행' : '배치하면 해소량이 표시됩니다'
+        head: hasPl ? '시간대별 영향 통행 감소' : '배치하면 감소량이 표시됩니다'
       });
     }
     C.wireKspark($('.kpis'));
@@ -1171,7 +1172,7 @@
       h += '<rect class="colhit" data-cmp="' + i + '" x="' + (cx - step / 2) + '" y="' + CM.t +
         '" width="' + step + '" height="' + plotH + '"/>';
     });
-    h += '<text class="axlab" x="' + CM.l + '" y="' + (CM.t - 6) + '">고수요·저공급 격자 수 (개)</text>';
+    h += '<text class="axlab" x="' + CM.l + '" y="' + (CM.t - 6) + '">버스 부족 지역 수 (곳)</text>';
     $('#cmpChart').innerHTML = h;
   }
 
@@ -1215,7 +1216,7 @@
     if (!S.placements.length) {
       host.innerHTML = '<div class="pcard"><h3>배치안이 비어 있습니다</h3>' +
         '<p>지도에서 수단을 배치하면, 기준선 대비 개선 효과와 소요 예산을 근거 문장으로 정리해 드립니다. ' +
-        '대시보드의 <b>노선 조정 우선순위 Top 10</b> 상위 격자부터 배치해 보는 것을 권장합니다.</p></div>';
+        '대시보드의 <b>우선 검토 지역</b>부터 배치해 보는 것을 권장합니다.</p></div>';
       return;
     }
 
@@ -1226,13 +1227,13 @@
     var verdict, verdictWhy;
     if (dn < 0 && !over) {
       verdict = '집행 가능 · 효과 확인됨';
-      verdictWhy = '예산 범위 안에서 사각지대가 실제로 줄어듭니다.';
+      verdictWhy = '예산 범위 안에서 버스 부족 지역이 실제로 줄어듭니다.';
     } else if (dn < 0 && over) {
       verdict = '효과는 있으나 예산 초과';
       verdictWhy = '배치 수를 줄이거나 예산 한도 상향이 필요합니다.';
     } else if (dn === 0) {
       verdict = '효과 미미 — 위치 재검토 필요';
-      verdictWhy = '배치 위치가 사각지대 중심에서 벗어나 있을 수 있습니다.';
+      verdictWhy = '배치 위치가 버스 부족 지역 중심에서 벗어나 있을 수 있습니다.';
     } else {
       verdict = '재검토 필요';
       verdictWhy = '해당 시간대 기준으로는 개선이 확인되지 않습니다.';
@@ -1251,20 +1252,20 @@
       '을 배치할 때 총 소요액은 <span class="num">' + esc(won(r.cost.totalKrw)) + '</span>입니다.</p></div>';
 
     h += '<div class="pcard"><h3>' + esc(b.periodName) + ' 시간대 효과</h3><ul>' +
-      '<li>고수요·저공급 격자 <span class="num">' + fmt(b.baseline.needCells) + '개 → ' + fmt(b.kpi.needCells) + '개</span>' +
-      (dn !== 0 ? ' (' + (dn < 0 ? fmt(-dn) + '개 해소' : fmt(dn) + '개 증가') + ')' : ' (변화 없음)') + '</li>' +
-      '<li>사각지대 잠재수요 <span class="num">일 ' + fmt(b.baseline.potentialTripsPerDay) + ' → ' + fmt(b.kpi.potentialTripsPerDay) + '통행</span>' +
-      (dt < 0 ? ' (' + fmt(-dt) + '통행 해소)' : '') + '</li>' +
+      '<li>버스 부족 지역 <span class="num">' + fmt(b.baseline.needCells) + '곳 → ' + fmt(b.kpi.needCells) + '곳</span>' +
+      (dn !== 0 ? ' (' + (dn < 0 ? fmt(-dn) + '곳 감소' : fmt(dn) + '곳 증가') + ')' : ' (변화 없음)') + '</li>' +
+      '<li>영향받는 추정 통행 <span class="num">일 ' + fmt(b.baseline.potentialTripsPerDay) + ' → ' + fmt(b.kpi.potentialTripsPerDay) + '통행</span>' +
+      (dt < 0 ? ' (' + fmt(-dt) + '통행 감소)' : '') + '</li>' +
       '<li>교통약자 수혜 <span class="num">일 ' + fmt(Math.max(0, -de)) + '통행</span> 추정</li>' +
       '</ul></div>';
 
     h += '<div class="pcard"><h3>비용 대비 효과</h3><ul>' +
       '<li>총 사업비 <span class="num">' + esc(won(r.cost.totalKrw)) + '</span>' +
       (S.budget > 0 ? ' / 한도 ' + esc(won(S.budget)) + (over ? ' <b style="color:var(--bad)">초과</b>' : '') : '') + '</li>' +
-      '<li>전 시간대 해소 통행 <span class="num">' + fmt(eff.resolvedTripsPerDay) + '통행/일</span></li>' +
+      '<li>전 시간대 예상 승차 증가 <span class="num">+' + fmt(eff.resolvedTripsPerDay) + '명/일</span></li>' +
       '<li>' + (eff.krwPerTripPerDay != null
-        ? '통행 1건당 <span class="num">' + fmt(eff.krwPerTripPerDay) + '원</span> (사업비 ÷ 해소 통행)'
-        : '해소된 통행이 없어 단가를 산출할 수 없습니다') + '</li>' +
+        ? '예상 승차 증가 1건당 <span class="num">' + fmt(eff.krwPerTripPerDay) + '원</span>'
+        : '예상 승차 증가가 없어 단가를 산출할 수 없습니다') + '</li>' +
       '</ul></div>';
 
     h += '<div class="pcard"><h3>실행 로드맵(안)</h3><ul>' +
@@ -1290,8 +1291,8 @@
          항등식이어서 백엔드가 avgMi 를 응답에서 제거했고, 그대로 두면
          p.delta.avgMi 가 undefined 라 toFixed 에서 터집니다.
          대신 실제로 의미가 있는 고령 통행 증감을 보여줍니다. */
-      '<tr><th>시간대</th><th>사각지대(전)</th><th>사각지대(후)</th><th>증감</th>' +
-      '<th>잠재수요(전)</th><th>잠재수요(후)</th><th>증감</th><th>고령 통행 증감</th></tr>' +
+      '<tr><th>시간대</th><th>버스 부족(전)</th><th>버스 부족(후)</th><th>증감</th>' +
+      '<th>영향 통행(전)</th><th>영향 통행(후)</th><th>증감</th><th>고령층 영향 증감</th></tr>' +
       viewPeriods().map(function (p) {
         var d = p.delta || {};
         return '<tr><td>' + esc(p.periodName) + '</td>' +
@@ -1309,7 +1310,7 @@
     var mi = typeof c.mi === 'number' ? (c.mi >= 0 ? '+' : '') + c.mi.toFixed(2) : '–';
     return '<b>' + esc(c.name) + '</b> <span class="mono">' + esc(c.id) + '</span><br>' +
       '수요 D <b>' + c.demand + '</b> · 공급 S <b>' + c.supply + '</b> · MI <b>' + mi + '</b><br>' +
-      '잠재수요 ' + fmt(c.flowTripsPerDay) + '통행/일 · 고령비 ' + Math.round((c.elderlyRatio || 0) * 100) + '%' +
+      '추정 통행 ' + fmt(c.flowTripsPerDay) + '통행/일 · 고령비 ' + Math.round((c.elderlyRatio || 0) * 100) + '%' +
       (c.adjusted ? '<br><span class="mono" style="color:var(--sel)">배치 효과 반영됨</span>' : '') + hint;
   }
 
@@ -1642,7 +1643,7 @@
 
     var warn = (A.budgetKrw !== B.budgetKrw)
       ? '<div class="cmp-warn">두 안의 설정 예산이 다릅니다(' + won(A.budgetKrw) + ' vs ' +
-        won(B.budgetKrw) + ') — 총액보다 <b>해소 통행당 사업비</b>로 비교하세요.</div>'
+        won(B.budgetKrw) + ') — 총액보다 <b>예상 승차 증가 1건당 사업비</b>로 비교하세요.</div>'
       : '';
 
     var tbl = '<div class="cmp-scroll"><table class="cmp2"><thead><tr><th>지표</th><th class="base">기준선(현행)</th>' +
@@ -1653,15 +1654,15 @@
       '<tr><td>배치 구성</td><td class="base">—</td><td class="wrapok">' + esc(compo(A)) +
       '</td><td class="wrapok">' + esc(compo(B)) + '</td></tr>' +
       sec('성과 — ' + pn + ' 시간대') +
-      row('공급 부족(사각지대) 격자', base.needCells,
+      row('버스 부족 지역', base.needCells,
         kpi(ba, 'needCells'), kpi(bb, 'needCells'), 'lo', fmt, '개') +
-      row('사각지대 잠재수요', base.potentialTripsPerDay,
+      row('영향받는 추정 통행', base.potentialTripsPerDay,
         kpi(ba, 'potentialTripsPerDay'), kpi(bb, 'potentialTripsPerDay'), 'lo', fmt, ' 통행/일') +
-      row('사각지대 고령 통행', base.elderlyTripsPerDay,
+      row('고령층 영향 통행', base.elderlyTripsPerDay,
         kpi(ba, 'elderlyTripsPerDay'), kpi(bb, 'elderlyTripsPerDay'), 'lo', fmt, ' 통행/일') +
       sec('효율 — 전 시간대 합') +
-      row('해소 통행량', null, effA.resolvedTripsPerDay, effB.resolvedTripsPerDay, 'hi', fmt, ' 통행/일') +
-      row('해소 통행당 사업비', null, effA.krwPerTripPerDay, effB.krwPerTripPerDay, 'lo', fmt, '원') +
+      row('예상 승차 증가', null, effA.resolvedTripsPerDay, effB.resolvedTripsPerDay, 'hi', fmt, ' 명/일') +
+      row('예상 승차 증가 1건당 사업비', null, effA.krwPerTripPerDay, effB.krwPerTripPerDay, 'lo', fmt, '원') +
       '</tbody></table></div>' +
       '<p class="cmp-note">색 굵은 값 = 그 지표에서 앞서는 안(색은 안 이름의 ● 와 동일) · ' +
       '▼▲ = 기준선 대비 증감 · 숫자는 모두 같은 엔진으로 다시 계산한 값입니다.</p>';
@@ -1672,9 +1673,9 @@
       var rt = eff.resolvedTripsPerDay;
       return '<div class="cmp-card ' + cls + '">' +
         '<div class="nm"><i class="cdot ' + cls + '"></i>' + esc(nm) + '</div>' +
-        '<div class="big">' + (rt == null ? '—' : fmt(rt)) + '<small> 통행/일 해소</small></div>' +
+        '<div class="big">' + (rt == null ? '—' : '+' + fmt(rt)) + '<small> 명/일 예상 승차</small></div>' +
         '<div class="sub">사업비 ' + won((r.cost || {}).totalKrw) +
-        (eff.krwPerTripPerDay != null ? ' · 통행당 ' + fmt(eff.krwPerTripPerDay) + '원' : '') + '</div>' +
+        (eff.krwPerTripPerDay != null ? ' · 승차 1건당 ' + fmt(eff.krwPerTripPerDay) + '원' : '') + '</div>' +
         '<div class="tag">지표 우위 ' + n + '개</div></div>';
     }
     var sum = '<div class="cmp-sum">' + card(A.name, ra, effA, tally.a, 'a') +
@@ -1693,7 +1694,7 @@
       }) + '</div>';
     }
     var ksHtml = mp.length
-      ? '<div class="cmp-diff"><h4>시간대별 사각지대 — 배치 적용 후 (개)</h4>' +
+      ? '<div class="cmp-diff"><h4>시간대별 버스 부족 지역 — 배치 적용 후 (곳)</h4>' +
         '<div class="cmp-ks">' + ks(ra, A.name, 'a') + ks(rb, B.name, 'b') + '</div></div>'
       : '';
 
@@ -1806,7 +1807,7 @@
         '<span>' + esc(periodName(s.period)) + '</span>' +
         '<span>배치 ' + (s.placements || []).length + '건</span>' +
         '<span>' + esc(won(su.costKrw)) + '</span>' +
-        '<span>' + (su.needDelta < 0 ? '사각지대 −' + Math.abs(su.needDelta) + '개' : '변화 없음') + '</span>' +
+        '<span>' + (su.needDelta < 0 ? '버스 부족 지역 −' + Math.abs(su.needDelta) + '곳' : '변화 없음') + '</span>' +
         (su.krwPerTrip != null ? '<span>' + fmt(su.krwPerTrip) + '원/통행</span>' : '') +
         '</span></button>' +
         '<button class="spick" data-pick="' + i + '" type="button" aria-pressed="false"' +
@@ -1900,7 +1901,7 @@
     S.recommendation = s.recommendation || null;
     S.recEdited = false;
     var rbtn = $('#btnRecommend');
-    if (rbtn) rbtn.innerHTML = HW.icon('spark') + (S.recommendation ? '추천 다시 받기' : 'AI 추천 배치안');
+    if (rbtn) rbtn.innerHTML = HW.icon('spark') + (S.recommendation ? '추천 다시 받기' : '최적화 추천 받기');
     S.name = s.name;
     S.period = s.period || S.period;
     S.daytype = s.daytype || 'wd';   /* 토글 도입 전 저장본은 평일 기준이었다 */
@@ -1993,14 +1994,14 @@
           배치목록: S.placements.map(function (p) {
             return { 수단: TYPE_KO[p.type] || p.type, 격자: p.cellName || p.cellId, 수량: p.count };
           }),
-          AI추천기준: S.recommendation ? (S.recommendation.methodLabel || null) : null,
-          AI추천설명: S.recommendation ? (S.recommendation.methodNote || null) : null,
+          최적화추천기준: S.recommendation ? (S.recommendation.methodLabel || null) : null,
+          최적화추천설명: S.recommendation ? (S.recommendation.methodNote || null) : null,
           효과: S.result ? {
             집행예정액: S.result.cost && S.result.cost.totalKrw,
-            일해소통행: eff.resolvedTripsPerDay,
-            통행당사업비: eff.krwPerTripPerDay,
-            이시간대_사각지대_기준선: b ? b.baseline.needCells : null,
-            이시간대_사각지대_배치후: b ? b.kpi.needCells : null
+            예상승차증가: eff.resolvedTripsPerDay,
+            승차증가1건당사업비: eff.krwPerTripPerDay,
+            이시간대_버스부족지역_기준선: b ? b.baseline.needCells : null,
+            이시간대_버스부족지역_배치후: b ? b.kpi.needCells : null
           } : null,
           선택한격자: S.selectedCellId
         };
@@ -2063,6 +2064,9 @@
     $('#btnReset').addEventListener('click', resetAll);
     /* 직접 바인딩하면 MouseEvent 가 strategy 인자로 들어가 전략이 초기화됩니다 */
     $('#btnRecommend').addEventListener('click', function () { requestRecommendation(); });
+    /* 초기 데이터·지도·이벤트 연결이 모두 끝난 뒤에만 추천을 열어 둡니다.
+       부팅 중 보이는 버튼을 먼저 누르면 아무 반응이 없던 짧은 경쟁 상태를 막습니다. */
+    $('#btnRecommend').disabled = false;
 
     $('#recScope').addEventListener('click', function (e) {
       var b = e.target.closest('[data-scope]');
@@ -2107,7 +2111,7 @@
       if (!col || !S.result) return C.hideTip();
       var p = viewPeriods()[+col.getAttribute('data-cmp')];
       C.showTip('<b>' + esc(p.periodName) + '</b><br>기준선 ' + p.baseline.needCells + '개 → 시나리오 ' +
-        p.kpi.needCells + '개<br>잠재수요 ' + fmt(p.baseline.potentialTripsPerDay) + ' → ' +
+        p.kpi.needCells + '곳<br>추정 통행 ' + fmt(p.baseline.potentialTripsPerDay) + ' → ' +
         fmt(p.kpi.potentialTripsPerDay) + '통행/일', e);
     });
     $('#cmpChart').addEventListener('mouseleave', C.hideTip);

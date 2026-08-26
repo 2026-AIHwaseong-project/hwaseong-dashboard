@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>정책 시뮬레이션 · 화성시 버스 미스매칭 대시보드</title>
-<meta name="description" content="정류장 신설·똑버스 배치·배차 증편을 지도에서 배치하고, 예산 대비 사각지대 해소 효과를 기준선과 비교하는 정책 시뮬레이션 화면">
+<meta name="description" content="정류장 신설·똑버스 배치·배차 증편을 지도에 배치하고, 예산 대비 버스 부족 지역 감소 효과를 기준선과 비교하는 정책 시뮬레이션 화면">
 <!-- index.html 과 같은 이유로 여기서 부릅니다 — app.css 안의 @import 는
      스타일 규칙 뒤에 있어 파서가 버립니다(그 파일의 주석 참고). -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="icon" type="image/png" href="assets/img/favicon.png">
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
-<link rel="stylesheet" href="assets/css/app.css">
+<link rel="stylesheet" href="assets/css/app.css?v=20260827-ux">
 </head>
 <body>
 <!--
@@ -41,7 +41,7 @@
   <header class="top">
     <div>
       <h1>배치안 시뮬레이션</h1>
-      <p class="sub">어디에 · 무엇을 · 얼마에 투입하면 사각지대가 얼마나 줄어드는지를 기준선과 비교합니다.
+      <p class="sub">어디에 · 무엇을 · 얼마에 투입하면 버스 부족 지역이 얼마나 줄어드는지를 기준선과 비교합니다.
         모든 수치는 배치를 바꾸는 즉시 다시 계산됩니다.</p>
     </div>
     <div class="ptoggles">
@@ -53,7 +53,7 @@
   <!-- ─────────────────── 기준선 대비 KPI ─────────────────── -->
   <section class="kpis" aria-label="기준선 대비 효과">
     <div class="kpi hero">
-      <div class="lb">고수요·저공급 격자
+      <div class="lb">버스 부족 지역 <span class="term">고수요·저공급 격자</span>
         <button class="help" data-help="need" type="button">?</button></div>
       <div class="vl pending" id="k1">–</div>
       <div class="dl" id="k1d">기준선</div>
@@ -61,7 +61,7 @@
       <div class="kspark" id="kc1" aria-label="시간대별 비교"></div>
     </div>
     <div class="kpi">
-      <div class="lb">사각지대 잠재수요
+      <div class="lb">영향받는 추정 통행 <span class="term">잠재수요</span>
         <button class="help" data-help="potential" type="button">?</button></div>
       <div class="vl pending" id="k2">–</div>
       <div class="dl" id="k2d">기준선</div>
@@ -69,19 +69,19 @@
       <div class="kspark" id="kc2" aria-label="시간대별 비교"></div>
     </div>
     <div class="kpi">
-      <div class="lb">사각지대 고령 통행</div>
+      <div class="lb">고령층 영향 통행</div>
       <div class="vl pending" id="k3">–</div>
       <div class="dl" id="k3d">기준선</div>
       <div class="sb" id="k3s">–</div>
       <div class="kspark" id="kc3" aria-label="시간대별 비교"></div>
     </div>
     <div class="kpi">
-      <div class="lb">해소 통행당 사업비
+      <div class="lb">예상 승차 증가 1건당 사업비
         <button class="help" data-help="baseline" type="button">?</button></div>
       <div class="vl pending" id="k4">–</div>
       <div class="dl" id="k4d">기준선</div>
       <div class="sb" id="k4s">–</div>
-      <div class="kspark good" id="kc4" aria-label="시간대별 해소 통행"></div>
+      <div class="kspark good" id="kc4" aria-label="시간대별 영향 통행 감소"></div>
     </div>
   </section>
 
@@ -112,9 +112,9 @@
 
       <div class="mtools">
         <div class="lset" id="layers" role="tablist" aria-label="지도 레이어">
-          <button class="lbtn on" data-layer="mi" type="button" title="미스매칭 지수 MI — 수요 대비 공급 부족 정도">버스 부족도</button>
-          <button class="lbtn" data-layer="demand" type="button" title="잠재수요 D">수요</button>
-          <button class="lbtn" data-layer="supply" type="button" title="공급 지수 S">공급</button>
+          <button class="lbtn on" data-layer="mi" type="button" title="버스 부족도 — 전문 지표: 미스매칭 지수 MI">버스 부족도</button>
+          <button class="lbtn" data-layer="demand" type="button" title="수요 수준 — 전문 지표: D">수요</button>
+          <button class="lbtn" data-layer="supply" type="button" title="공급 수준 — 전문 지표: S">공급</button>
           <button class="lbtn" data-layer="flow" type="button">유동인구</button>
         </div>
         <!-- 대시보드와 같은 토글입니다. 배치 판단에는 "여기 이미 정류장이 있나"가
@@ -173,7 +173,7 @@
         <div class="rec-types" id="recTypes" role="group" aria-label="추천에 쓸 수단"></div>
         <!-- 아이콘은 simulation.js 가 HW.icon('spark') 로 채웁니다(부팅 직후 교체).
              여기 글자는 스크립트가 늦게 붙는 순간에도 버튼이 비어 보이지 않게 두는 것입니다. -->
-        <button class="btn primary" id="btnRecommend" type="button" style="width:100%">AI 추천 배치안</button>
+        <button class="btn primary" id="btnRecommend" type="button" style="width:100%" disabled>최적화 추천 받기</button>
         <div class="rec-hint">예산 범위에서 효과가 가장 큰 지점을 알고리즘이 골라 줍니다.
           받은 뒤 자유롭게 고칠 수 있습니다.</div>
       </div>
@@ -205,14 +205,14 @@
     <!-- ───────────────────── 전후 비교 ───────────────────── -->
     <section class="card span7">
       <div class="chead">
-        <h2>시간대별 사각지대 격자 · 기준선 대비</h2>
+        <h2>시간대별 버스 부족 지역 · 기준선 대비</h2>
         <div class="keys">
           <span><i class="ghost"></i>기준선(배치 전)</span>
           <span><i style="background:var(--c-board)"></i>시나리오(배치 후)</span>
         </div>
       </div>
       <svg id="cmpChart" class="chart" viewBox="0 0 640 260" role="img"
-           aria-label="시간대별 고수요·저공급 격자 수를 기준선과 시나리오로 비교한 막대차트. 아래 표에 같은 수치가 있습니다."></svg>
+           aria-label="시간대별 버스 부족 지역 수를 기준선과 시나리오로 비교한 막대차트. 아래 표에 같은 수치가 있습니다."></svg>
       <details class="tbl">
         <summary>시간대별 수치 표 보기</summary>
         <div class="tblwrap"><table id="deltaTbl"></table></div>
@@ -253,7 +253,7 @@
   <footer class="pg">
     <div class="fx">
       <span>배치효과: 정류장=커버리지↑ · 똑버스=넓은 반경 얕은 공급↑ · 증편=근접 격자 공급↑</span>
-      <span>해소 통행당 사업비 = 총 사업비 ÷ 전 시간대 해소 통행 합</span>
+      <span>예상 승차 증가 1건당 사업비 = 총 사업비 ÷ 전 시간대 예측 승차 증가량</span>
     </div>
     <!-- 대시보드와 같은 발행 표기 (core.js) -->
     <p class="issuer" data-issuer></p>
@@ -261,11 +261,11 @@
 </div>
 
 <script src="assets/js/config.js"></script>
-<script src="assets/js/core.js"></script>
-<script src="assets/js/api.js"></script>
-<script src="assets/js/map.js"></script>
+<script src="assets/js/core.js?v=20260827-ux"></script>
+<script src="assets/js/api.js?v=20260827-ux"></script>
+<script src="assets/js/map.js?v=20260827-ux"></script>
 <script src="assets/js/report.js"></script>
 <script src="assets/js/chat.js"></script>
-<script src="assets/js/simulation.js"></script>
+<script src="assets/js/simulation.js?v=20260827-ux"></script>
 </body>
 </html>

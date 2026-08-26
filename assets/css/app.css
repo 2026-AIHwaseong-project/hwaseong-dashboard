@@ -2145,3 +2145,42 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 .rp-archive[open] summary svg{transform:rotate(-90deg)}
 .rp-archive .rp-count{color:var(--ink3);font-weight:400}
 .rp-archive .scen-list{margin-top:4px}
+
+/* ===========================================================================
+ * [37] 대시보드 요약/상세 보기
+ *   기본 화면에서는 결론·지도·상위 5곳만 남기고, 근거 차트와 표는 사용자가
+ *   [상세 분석]을 고를 때 같은 상태 그대로 펼칩니다.
+ * ======================================================================== */
+.viewbar{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  margin:-2px 0 12px;padding:8px 10px 8px 14px;border:1px solid var(--line);
+  border-radius:10px;background:var(--card)}
+.viewcopy{display:flex;align-items:baseline;gap:9px;min-width:0;color:var(--ink2)}
+.viewcopy b{font-size:12px;color:var(--ink);white-space:nowrap}
+.viewcopy span{font-size:11.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.view-switch{display:flex;gap:3px;padding:3px;border:1px solid var(--line);
+  border-radius:8px;background:var(--bg);flex:none}
+.view-btn{min-height:30px;padding:5px 12px;border-radius:6px;font-size:11.5px;
+  font-weight:650;color:var(--ink2)}
+.view-btn:hover{background:var(--brand-soft);color:var(--brand-ink)}
+.view-btn.on,.view-btn.on:hover{background:var(--brand);color:#fff}
+.term{font-size:10px;font-weight:400;color:var(--ink3);margin-left:4px;white-space:nowrap}
+
+body[data-view="summary"] .detail-only{display:none!important}
+body[data-view="summary"] .kpis{grid-template-columns:1.45fr 1fr 1fr}
+body[data-view="summary"] .kpis .kspark{display:none}
+body[data-view="summary"] .kpi{min-height:104px;justify-content:center}
+body[data-view="summary"] #t10 .trow:nth-child(n+6){display:none}
+body[data-view="summary"] .dashgrid .sidecard{grid-row:1}
+
+@media (max-width:1024px){
+  body[data-view="summary"] .kpis{grid-template-columns:1fr 1fr}
+}
+@media (max-width:680px){
+  .viewbar{align-items:stretch;flex-direction:column;gap:7px;padding:10px}
+  .viewcopy{display:block}
+  .viewcopy b,.viewcopy span{display:block;white-space:normal}
+  .view-switch{width:100%}
+  .view-btn{flex:1}
+  body[data-view="summary"] .kpis{grid-template-columns:1fr}
+  body[data-view="summary"] .kpi + .kpi{border-left:0;border-top:1px solid var(--line)}
+}

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>사용자 화면 계약 테스트</title>
+<style>
+  body{font:14px/1.5 system-ui,sans-serif;margin:24px;color:#12233a}
+  #app{position:fixed;left:-20000px;top:0;width:1440px;height:900px;border:0}
+  .pass{color:#087443}.fail{color:#b42318}
+</style>
+</head>
+<body data-status="running">
+<h1>사용자 화면 계약 테스트</h1>
+<p id="summary">실행 중…</p>
+<ol id="results"></ol>
+<iframe id="app" title="테스트 대상 화면"></iframe>
+<script>
+(function () {
+  'use strict';
+
+  var frame = document.getElementById('app');
+  var list = document.getElementById('results');
+  var passed = 0, failed = 0;
+
+  function record(ok, message) {
+    var li = document.createElement('li');
+    li.className = ok ? 'pass' : 'fail';
+    li.textContent = (ok ? 'PASS: ' : 'FAIL: ') + message;
+    list.appendChild(li);
+    if (ok) passed += 1; else failed += 1;
+  }
+
+  function assert(condition, message) { record(Boolean(condition), message); }
+  function wait(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+  function load(url) {
+    return new Promise(function (resolve) {
+      frame.onload = function () { resolve(frame.contentDocument); };
+      frame.src = url;
+    });
+  }
+  async function waitFor(doc, check, timeout) {
+    var started = Date.now();
+    while (Date.now() - started < timeout) {
+      if (check()) return;
+      await wait(100);
+    }
+    throw new Error('화면 상태 대기 시간 초과: ' + doc.title);
+  }
+  function visible(doc, el) {
+    if (!el) return false;
+    var style = doc.defaultView.getComputedStyle(el);
+    return style.display !== 'none' && style.visibility !== 'hidden';
+  }
+  function visibleCount(doc, selector) {
+    return Array.prototype.filter.call(doc.querySelectorAll(selector), function (el) {
+      return visible(doc, el);
+    }).length;
+  }
+  function label(doc, id) {
+    var value = doc.getElementById(id);
+    var tile = value && value.closest('.kpi');
+    var lb = tile && tile.querySelector('.lb');
+    return lb ? lb.textContent.replace('?', '').trim() : '';
+  }
+
+  async function testDashboard() {
+    var doc = await load('../index.html?server=http://127.0.0.1:8000');
+    await waitFor(doc, function () {
+      return doc.querySelectorAll('#t10 .trow').length >= 10;
+    }, 15000);
+
+    var summaryButton = doc.querySelector('[data-dashboard-view="summary"]');
+    var detailButton = doc.querySelector('[data-dashboard-view="detail"]');
+    assert(summaryButton && detailButton, '대시보드에 요약 보기와 상세 분석 전환이 있다');
+    assert(doc.body.getAttribute('data-view') === 'summary', '대시보드는 요약 보기로 시작한다');
+    assert(summaryButton && summaryButton.getAttribute('aria-pressed') === 'true', '요약 보기 선택 상태가 보조기기에 전달된다');
+    assert(visibleCount(doc, '.kpis .kpi') === 3, '요약 보기에는 핵심 KPI 3개만 보인다');
+    assert(visibleCount(doc, '.kpis .kspark') === 0, '요약 보기에서는 반복 시간대 미니차트를 숨긴다');
+    assert(visibleCount(doc, '#t10 .trow') === 5, '요약 보기에는 우선 검토 지역 5곳만 보인다');
+    assert(!visible(doc, doc.querySelector('.routecard')), '요약 보기에서는 노선·차트·표 상세 영역을 숨긴다');
+
+    assert(label(doc, 'k1').indexOf('버스 부족 지역') === 0, '첫 KPI는 시민어인 버스 부족 지역을 앞세운다');
+    assert(label(doc, 'k2').indexOf('영향받는 추정 통행') === 0, '잠재수요는 영향받는 추정 통행으로 설명한다');
+    assert(label(doc, 'k4').indexOf('똑버스 우선 검토 지역') === 0, 'DRT 후보는 똑버스 우선 검토 지역으로 설명한다');
+    assert(doc.querySelector('.mapcard h2').textContent.indexOf('버스 부족도 지도') >= 0, '지도 제목은 버스 부족도를 먼저 말한다');
+
+    if (detailButton) detailButton.click();
+    await wait(50);
+    assert(doc.body.getAttribute('data-view') === 'detail', '상세 분석 버튼이 상세 보기로 전환한다');
+    assert(detailButton && detailButton.getAttribute('aria-pressed') === 'true', '상세 분석 선택 상태가 보조기기에 전달된다');
+    assert(visibleCount(doc, '.kpis .kpi') === 4, '상세 분석에는 KPI 4개가 모두 보인다');
+    assert(visibleCount(doc, '.kpis .kspark') === 4, '상세 분석에는 시간대 비교가 다시 보인다');
+    assert(visibleCount(doc, '#t10 .trow') === 10, '상세 분석에는 우선순위 10곳이 모두 보인다');
+    assert(visible(doc, doc.querySelector('.routecard')), '상세 분석에는 노선·차트·표 영역이 보인다');
+
+    if (summaryButton) summaryButton.click();
+    frame.style.width = '390px';
+    await wait(100);
+    assert(doc.defaultView.getComputedStyle(doc.querySelector('.viewbar')).flexDirection === 'column',
+      '좁은 화면에서는 보기 전환 안내와 버튼을 세로로 배치한다');
+    assert(doc.defaultView.getComputedStyle(doc.querySelector('.kpis')).gridTemplateColumns.split(' ').length === 1,
+      '좁은 화면에서는 핵심 KPI를 한 열로 읽는다');
+    assert(doc.documentElement.scrollWidth <= doc.documentElement.clientWidth,
+      '좁은 화면에서도 문서 전체에 가로 스크롤이 생기지 않는다');
+    frame.style.width = '1440px';
+  }
+
+  async function testSimulation() {
+    var doc = await load('../simulation.html?cell=%EB%8B%A4%EC%82%AC6707&period=am&server=http://127.0.0.1:8000');
+    await waitFor(doc, function () {
+      var button = doc.getElementById('btnRecommend');
+      return button && !button.disabled;
+    }, 15000);
+
+    assert(label(doc, 'k1').indexOf('버스 부족 지역') === 0, '시뮬레이션도 버스 부족 지역 용어를 쓴다');
+    assert(label(doc, 'k2').indexOf('영향받는 추정 통행') === 0, '시뮬레이션도 영향받는 추정 통행 용어를 쓴다');
+    assert(label(doc, 'k4').indexOf('예상 승차 증가 1건당 사업비') === 0, '효율 KPI가 예측 승차 증가 기준임을 밝힌다');
+
+    var button = doc.getElementById('btnRecommend');
+    assert(button.textContent.indexOf('최적화 추천') >= 0, '추천 버튼은 최적화 알고리즘의 역할을 밝힌다');
+    button.dispatchEvent(new doc.defaultView.MouseEvent('click', {
+      bubbles: true, cancelable: true, view: doc.defaultView
+    }));
+    await waitFor(doc, function () { return Boolean(doc.querySelector('.rec-box')); }, 15000);
+
+    var badge = doc.querySelector('.rec-badge');
+    var nums = doc.querySelector('.rec-nums');
+    var methodNote = doc.querySelector('.rec-box > .rec-note');
+    var notes = Array.prototype.map.call(doc.querySelectorAll('.rec-note'), function (el) { return el.textContent; }).join(' ');
+    assert(badge && badge.textContent.trim() === '최적화 추천', '추천 결과 배지가 AI가 아닌 최적화를 표시한다');
+    assert(nums && nums.textContent.indexOf('예상 승차') >= 0, '전 시간대 효과를 예상 승차 증가로 표시한다');
+    assert(nums && nums.textContent.indexOf('승차 1건당') >= 0, '효율 단가의 분모를 승차 증가로 표시한다');
+    assert(methodNote && methodNote.textContent.indexOf('사업비 1원당 예측 승차 증가량이 가장 큰') >= 0,
+      '추천 산정 설명은 예측 승차 증가량을 늘리는 목적을 정확히 말한다');
+    assert(doc.getElementById('k4s').textContent.indexOf('전 시간대 예상 승차 증가') >= 0, 'KPI 보조 문구가 전 시간대 합산 지표를 구분한다');
+    assert(doc.getElementById('kc4').textContent.indexOf('시간대별 영향 통행 감소') >= 0, '시간대별 잠재수요 감소와 전 시간대 승차 증가를 다른 이름으로 구분한다');
+  }
+
+  (async function () {
+    try {
+      await testDashboard();
+      await testSimulation();
+    } catch (err) {
+      record(false, err && err.message ? err.message : String(err));
+    }
+    document.body.setAttribute('data-status', failed ? 'fail' : 'pass');
+    document.getElementById('summary').textContent = passed + '개 통과 · ' + failed + '개 실패';
+  })();
+})();
+</script>
+</body>
+</html>

@@ -29,9 +29,9 @@
      MI 만 둘이 달라서, 범례를 prefix 로 그리면 존재하지 않는 --m0 을 참조해
      색 띠가 투명하게 나옵니다. */
   var LAYERS = {
-    mi: { key: 'mi', prefix: 'm', varPrefix: 'mi', steps: 7, title: '미스매칭 지수 MI', unit: '(z)', kind: 'diverging' },
-    demand: { key: 'demand', prefix: 'sb', steps: 5, title: '수요지수 D', unit: '5분위', kind: 'sequential' },
-    supply: { key: 'supply', prefix: 'so', steps: 5, title: '공급지수 S', unit: '5분위', kind: 'sequential' },
+    mi: { key: 'mi', prefix: 'm', varPrefix: 'mi', steps: 7, title: '버스 부족도', unit: 'MI (z)', kind: 'diverging' },
+    demand: { key: 'demand', prefix: 'sb', steps: 5, title: '수요 수준', unit: 'D · 5분위', kind: 'sequential' },
+    supply: { key: 'supply', prefix: 'so', steps: 5, title: '공급 수준', unit: 'S · 5분위', kind: 'sequential' },
     /* 유동인구는 --fl(자주). 예전에는 수요와 같은 'sb'(파랑)를 써서, 두 층을
        번갈아 켜도 지도가 똑같이 보였습니다 — 무엇을 보고 있는지 알 수 없었습니다. */
     flow: { key: 'flow', prefix: 'fl', steps: 5, title: '유동인구(잠재수요)', unit: '5분위', kind: 'sequential' }
@@ -1761,7 +1761,7 @@
       var mi = typeof c.mi === 'number' ? (c.mi >= 0 ? '+' : '') + c.mi.toFixed(2) : '–';
       return '<b>' + esc(c.name) + '</b> <span class="mono">' + esc(c.id) + '</span><br>' +
         '수요 D <b>' + c.demand + '</b> · 공급 S <b>' + c.supply + '</b> · MI <b>' + mi + '</b><br>' +
-        '잠재수요 ' + C.fmt(c.flowTripsPerDay) + '통행/일 · 고령비 <b>' +
+        '추정 통행 ' + C.fmt(c.flowTripsPerDay) + '통행/일 · 고령비 <b>' +
         Math.round((c.elderlyRatio || 0) * 100) + '%</b>';
     }
 
