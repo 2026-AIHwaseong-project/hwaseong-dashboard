@@ -41,6 +41,7 @@
     recommendation: null,   // 추천 결과 원본
     recEdited: false,       // 추천안을 사용자가 손봤는지
     recStrategy: 'efficiency',  // 어떤 목적으로 고를지 (효율/약자/균형/즉시)
+    recTypes: new Set(['stop', 'drt', 'freq']),  // 추천에 쓸 수단 (기본 전부 — 지금까지의 동작과 같음)
     recRegion: null,        // 추천 범위 읍면동 (null = 화성시 전체)
     area: null,             // 분석 영역 안 격자 ID Set (null = 화성시 전체)
     baseCells: {},          // 시간대별 기준선 격자 — 영역 KPI 를 다시 세는 데 씁니다
@@ -159,6 +160,8 @@
       renderPeriodTabs(meta.periods);
       renderDaytypeToggle();
       renderToolbar(meta.effects || []);
+      renderRecTypes(meta.effects || []);
+      wireRecTypes();
       renderBudgetInput();
       renderFooter(meta);
 
@@ -386,6 +389,50 @@
     }).join('');
   }
 
+  /* 추천에 쓸 수단 — 지도 위 .simtool(수동 배치 도구, 라디오)과 헷갈리기 쉽지만
+     이건 별개의 다중 선택(체크박스) 상태다. 예전엔 이 UI 자체가 없어서 [AI 추천
+     배치안]이 항상 서버 기본값(3종 전부)으로 나갔는데, 증편의 파급 효과가
+     정류장·똑버스보다 수십~수백 배 커서(반경 안 정류장을 공유하는 모든 격자에
+     영향) 예산이 아무리 남아도 그리디가 증편만 골랐다 — "지도엔 똑버스가 많은데
+     추천엔 하나도 없다"는 문의가 실제로 있었다. README §3분 데모에도 이미
+     "allowedTypes:['drt']로 따로 돌리는 편이 안전하다"고 적혀 있던 우회로를,
+     화면에서 직접 고를 수 있게 만든 것이다.
+     즉시 착수(quick)는 서버가 무조건 정류장만 쓰므로(_greedy: strategy=='quick'
+     이면 allowed_types 를 무시) 그 목적일 때는 눌러도 반영이 안 된다는 걸
+     disabled 로 미리 알린다. */
+  function renderRecTypes(effects) {
+    var host = $('#recTypes');
+    if (!host) return;
+    var quick = S.recStrategy === 'quick';
+    host.innerHTML = '<span class="rs-lb">추천 수단</span>' + effects.map(function (e) {
+      var on = quick ? (e.type === 'stop') : S.recTypes.has(e.type);
+      return '<button class="simtool' + (on ? ' on' : '') + '" data-rectype="' + esc(e.type) + '"' +
+        ' type="button" aria-pressed="' + on + '"' +
+        (quick ? ' disabled title="즉시 착수는 정류장만 씁니다"' : '') + '>' +
+        toolIcon(e.type, e.icon) + esc(e.label) + '</button>';
+    }).join('');
+  }
+
+  function wireRecTypes() {
+    var host = $('#recTypes');
+    if (!host) return;
+    host.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-rectype]');
+      if (!b || b.disabled) return;
+      var t = b.getAttribute('data-rectype');
+      if (S.recTypes.has(t)) {
+        /* 마지막 하나까지 끄면 서버가 400("allowedTypes 가 비어 있습니다")을
+           내고, 그 앞에 즉시 착수처럼 "왜 추천이 하나도 안 나오지" 상태가 된다.
+           끄기 전에 막는 게 요청 자체를 보내고 실패를 보여주는 것보다 낫다. */
+        if (S.recTypes.size === 1) { C.toast('적어도 하나는 켜져 있어야 합니다.'); return; }
+        S.recTypes.delete(t);
+      } else {
+        S.recTypes.add(t);
+      }
+      renderRecTypes(Object.keys(S.effects).map(function (k) { return S.effects[k]; }));
+    });
+  }
+
   function renderBudgetInput() {
     var inp = $('#budgetInput');
     inp.value = Math.round(S.budget / 100000000);
@@ -591,6 +638,9 @@
        바꿨더니 영역을 지정하면 지역 균형을 고를 수 없는 버그가 됐습니다.
        (영역이 있으면 region 은 아예 전송되지 않으므로 recRegion 만 봐선 안 됩니다) */
     if (!S.area && S.recRegion && S.recStrategy === 'balance') S.recStrategy = 'efficiency';
+    /* 목적 전환으로 quick 여부가 바뀌었을 수 있으니 수단 칸도 다시 그립니다
+       (즉시 착수 ↔ 다른 목적 전환 시 disabled 상태가 맞아떨어져야 합니다). */
+    renderRecTypes(Object.keys(S.effects).map(function (k) { return S.effects[k]; }));
     var btn = $('#btnRecommend');
     btn.disabled = true;
     btn.textContent = '계산 중…';
@@ -602,6 +652,9 @@
       budgetKrw: S.budget,
       maxPlacements: 10,
       strategy: S.recStrategy,
+      // quick 은 서버가 어차피 정류장으로 못박으니(_greedy) 그대로 알려 화면과
+      // 요청이 같은 말을 하게 맞춥니다 — 실제 선택에 영향은 없습니다.
+      allowedTypes: S.recStrategy === 'quick' ? ['stop'] : Array.from(S.recTypes),
       /* 지도에서 끈 영역이 있으면 그 안에서만 고릅니다(읍면동 범위보다 우선).
          영역 밖 지점을 추천하면 화면의 영역 KPI 와 어긋납니다. */
       cellIds: S.area ? Array.from(S.area) : undefined,
