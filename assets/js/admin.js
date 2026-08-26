@@ -422,7 +422,14 @@
     api.call('admin.save', null, body).then(function (res) {
       $('#saveReason').value = '';
       if (res.requiresRefresh && res.requiresRefresh.length) {
-        C.toast('저장되었습니다 — 모델 상수는 [지표 재계산]을 실행해야 화면에 반영됩니다', '', 8000);
+        /* 재계산이 필요한 값(모델·기준선 상수)은 저장 즉시 자동으로 재계산을
+           건다 — "저장했는데 화면이 안 바뀐다"가 이 화면에서 가장 흔한 혼란이었고,
+           버튼을 따로 누르게 하면 그 사이의 '저장됐지만 미반영' 상태가 사람 몫이
+           된다. 진행 상황은 아래 작업 로그로 시선을 옮겨 보여준다. */
+        C.toast('저장되었습니다 — 지표 재계산을 자동으로 시작합니다 (수십 초)', '', 8000);
+        startRefresh(['join', 'model', 'validate', 'load', 'reload'],
+                     '상수 저장 — 자동 지표 재계산');
+        focusJobLog();
       } else {
         C.toast('적용되었습니다 — 시뮬레이션·추천에 즉시 반영됩니다');
       }
@@ -443,13 +450,24 @@
   }
 
   /* --------------------------------------------------------- 최신화 */
+  /** 작업 로그로 시선을 옮깁니다 — 자동 재계산처럼 사용자가 다른 카드에서
+      촉발한 작업은 로그가 화면 밖이라 "뭔가 도는 중"이 안 보입니다. */
+  function focusJobLog() {
+    var log = $('#jobLog');
+    if (!log) return;
+    log.hidden = false;
+    if (!log.hasAttribute('tabindex')) log.setAttribute('tabindex', '-1');
+    log.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    log.focus({ preventScroll: true });
+  }
+
   function startRefresh(steps, label, opts) {
     var body = { reason: label, actor: 'admin' };
     if (steps) body.steps = steps;
     if (opts && opts.uploadId) { body.uploadId = opts.uploadId; body.apply = !!opts.apply; }
     /* 새 작업이 시작되면 이전 예행의 [라이브에 반영]은 반드시 사라져야 한다.
        남겨 두면 방금 것이 아닌 옛 uploadId 로 반영이 나갈 수 있다. */
-    if ($('#dryApply')) $('#dryApply').hidden = true;
+    setApplyUploadState(false);
     if ($('#dryResult')) $('#dryResult').hidden = true;
     api.call('admin.refresh', null, body)
       .then(function () {
@@ -668,10 +686,23 @@
     }
     el.innerHTML = html;
     el.hidden = false;
-    /* 여기서만 [라이브에 반영]이 열린다 — 서버가 반영을 허용하고(HW_UPLOAD_APPLY)
+    /* 여기서만 [라이브에 반영]이 풀린다 — 서버가 반영을 허용하고(HW_UPLOAD_APPLY)
        방금 검증한 업로드가 손에 있을 때. 검증 결과를 본 사람만 반영할 수 있다. */
-    var ap = $('#dryApply');
-    if (ap) ap.hidden = !((S.upload && S.upload.applyEnabled) && S.pendingUpload);
+    setApplyUploadState(!!((S.upload && S.upload.applyEnabled) && S.pendingUpload));
+  }
+
+  /** [라이브에 반영] 버튼 상태. 숨기지 않고 **비활성으로 보여준다** — 숨기면
+      "반영은 어디서 하지?"를 검증이 끝나기 전에는 알 수 없다. 왜 안 눌리는지는
+      호버 안내(title)가 말한다. */
+  function setApplyUploadState(ready) {
+    var b = $('#btnApplyUpload');
+    if (!b) return;
+    b.disabled = !ready;
+    b.title = ready
+      ? '방금 검증한 파일로 라이브 원본을 교체합니다'
+      : (S.upload && S.upload.applyEnabled === false
+        ? '서버에서 라이브 반영이 꺼져 있습니다 — .env 의 HW_UPLOAD_APPLY=1 로 켭니다'
+        : 'CSV 파일을 올리고 [검증 실행]을 먼저 하세요 — 검증 결과를 본 뒤에만 반영할 수 있습니다');
   }
 
   /* ------------------------------------------------------------ 배선 */
