@@ -138,3 +138,9 @@ body { padding-bottom: 72px; }
 /* 잡이 도는 동안 label 은 disabled 가 안 먹습니다. 눌리는데 아무 일도
    안 나는 상태가 가장 나쁘므로 클릭 자체를 막습니다. */
 .admupload .btn.disabled { opacity: .5; pointer-events: none; }
+
+/* 저장 위치 토글 — 상단 액션 줄. 체크 해제(기본)=로컬 초안, 체크=서버(DB) 저장 */
+.admmode{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);
+  cursor:pointer;user-select:none;padding:0 4px}
+.admmode input{accent-color:var(--brand);width:14px;height:14px;cursor:pointer}
+.admmode small{font-size:10.5px;color:var(--ink3)}

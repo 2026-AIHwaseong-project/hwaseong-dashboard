@@ -16,7 +16,13 @@
   var S = { params: [], byKey: {}, dirty: {}, status: null, polling: null, meta: null,
             /* 확인창이 무엇을 확정하려는지 — 저장 버튼과 업로드 검증 버튼이
                같은 [확정]을 쓰기 때문에 반드시 구분해야 한다. */
-            confirmMode: 'params', upload: null, uploading: false };
+            confirmMode: 'params', upload: null, uploading: false,
+            /* 저장 위치 — false(기본)=로컬 초안(이 브라우저), true=서버(DB).
+               로컬 초안은 서버·화면 계산에 영향이 없어 토큰 없이 만져볼 수 있고,
+               DB 저장을 켜는 순간 관리자 토큰을 확인한다(ensureWriteToken). */
+            dbMode: false };
+
+  var LS_DRAFT = 'hw.adminDraft';   /* 로컬 초안 — {savedAt, reason, changes:{key:value|null}} */
 
   /* 사유는 **선택**입니다(2026-08-26 — 한때 서버가 5자 이상을 요구해 콘솔이
      '관리자 콘솔에서 수정'으로 자동 채웠는데, 그 문구는 이력에서 아무것도
@@ -87,6 +93,18 @@
       renderGridOverrides(rs[2]);
       renderDataState();
       updateSaveBar();
+      /* 저장 위치 복원 — 세션에 'db' 로 남아 있어도 쓰기 권한이 확인될 때만
+         켠다(토큰이 사라졌으면 조용히 로컬로 내려간다). */
+      var want = 'local';
+      try { want = sessionStorage.getItem('hw.adminSaveMode') || 'local'; } catch (e) { /* 무시 */ }
+      S.dbMode = want === 'db' && rs[2].canWrite !== false;
+      syncSaveModeUi();
+      var n = applyDraftToInputs();
+      if (n && !S.draftNoticeShown) {
+        S.draftNoticeShown = true;
+        C.toast('로컬 초안 <b>' + n + '건</b>을 불러왔습니다(이 브라우저 전용 — 서버 미반영). '
+          + '반영하려면 [DB에 저장]을 켜고 [적용]하세요.', '', 8000);
+      }
     })['catch'](function (e) { C.toast(esc(api.humanize(e)), 'err'); });
   }
 
@@ -407,20 +425,90 @@
     /* 사유 입력칸은 하단 저장 바(적용 대기 옆)에 있습니다 — 값을 고치는 그
        자리에서 바로 적게 하기 위해서입니다. 확인 모달은 파라미터 저장과 업로드
        리포트가 함께 쓰므로 열 때마다 모드를 되돌립니다. */
-    $('#confirmReason').textContent =
-      '적용하면 서버에 저장되고 변경 이력에 남습니다. 되돌리려면 [모두 기본값으로]를 쓰세요.';
+    $('#confirmReason').textContent = S.dbMode
+      ? '적용하면 서버(DB)에 저장되고 변경 이력에 남습니다. 되돌리려면 [모두 기본값으로]를 쓰세요.'
+      : '지금은 로컬 초안 모드입니다 — 이 브라우저에만 저장되고 서버·화면 계산에는 영향이 없습니다. '
+        + '실제 반영은 상단 [DB에 저장]을 켜세요.';
     S.confirmMode = 'params';
     $('#confirmModal').querySelector('h2').textContent = '변경 내용 확인';
     $('#btnConfirm').textContent = '확정';
     $('#confirmModal').hidden = false;
   }
 
+  function readDraft() {
+    try { return JSON.parse(localStorage.getItem(LS_DRAFT) || 'null'); }
+    catch (e) { return null; }
+  }
+  function clearDraft() {
+    try { localStorage.removeItem(LS_DRAFT); } catch (e) { /* 무시 */ }
+  }
+
+  /** 로컬 초안 저장 — 서버를 건드리지 않는다. 입력·적용 대기 표시는 그대로
+      남는다("서버엔 아직"이라는 신호). 기존 초안 위에 이번 변경을 덮는다. */
+  function saveDraftLocal() {
+    var d = { savedAt: C.nowStamp(), reason: $('#saveReason').value.trim(), changes: {} };
+    var prev = readDraft();
+    if (prev && prev.changes) for (var pk in prev.changes) d.changes[pk] = prev.changes[pk];
+    for (var k in S.dirty) d.changes[k] = S.dirty[k];
+    try { localStorage.setItem(LS_DRAFT, JSON.stringify(d)); }
+    catch (e) { C.toast('초안을 저장하지 못했습니다(브라우저 저장 공간).', 'err'); return; }
+    C.toast('이 브라우저에 <b>초안으로만</b> 저장했습니다 — 서버·화면 계산에는 반영되지 '
+      + '않습니다. 실제 반영은 상단 [DB에 저장]을 켜고 다시 [적용]하세요.', '', 9000);
+  }
+
+  /** 로컬 초안을 입력 칸에 되살린다(새로고침·재방문에도 초안 유지). 반환 = 건수. */
+  function applyDraftToInputs() {
+    var d = readDraft();
+    if (!d || !d.changes) return 0;
+    var n = 0;
+    for (var k in d.changes) {
+      var p = S.byKey[k];
+      var input = document.querySelector('input[data-key="' + k + '"]');
+      if (!p || !input) continue;      /* 서버에서 사라진 키는 조용히 건너뜀 */
+      input.value = d.changes[k] === null ? p.default : d.changes[k];
+      onInput(input);
+      n++;
+    }
+    if (d.reason && !$('#saveReason').value) $('#saveReason').value = d.reason;
+    return n;
+  }
+
+  function syncSaveModeUi() {
+    var box = $('#saveToDb');
+    if (box) box.checked = S.dbMode;
+    var hint = $('#saveModeHint');
+    if (hint) hint.textContent = S.dbMode ? '서버에 실제 반영' : '지금은 로컬 초안';
+  }
+
+  /** DB 저장을 켜기 전 쓰기 권한을 확인한다. 토큰이 없으면 물어보고, 서버가
+      토큰을 요구하지 않는 상태(fail-open)면 그대로 통과한다. */
+  function ensureWriteToken() {
+    function verify() {
+      return api.call('admin.gridOverrides')
+        .then(function (r) { return r.canWrite !== false; })
+        ['catch'](function () { return false; });
+    }
+    return verify().then(function (ok) {
+      if (ok) return true;
+      var t = global.prompt('DB(서버) 저장에는 관리자 토큰이 필요합니다.\n서버 .env 의 ADMIN_TOKEN 값을 입력하세요:');
+      if (!t) return false;
+      try { sessionStorage.setItem('hw.adminToken', t.replace(/\s/g, '')); } catch (e) { /* 무시 */ }
+      return verify().then(function (ok2) {
+        if (!ok2) { C.toast('토큰이 올바르지 않습니다.', 'err', 5000); return false; }
+        C.toast('관리자 인증 확인 — 이제 [적용]이 서버(DB)에 저장됩니다.');
+        return true;
+      });
+    });
+  }
+
   function doSave() {
     $('#confirmModal').hidden = true;
+    if (!S.dbMode) { saveDraftLocal(); return; }
     var body = { changes: S.dirty, reason: $('#saveReason').value.trim(), actor: 'admin' };
     $('#btnApply').disabled = true;
     api.call('admin.save', null, body).then(function (res) {
       $('#saveReason').value = '';
+      clearDraft();     /* 서버에 들어갔으니 로컬 초안은 소임을 다했다 */
       if (res.requiresRefresh && res.requiresRefresh.length) {
         /* 재계산이 필요한 값(모델·기준선 상수)은 저장 즉시 자동으로 재계산을
            건다 — "저장했는데 화면이 안 바뀐다"가 이 화면에서 가장 흔한 혼란이었고,
@@ -729,9 +817,10 @@
     });
     $('#btnRevert').addEventListener('click', function () {
       S.dirty = {};
+      clearDraft();     /* 안 비우면 다음 방문에 초안이 입력을 도로 채운다 */
       renderParams();
       updateSaveBar();
-      C.toast('입력을 서버 저장값으로 되돌렸습니다');
+      C.toast('입력을 서버 저장값으로 되돌렸습니다 (로컬 초안도 비웠습니다)');
     });
     /* 조별 [여기만 기본값으로] · 전체 [모두 기본값으로] */
     document.addEventListener('click', function (ev) {
@@ -745,6 +834,25 @@
     global.addEventListener('beforeunload', function (e) {
       if (S.uploading) { e.preventDefault(); e.returnValue = ''; return ''; }
       for (var k in S.dirty) { e.preventDefault(); e.returnValue = ''; return ''; }
+    });
+    $('#saveToDb').addEventListener('change', function (ev) {
+      var box = ev.target;
+      if (!box.checked) {
+        S.dbMode = false;
+        try { sessionStorage.setItem('hw.adminSaveMode', 'local'); } catch (e) { /* 무시 */ }
+        syncSaveModeUi();
+        return;
+      }
+      box.checked = false;             /* 인증이 확인될 때까지 켜지 않는다 */
+      ensureWriteToken().then(function (ok) {
+        if (!ok) { S.dbMode = false; syncSaveModeUi(); return; }
+        S.dbMode = true;
+        try { sessionStorage.setItem('hw.adminSaveMode', 'db'); } catch (e) { /* 무시 */ }
+        syncSaveModeUi();
+        var d = readDraft();
+        var cnt = d && d.changes ? Object.keys(d.changes).length : 0;
+        if (cnt) C.toast('로컬 초안 ' + cnt + '건이 입력에 남아 있습니다 — [적용]하면 서버에 저장됩니다.');
+      });
     });
     $('#btnApply').addEventListener('click', openConfirm);
     $('#btnCancel').addEventListener('click', function () { $('#confirmModal').hidden = true; });

@@ -30,6 +30,13 @@
         <span class="mono" style="font-size:11px">데이터 빌드 <span id="metaUpdated">–</span></span></p>
     </div>
     <div class="admtop-act" id="topAct" hidden>
+      <!-- 저장 위치 — 기본은 로컬(이 브라우저 초안). 초안은 서버·화면 계산에 영향이
+           없어 토큰 없이 자유롭게 만져볼 수 있고, DB(서버) 저장을 켜야 실제 반영되며
+           그때 관리자 토큰을 확인한다. -->
+      <label class="admmode" for="saveToDb"
+             title="끄면(기본) [적용]이 이 브라우저에만 초안으로 저장됩니다 — 서버·화면 계산에는 영향이 없습니다. 켜면 서버(DB)에 실제 반영되며 관리자 토큰이 필요합니다.">
+        <input type="checkbox" id="saveToDb">DB에 저장<small id="saveModeHint">지금은 로컬 초안</small>
+      </label>
       <button type="button" class="btn" data-reset-all>모두 기본값으로</button>
       <button type="button" class="btn primary" id="btnApply" disabled>적용</button>
     </div>
