@@ -85,6 +85,36 @@
       <div class="cbody"><div class="admrows" id="rowsBaseline"></div></div>
     </section>
 
+    <!-- 격자 판정 오버라이드 — 현장 실사·민원 확인으로 모델 판정을 사람이 바로잡는 자리.
+         표시·판단 계층(사분면·수단 배지·우선순위 점수)만 바꾸고, 시뮬레이션·추천의
+         모델 기준선은 그대로입니다. KPI 는 셀에서 재집계되므로 지도와 상단 수치가
+         같이 움직이고, 재계산(batch)이 돌아도 사람이 고친 값은 살아남습니다. -->
+    <section class="card">
+      <div class="chead"><h2>격자 판정 수정</h2>
+        <span class="hsub">저장 즉시 반영 · 재계산에도 살아남음 · 사유 필수 · 되돌리기는 이력에 남습니다</span>
+      </div>
+      <div class="cbody">
+        <div class="admactions" id="gridOvForm">
+          <input class="btn sm" id="govGrid" type="text" placeholder="격자 ID (예: 다사6707)"
+                 aria-label="격자 ID" style="width:160px">
+          <select class="btn sm" id="govPeriod" aria-label="시간대"></select>
+          <select class="btn sm" id="govDaytype" aria-label="요일">
+            <option value="wd">평일</option><option value="we">주말</option>
+          </select>
+          <select class="btn sm" id="govField" aria-label="바꿀 항목"></select>
+          <select class="btn sm" id="govValueSel" aria-label="새 값" hidden></select>
+          <input class="btn sm" id="govValueNum" type="number" step="0.01" min="0"
+                 placeholder="점수" aria-label="새 값" hidden style="width:100px">
+          <input class="btn sm" id="govReason" type="text" maxlength="200"
+                 placeholder="사유 — 5자 이상 필수 (예: 현장 실사 결과 …)"
+                 aria-label="사유" style="flex:1;min-width:200px">
+          <button type="button" class="btn primary" id="govSave">저장</button>
+        </div>
+        <p class="admerr" id="govErr" hidden></p>
+        <div id="gridOvList"></div>
+      </div>
+    </section>
+
     <section class="card">
       <div class="chead"><h2>데이터 상태 · 최신화</h2>
         <span class="hsub">원천 기준일과 재계산</span>

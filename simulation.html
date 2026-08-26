@@ -90,7 +90,7 @@
     <section class="card mapcard">
       <div class="chead">
         <h2>배치 시뮬레이터</h2>
-        <span class="hsub">수단을 고른 뒤 격자를 클릭하면 배치됩니다</span>
+        <span class="hsub">수단을 고른 뒤 격자를 클릭하면 배치됩니다 · 클릭마다 1개씩, Shift+클릭은 빼기</span>
         <span class="pchip" id="simStatus"></span>
       </div>
 
@@ -104,7 +104,7 @@
         <button class="minib" id="btnAreaClear" type="button" hidden>영역 해제</button>
         <button class="minib" id="btnUndo" type="button" disabled>되돌리기</button>
         <button class="minib" id="btnReset" type="button" disabled>초기화</button>
-        <div class="simhint" id="simhint">수단을 고른 뒤 지도를 클릭하면 배치되고, KPI가 기준선 대비 즉시 재계산됩니다.</div>
+        <div class="simhint" id="simhint">수단을 고른 뒤 지도를 클릭하면 배치됩니다 — 클릭마다 1개씩 쌓이고 Shift+클릭으로 뺍니다. KPI는 기준선 대비 즉시 재계산됩니다.</div>
       </div>
 
       <div class="mtools">
@@ -185,6 +185,8 @@
         <!-- 옆의 [보고서]에는 문서 아이콘이 붙는데 이쪽만 글자뿐이라 한 쌍으로
              안 보였습니다. data-ic 로 core.js 가 저장 아이콘을 넣습니다. -->
         <button class="btn primary" id="btnSave" type="button" data-ic="save" style="flex:1">시나리오 저장</button>
+        <!-- 저장은 이 브라우저(localStorage), 공유는 서버 — 받은 사람은 링크만 열면 됩니다 -->
+        <button class="btn" id="btnShare" type="button" title="서버에 저장하고 누구나 열 수 있는 링크를 복사합니다">공유 링크</button>
         <button class="btn" data-report-open type="button">보고서</button>
       </div>
 

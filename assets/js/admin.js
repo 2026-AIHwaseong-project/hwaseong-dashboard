@@ -76,7 +76,8 @@
   function loadAll() {
     return Promise.all([
       api.call('admin.params'),
-      api.call('admin.history', { limit: 30 })
+      api.call('admin.history', { limit: 30 }),
+      api.call('admin.gridOverrides')
     ]).then(function (rs) {
       S.params = rs[0].params || [];
       S.byKey = {};
@@ -84,6 +85,7 @@
       S.dirty = {};
       renderParams();
       renderHistory(rs[1].items || []);
+      renderGridOverrides(rs[2]);
       renderDataState();
       updateSaveBar();
     })['catch'](function (e) { C.toast(esc(api.humanize(e)), 'err'); });
@@ -144,10 +146,14 @@
       '<small>' + esc(p.note || '') + '</small></div>';
     var mid;
     if (p.editable) {
-      var step = p.type === 'int' ? (p.max >= 1000000 ? 1000000 : 1) : 0.01;
+      /* 서버가 범위(min/max)를 내리지 않습니다 — 2026-08-26 제거. step 은 범위
+         대신 기본값의 자릿수로 정합니다(단가류 100만 원 단위, 건수류 1 단위). */
+      var step = p.type === 'int' ? (Math.abs(p.default) >= 1000000 ? 1000000 : 1) : 0.01;
       mid = '<div class="pinput">' +
         '<input type="number" data-key="' + esc(p.key) + '" value="' + esc(String(p.effective)) + '"' +
-        ' min="' + p.min + '" max="' + p.max + '" step="' + step + '"' +
+        (p.min != null ? ' min="' + p.min + '"' : '') +
+        (p.max != null ? ' max="' + p.max + '"' : '') +
+        ' step="' + step + '"' +
         ' aria-label="' + esc(p.label) + '">' +
         '<span class="unit">' + esc(p.unit || '') + '</span>' +
         '<button type="button" class="btn sm" data-reset="' + esc(p.key) + '">기본값</button></div>';
@@ -215,6 +221,106 @@
     return m ? m[1] + ' ' + m[2] : String(s == null ? '' : s);
   }
 
+  /* --------------------------------------------- 격자 판정 오버라이드 */
+  var GOV_PERIOD_KO = { am: '출근', day: '낮', pm: '퇴근', night: '심야' };
+  var GOV_VALUE_KO = {
+    need: '고수요·저공급', over: '저수요·고공급', drt: '수요응답형', ok: '적정', mid: '균형권',
+    DRT: '똑버스', NEW_STOP: '신설', ADD_FREQ: '증차'
+  };
+  var GOV_FIELD_KO = { quadrant: '사분면 판정', action: '수단 배지', priorityScore: '우선순위 점수' };
+
+  function fmtGovVal(v) {
+    if (v == null) return '—';
+    return GOV_VALUE_KO[v] || (typeof v === 'number' ? Number(v).toLocaleString('ko-KR') : String(v));
+  }
+
+  function renderGridOverrides(res) {
+    S.gridOv = res || { overrides: [], fields: {} };
+    /* 필드·허용값 셀렉트는 서버 계약(fields)에서 만듭니다 — 하드코딩 복제가
+       서버와 어긋나는 사고를 막습니다(coverageMin 과 같은 이유). 시간대 라벨만
+       이쪽 소유이고 값 검증은 서버가 합니다. */
+    var pf = $('#govPeriod');
+    if (pf && !pf.options.length) {
+      pf.innerHTML = Object.keys(GOV_PERIOD_KO).map(function (p) {
+        return '<option value="' + p + '">' + GOV_PERIOD_KO[p] + '</option>';
+      }).join('');
+    }
+    var ff = $('#govField');
+    if (ff && !ff.options.length) {
+      ff.innerHTML = Object.keys(S.gridOv.fields || {}).map(function (k) {
+        return '<option value="' + esc(k) + '">' + esc(GOV_FIELD_KO[k] || k) + '</option>';
+      }).join('');
+      syncGovValueInput();
+    }
+    var host = $('#gridOvList');
+    if (!host) return;
+    var recs = S.gridOv.overrides || [];
+    if (!recs.length) {
+      host.innerHTML = '<p class="admhint">수정된 격자가 없습니다 — 지도·표의 판정은 전부 모델 산출값입니다.</p>';
+      return;
+    }
+    var html = '<table><tr><th>격자</th><th>시간대</th><th>항목</th><th>값</th><th>사유</th><th>일시</th><th></th></tr>';
+    recs.slice(0, 20).forEach(function (r) {
+      var revoked = !!r.revokedAt;
+      html += '<tr' + (revoked ? ' style="opacity:.45"' : '') + '><td>' + esc(r.gridId) + '</td><td>' +
+        esc((GOV_PERIOD_KO[r.period] || r.period) + (r.daytype === 'we' ? '·주말' : '')) + '</td><td>' +
+        esc(GOV_FIELD_KO[r.field] || r.field) + '</td><td><span class="hchg">' +
+        esc(fmtGovVal(r.prev)) + ' → ' + esc(fmtGovVal(r.value)) + '</span>' +
+        (revoked ? ' (되돌림)' : '') + '</td><td>' + esc(r.reason || '') + '</td><td>' +
+        esc(fmtTs(r.at)) + '</td><td>' +
+        (!revoked && S.gridOv.canWrite !== false
+          ? '<button type="button" class="btn sm" data-gov-revoke="' + esc(r.id) + '">되돌리기</button>' : '') +
+        '</td></tr>';
+    });
+    host.innerHTML = html + '</table>' +
+      (recs.length > 20 ? '<p class="admhint">최근 20건만 표시합니다 — 전체는 이력 파일에 있습니다.</p>' : '');
+  }
+
+  function syncGovValueInput() {
+    var ff = $('#govField');
+    if (!ff) return;
+    var spec = (S.gridOv && S.gridOv.fields && S.gridOv.fields[ff.value]) || {};
+    var sel = $('#govValueSel'), num = $('#govValueNum');
+    if (spec.kind === 'num') { sel.hidden = true; num.hidden = false; return; }
+    num.hidden = true;
+    sel.hidden = false;
+    sel.innerHTML = (spec.allowed || []).map(function (v) {
+      return '<option value="' + esc(v) + '">' + esc(GOV_VALUE_KO[v] || v) + '</option>';
+    }).join('');
+  }
+
+  function saveGridOverride() {
+    var field = $('#govField').value;
+    var spec = (S.gridOv && S.gridOv.fields && S.gridOv.fields[field]) || {};
+    var value = spec.kind === 'num' ? Number($('#govValueNum').value) : $('#govValueSel').value;
+    var body = {
+      gridId: $('#govGrid').value.trim(),
+      period: $('#govPeriod').value,
+      daytype: $('#govDaytype').value,
+      field: field,
+      value: value,
+      reason: $('#govReason').value.trim(),
+      actor: 'admin'
+    };
+    var err = $('#govErr');
+    err.hidden = true;
+    if (!body.gridId) { err.hidden = false; err.textContent = '격자 ID 를 입력하세요 — 대시보드에서 격자를 클릭하면 ID 가 보입니다.'; return; }
+    if (body.reason.length < 5) { err.hidden = false; err.textContent = '사유를 5자 이상 적으세요 — "왜 모델 값을 사람이 고쳤는가"는 반드시 남아야 합니다.'; return; }
+    if (spec.kind === 'num' && !isFinite(value)) { err.hidden = false; err.textContent = '점수 값을 숫자로 입력하세요.'; return; }
+    var btn = $('#govSave');
+    btn.disabled = true;
+    api.call('admin.gridOverrideSave', null, body).then(function () {
+      btn.disabled = false;
+      $('#govReason').value = '';
+      C.toast('격자 <b>' + esc(body.gridId) + '</b> 판정을 수정했습니다 — 열려 있는 대시보드는 새로고침해야 보입니다.');
+      return loadAll();
+    })['catch'](function (e) {
+      btn.disabled = false;
+      err.hidden = false;
+      err.textContent = api.humanize(e);
+    });
+  }
+
   function renderHistory(items) {
     if (!items.length) { $('#historyList').innerHTML = '<p class="admhint">기록이 없습니다.</p>'; return; }
     var html = '<table><tr><th>시각</th><th>종류</th><th>내용</th></tr>';
@@ -222,9 +328,12 @@
       var ev = items[i];
       var kind = { 'param.set': '값 변경', 'refresh.start': '갱신 시작', 'refresh.done': '갱신 완료',
                    'auth.fail': '인증 실패', 'upload.accept': '파일 접수',
-                   'upload.dryrun': '검증 실행', 'upload.apply': '라이브 반영' }[ev.kind] || ev.kind;
+                   'upload.dryrun': '검증 실행', 'upload.apply': '라이브 반영',
+                   'grid.set': '격자 판정 수정', 'grid.revoke': '격자 판정 되돌림' }[ev.kind] || ev.kind;
       var body = '';
-      if (ev.kind === 'param.set') {
+      /* grid.* 이력도 changes[{key,old,new}] 모양이 같아 param.set 포맷을 그대로
+         씁니다 — key 가 SPECS 에 없으니 라벨 대신 "격자·시간대·필드" 원문이 남습니다. */
+      if (ev.kind === 'param.set' || ev.kind === 'grid.set' || ev.kind === 'grid.revoke') {
         var parts = [];
         for (var j = 0; j < (ev.changes || []).length; j++) {
           var ch = ev.changes[j];
@@ -269,7 +378,10 @@
     if (!p) return;
     var v = input.value === '' ? NaN : Number(input.value);
     var row = input.closest('.admrow');
-    var bad = isNaN(v) || v < p.min || v > p.max || (p.type === 'int' && v !== Math.round(v));
+    /* 범위 검사는 서버 계약에서 빠졌습니다 — min/max 가 null 인 채로 `v < null`
+       을 비교하면 null 이 0 으로 강제돼 음수가 전부 "잘못된 값"이 됩니다. */
+    var bad = isNaN(v) || (p.min != null && v < p.min) || (p.max != null && v > p.max) ||
+      (p.type === 'int' && v !== Math.round(v));
     input.classList.toggle('bad', bad);
     if (bad) { delete S.dirty[key]; updateSaveBar(); return; }
     if (v === p.effective) {
@@ -613,6 +725,19 @@
       });
     }
     if ($('#upTarget')) $('#upTarget').addEventListener('change', updateUpNote);
+    if ($('#govSave')) $('#govSave').addEventListener('click', saveGridOverride);
+    if ($('#govField')) $('#govField').addEventListener('change', syncGovValueInput);
+    if ($('#gridOvList')) {
+      $('#gridOvList').addEventListener('click', function (ev) {
+        var b = ev.target.closest('[data-gov-revoke]');
+        if (!b) return;
+        if (!global.confirm('이 수정을 되돌릴까요? 원값이 복원되고 되돌림도 이력에 남습니다.')) return;
+        api.call('admin.gridOverrideRevoke', null,
+                 { id: b.getAttribute('data-gov-revoke'), actor: 'admin' })
+          .then(function () { C.toast('되돌렸습니다 — 원값이 복원됐습니다.'); return loadAll(); })
+          ['catch'](function (e) { C.toast(esc(api.humanize(e)), 'err', 6000); });
+      });
+    }
     if ($('#btnApplyUpload')) {
       $('#btnApplyUpload').addEventListener('click', function () {
         var up = S.pendingUpload;

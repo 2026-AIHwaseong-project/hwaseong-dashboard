@@ -212,6 +212,16 @@
          wireChatActions() 뒤라 HW.chatActions.recommend 가 준비돼 있습니다. */
       var pending = HW.chat && HW.chat.consumePending && HW.chat.consumePending();
       if (pending) HW.chat.runAction(pending);
+      /* 공유 링크(?scenario=) — 부트 직후라 로컬 배치가 없어 확인 없이 엽니다.
+         실패해도 기준선 화면은 그대로 살립니다(빈 화면이 최악입니다). */
+      var shareId = q.get('scenario');
+      if (shareId) {
+        return api.getScenario(shareId).then(function (doc) {
+          applySharedScenario(doc);
+        }).catch(function (err) {
+          C.toast('공유 시나리오를 열지 못했습니다 — ' + esc(api.humanize(err)), 'err', 8000);
+        }).then(function () { return runSim(); });
+      }
       return runSim();
     }).catch(fail);
   }
@@ -388,7 +398,7 @@
     S.map.setAreaMode(!!on);
     $('#simhint').textContent = on
       ? '끌어서 여러 칸을 한 번에, 격자를 눌러 한 칸씩 넣고 뺄 수 있습니다. 다 고르면 [지정 완료]를 누르세요.'
-      : '수단을 고른 뒤 지도를 클릭하면 배치되고, KPI가 기준선 대비 즉시 재계산됩니다.';
+      : '수단을 고른 뒤 지도를 클릭하면 배치됩니다 — 클릭마다 1개씩 쌓이고 Shift+클릭으로 뺍니다. KPI는 기준선 대비 즉시 재계산됩니다.';
   }
 
   /** 고르는 중에 개수를 버튼에 실시간으로 보여 줍니다 */
@@ -415,7 +425,11 @@
   /* =====================================================================
    * 3. 배치
    * =================================================================== */
-  function onCellClick(cell) {
+  /* 한 격자에 같은 수단을 몇 개까지 쌓는가 — 서버 _validate_placements 의
+     MAX_COUNT 와 같은 값입니다. 넘겨 보내면 400 이라 여기서 먼저 막습니다. */
+  var MAX_COUNT = 20;
+
+  function onCellClick(cell, ev) {
     S.selectedCellId = cell.id;
     S.map.select(cell.id);
     paintRecScope();   /* 선택한 격자의 동으로 추천 범위를 좁힐 수 있게 칩을 갱신 */
@@ -423,28 +437,48 @@
       C.toast('먼저 상단에서 배치할 수단을 선택하세요.');
       return;
     }
-    /* 수단별 적용 제약 확인 (규칙은 서버 모델과 같은 값을 씁니다) */
-    var guardMsg = guardFor(S.tool, cell);
-    if (guardMsg) { C.toast(guardMsg, 'err', 6000); return; }
-    /* 같은 격자에 같은 수단을 다시 누르면 **취소**합니다(토글).
-       예전에는 누를 때마다 수량이 1씩 올라가서, 잘못 찍었을 때 되돌리려면
-       배치 목록의 19px 짜리 × 를 찾아 눌러야 했습니다 — 방금 누른 자리에서
-       바로 취소하는 게 지도 위 조작의 자연스러운 기대입니다.
-       수량을 2 이상으로 올리는 경로는 AI 추천 응답(count>1)과 시나리오
-       불러오기에만 남습니다. */
     var idx = -1;
     for (var i = 0; i < S.placements.length; i++) {
       if (S.placements[i].type === S.tool && S.placements[i].cellId === cell.id) { idx = i; break; }
     }
-    if (idx >= 0) {
-      var removed = S.placements.splice(idx, 1)[0];
+    /* 클릭할 때마다 1개씩 **쌓입니다**(중복 배치). 한때 토글(다시 누르면 취소)
+       이었는데, 그 방식은 한 격자에 똑버스 2대 같은 시나리오를 지도에서 짤 수
+       없었습니다. 토글로 갔던 이유(방금 누른 자리에서 바로 취소)는 Shift/Alt+
+       클릭 = 1개 빼기로 보존합니다 — 배치 목록의 19px × 나 [되돌리기]까지 갈
+       필요가 없습니다. */
+    var undo = !!(ev && (ev.shiftKey || ev.altKey));
+    if (undo) {
+      /* 빼기는 제약 검사를 거치지 않습니다 — 놓을 때 이미 통과한 배치이고,
+         영역을 나중에 바꿨더라도 제거는 언제나 허용돼야 합니다. */
+      if (idx < 0) { C.toast('이 격자에는 뺄 ' + ((S.effects[S.tool] || {}).label || '배치') + '이(가) 없습니다.'); return; }
+      var p0 = S.placements[idx];
+      p0.count -= 1;
       /* 괄호 주의 — `+` 가 `||` 보다 우선이라 괄호가 없으면
          `label || ('배치 취소 — …')` 로 묶입니다. label 은 항상 있으므로
          지웠는데도 수단 이름만 떠서 배치한 것처럼 읽혔습니다. */
-      C.toast(((S.effects[removed.type] || {}).label || '배치') + ' 취소 — ' +
-        esc(cell.name) + (removed.count > 1 ? ' (' + removed.count + '건)' : ''));
+      if (p0.count <= 0) {
+        S.placements.splice(idx, 1);
+        C.toast(((S.effects[p0.type] || {}).label || '배치') + ' 취소 — ' + esc(cell.name));
+      } else {
+        C.toast(((S.effects[p0.type] || {}).label || '배치') + ' 1개 빼기 — ' +
+          esc(cell.name) + ' (남은 수량 ' + p0.count + ')');
+      }
     } else {
-      S.placements.push({ type: S.tool, cellId: cell.id, cellName: cell.name, count: 1 });
+      /* 수단별 적용 제약 확인 (규칙은 서버 모델과 같은 값을 씁니다) */
+      var guardMsg = guardFor(S.tool, cell);
+      if (guardMsg) { C.toast(guardMsg, 'err', 6000); return; }
+      if (idx >= 0) {
+        var p1 = S.placements[idx];
+        if (p1.count >= MAX_COUNT) {
+          C.toast('한 격자에 같은 수단은 ' + MAX_COUNT + '개까지입니다.', 'err', 5000);
+          return;
+        }
+        p1.count += 1;
+        C.toast(((S.effects[p1.type] || {}).label || '배치') + ' ×' + p1.count + ' — ' +
+          esc(cell.name) + ' (Shift+클릭으로 뺍니다)');
+      } else {
+        S.placements.push({ type: S.tool, cellId: cell.id, cellName: cell.name, count: 1 });
+      }
     }
     if (S.recommendation) S.recEdited = true;
     runSim();
@@ -509,10 +543,12 @@
       if (!confirm('현재 배치 ' + S.placements.length + '건이 추천안으로 교체됩니다. 계속할까요?')) return;
     }
     if (strategy) S.recStrategy = strategy;
-    /* 동 범위·지도 영역에서 '지역 균형'(동별 1건 상한)은 성립하지 않습니다.
-       영역(cellIds)을 빼먹으면 서버가 조용히 efficiency 로 바꿔 계산하는데 화면
-       상태는 balance 로 남아, 응답의 strategy 와 버튼 표시가 서로 다른 말을 합니다. */
-    if ((S.area || S.recRegion) && S.recStrategy === 'balance') S.recStrategy = 'efficiency';
+    /* 동 범위(읍면동 하나)에서만 '지역 균형'(동별 1건 상한 = 곧 1건 추천)이
+       성립하지 않아 서버와 같은 규칙으로 미리 바꿉니다. 지도 영역(S.area)은
+       여러 읍면동에 걸칠 수 있어 균형이 유효합니다 — 한때 영역까지 묶어서
+       바꿨더니 영역을 지정하면 지역 균형을 고를 수 없는 버그가 됐습니다.
+       (영역이 있으면 region 은 아예 전송되지 않으므로 recRegion 만 봐선 안 됩니다) */
+    if (!S.area && S.recRegion && S.recStrategy === 'balance') S.recStrategy = 'efficiency';
     var btn = $('#btnRecommend');
     btn.disabled = true;
     btn.textContent = '계산 중…';
@@ -913,6 +949,7 @@
       host.innerHTML = '<div class="empty">아직 배치가 없습니다.<br>위에서 수단을 고른 뒤 지도의 격자를 클릭하세요.</div>';
       $('#btnReset').disabled = true;
       $('#btnUndo').disabled = true;
+      $('#btnShare').disabled = true;   /* 빈 시나리오는 서버도 400 으로 거절합니다 */
       /* 배치가 없으면 저장할 내용도 없습니다. S.result 는 부팅 시 기준선
          계산으로 이미 차 있어서, 예전에는 눌리면 실제로 '배치 0건 · 0원 ·
          변화 없음' 짜리 빈 시나리오가 저장됐습니다 — 같은 패널의 되돌리기·
@@ -923,6 +960,7 @@
     $('#btnReset').disabled = false;
     $('#btnUndo').disabled = false;
     $('#btnSave').disabled = false;
+    $('#btnShare').disabled = false;
     /* 10건이 넘으면 스크롤 아래에 숨습니다 — 총량은 항상 위에 보여 줍니다 */
     var totalCnt = S.placements.reduce(function (a, p) { return a + p.count; }, 0);
     var totalKrw = S.placements.reduce(function (a, p) {
@@ -1568,6 +1606,75 @@
     }).join('');
   }
 
+  /** 현재 배치를 서버에 저장하고 공유 링크를 클립보드에 복사합니다.
+      [시나리오 저장](localStorage)과 별개 경로입니다 — 로컬 저장은 이 브라우저에만
+      남아 다른 사람이 못 봅니다. 링크(?scenario=id)를 받은 사람은 열기만 하면
+      같은 배치·예산·시간대가 복원됩니다. */
+  function shareCurrent() {
+    if (!S.placements.length) { C.toast('먼저 배치를 한 건 이상 놓으세요.'); return; }
+    var btn = $('#btnShare');
+    btn.disabled = true;
+    btn.textContent = '링크 만드는 중…';
+    api.saveScenario({
+      name: S.name,
+      period: S.period,
+      budgetKrw: S.budget,
+      placements: S.placements.map(function (p) {
+        return { type: p.type, cellId: p.cellId, count: p.count };
+      })
+    }).then(function (res) {
+      btn.disabled = false;
+      btn.textContent = '공유 링크';
+      var u = new URL(location.href);
+      u.searchParams.set('scenario', res.id);
+      u.searchParams.delete('cell');   /* 격자 딥링크가 남으면 받은 쪽에서 안내가 두 번 뜹니다 */
+      u.hash = '';
+      var link = u.toString();
+      function done() {
+        C.toast('공유 링크를 복사했습니다 — 받는 사람은 링크만 열면 같은 배치안을 봅니다.', null, 6000);
+      }
+      /* 클립보드는 https·localhost 밖에서 막힐 수 있습니다 — 막히면 링크를
+         직접 보여 주고 사람이 복사하게 합니다(조용히 실패하는 게 최악입니다). */
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(done, function () {
+          window.prompt('자동 복사가 막혔습니다 — 아래 링크를 직접 복사하세요:', link);
+        });
+      } else {
+        window.prompt('아래 링크를 복사하세요:', link);
+      }
+    }).catch(function (err) {
+      btn.disabled = false;
+      btn.textContent = '공유 링크';
+      C.toast('공유 링크를 만들지 못했습니다 — ' + esc(api.humanize(err)), 'err', 6000);
+    });
+  }
+
+  /** 공유 링크(?scenario=)로 받은 서버 저장본을 화면에 복원합니다.
+      loadScenario 와 같은 절차이되 부트 직후 전용이라 교체 확인이 없고,
+      서버 저장본에는 추천 설명·요약이 없어 배치·예산·시간대만 복원합니다. */
+  function applySharedScenario(doc) {
+    S.name = doc.name || '';
+    S.period = doc.period || S.period;
+    S.budget = doc.budgetKrw || S.budget;
+    var sane = sanePlacements(doc.placements);
+    S.placements = sane.placements.map(function (p) {
+      return { type: p.type, cellId: p.cellId, count: p.count };
+    });
+    $('#scenName').value = S.name;
+    $('#budgetInput').value = Math.round(S.budget / 100000000);
+    $$('#periods [data-period]').forEach(function (x) {
+      var on = x.getAttribute('data-period') === S.period;
+      x.classList.toggle('on', on);
+      x.setAttribute('aria-selected', String(on));
+    });
+    if (sane.repaired || sane.dropped) {
+      C.toast('격자 개편 전 공유본 — ' +
+        (sane.repaired ? '배치 ' + sane.repaired + '건을 지금 격자로 옮기고 ' : '') +
+        (sane.dropped ? sane.dropped + '건은 제외하고 ' : '') + '열었습니다.', 'err', 6000);
+    }
+    C.toast('공유 시나리오 <b>' + esc(S.name || doc.id) + '</b> 을(를) 열었습니다.');
+  }
+
   function loadScenario(i) {
     var list = loadScenarios();
     var s = list[i];
@@ -1702,7 +1809,7 @@
       $('#simhint').textContent = e2
         ? (e2.label + ' 모드 — 배치할 격자를 지도에서 클릭하세요. 반경 약 ' + e2.radiusKm + 'km에 파급됩니다. (단가 ' + won(e2.unitKrw) + ')' +
            (S.tool !== 'drt' ? ' 적용 가능한 격자만 또렷하게 표시됩니다.' : ''))
-        : '수단을 고른 뒤 지도를 클릭하면 배치되고, KPI가 기준선 대비 즉시 재계산됩니다.';
+        : '수단을 고른 뒤 지도를 클릭하면 배치됩니다 — 클릭마다 1개씩 쌓이고 Shift+클릭으로 뺍니다. KPI는 기준선 대비 즉시 재계산됩니다.';
     });
 
     $('#tgRoute').addEventListener('click', function (e) {
@@ -1748,13 +1855,16 @@
         var c = S.selectedCellId ? S.map.cellById(S.selectedCellId) : null;
         if (c && c.region) S.recRegion = c.region;
       }
-      if (S.recRegion && S.recStrategy === 'balance') S.recStrategy = 'efficiency';
+      /* 영역(S.area)이 켜져 있으면 region 은 전송되지 않으므로 바꾸지 않습니다 —
+         지역 균형은 여러 동에 걸친 영역에서 유효합니다(requestRecommendation 참고) */
+      if (!S.area && S.recRegion && S.recStrategy === 'balance') S.recStrategy = 'efficiency';
       /* 범위 전환에 맞춰 지도도 따라갑니다 */
       if (S.recRegion) S.map.zoomToRegion(S.recRegion);
       else S.map.zoomReset();
       paintRecScope();
     });
     $('#btnSave').addEventListener('click', saveCurrent);
+    $('#btnShare').addEventListener('click', shareCurrent);
     $('#btnCompare').addEventListener('click', runCompare);
 
     $('#scenList').addEventListener('click', function (e) {

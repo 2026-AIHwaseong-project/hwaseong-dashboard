@@ -28,6 +28,8 @@
     'routes.list':     { method: 'GET',  path: '/routes' },
     'priorities.list': { method: 'GET',  path: '/priorities' },                 // ?period=am&limit=10
     'simulations.run': { method: 'POST', path: '/simulations' },
+    'scenarios.save':  { method: 'POST', path: '/scenarios' },                  // 공유 링크의 실체
+    'scenarios.get':   { method: 'GET',  path: '/scenarios/{id}' },
     'recommendations.run': { method: 'POST', path: '/recommendations', long: true },  // 최적화 계산
     'reports.draft':   { method: 'POST', path: '/reports/draft',  long: true }, // AI 호출 → 타임아웃 김
     'reports.export':  { method: 'POST', path: '/reports/export', long: true, binary: true },
@@ -44,6 +46,9 @@
     'admin.status':    { method: 'GET',  path: '/admin/status' },
     'admin.params':    { method: 'GET',  path: '/admin/params' },
     'admin.save':      { method: 'POST', path: '/admin/params' },
+    'admin.gridOverrides':      { method: 'GET',  path: '/admin/grid-overrides' },
+    'admin.gridOverrideSave':   { method: 'POST', path: '/admin/grid-overrides' },
+    'admin.gridOverrideRevoke': { method: 'POST', path: '/admin/grid-overrides/revoke' },
     'admin.refresh':   { method: 'POST', path: '/admin/refresh', long: true },  // 재계산 수 분
     'admin.upload':    { method: 'POST', path: '/admin/upload',  long: true },  // 원본 CSV 접수
     'admin.history':   { method: 'GET',  path: '/admin/history' }
@@ -522,6 +527,20 @@
      */
     runSimulation: function (body) {
       return call('simulations.run', null, body).then(adaptSimulation);
+    },
+
+    /**
+     * 시나리오 공유 — 서버에 저장하고 id 를 받습니다. 링크는 호출부가
+     * `?scenario=id` 로 조립합니다(서버는 프론트 주소를 모릅니다).
+     * body = { name, period, budgetKrw, placements:[{type, cellId, count}] }
+     */
+    saveScenario: function (body) {
+      return call('scenarios.save', null, body);
+    },
+
+    /** 공유 시나리오 조회. 캐시하지 않습니다 — 링크로 새로 열 때마다 서버가 정본. */
+    getScenario: function (id) {
+      return call('scenarios.get', { id: id });
     },
 
     /**
