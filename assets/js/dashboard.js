@@ -1419,8 +1419,12 @@
     if (!est.length) { host.style.display = 'none'; return; }
     host.innerHTML = est.map(function (k) {
       var d = dq[k];
+      /* 설명(— 뒤)을 따로 감쌉니다 — 좁은 화면에서는 이 부분만 접고 배지·라벨을
+         한 줄로 남깁니다(app.css). 텍스트 노드로 붙여 두면 CSS 로 고를 수 없어
+         푸터가 세 줄로 늘어지거나 잘려 나갔습니다. 근거는 [?] 도움말이 폅니다. */
       return '<span class="dq-item"><span class="dq-badge">추정</span>' +
-        esc(d.label) + ' — ' + esc(d.method || d.note || '') + '</span>';
+        '<b class="dq-lb">' + esc(d.label) + '</b>' +
+        '<span class="dq-note"> — ' + esc(d.method || d.note || '') + '</span></span>';
     }).join('') +
       '<button class="help" data-help="estimated" type="button">?</button>';
     C.wireHelp(host);

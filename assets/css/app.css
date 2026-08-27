@@ -1581,6 +1581,10 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--line)}
 .dq:empty{display:none}
 .dq-item{font-size:11px;color:var(--ink3);display:inline-flex;align-items:center}
+/* 라벨·근거를 나눠 감싼 것은 좁은 화면에서 근거만 접기 위해서입니다(§모바일).
+   넓은 화면에서는 예전처럼 한 줄로 이어 보이도록 둘 다 기본 스타일을 씁니다. */
+.dq-lb{font-weight:inherit;color:inherit}
+.dq-note{color:inherit}
 .cost-assumed{display:inline-flex;align-items:center;color:var(--tag-add-fg);font-weight:600}
 #costNote b{color:var(--ink2);font-weight:600}
 #costNote i{font-style:normal;opacity:.75}
@@ -2026,6 +2030,30 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   .cmp-sum .vs{display:none}
   /* 칩이 값 옆에 붙으면 열 폭을 밀어 B열이 잘립니다 — 값 아래 줄로 내립니다 */
   .dchip{display:block;width:max-content;margin:3px 0 0 auto;padding:1px 5px}
+
+  /* 푸터 데이터 품질 — 좁은 화면에서 항목 하나가 세 줄로 늘어져 푸터가 화면의
+     3분의 1을 먹었습니다("추정 · 시간대별 승하차 — 일자별 승하차를 …로 안분").
+     배지와 라벨만 한 줄로 남기고 긴 설명(— 뒤)은 접습니다. 근거를 지우는 게
+     아니라 자리를 옮긴 것입니다 — 옆의 [?] 도움말이 같은 설명을 그대로 폅니다. */
+  .dq{gap:6px 10px;align-items:center}
+  .dq-item{font-size:11px;line-height:1.5;gap:5px;min-width:0}
+  /* 긴 근거 문장은 접습니다 — 화면 밖으로 이어지거나 세 줄로 늘어지던 자리입니다.
+     [?] 도움말이 같은 설명을 그대로 펴므로 정보는 사라지지 않습니다. */
+  .dq-note{display:none}
+  .dq-lb{font-weight:600;color:var(--ink2)}
+
+  /* 저장된 시나리오 머리 — 제목·부제·버튼 둘이 한 줄에 들어가 2줄로 접히고
+     버튼이 화면 끝에 붙었습니다. 부제는 접고 버튼은 손가락 크기로 나눕니다. */
+  .scen-floor-hd{flex-wrap:wrap;align-items:center;gap:6px}
+  .scen-floor-hd .hsub{display:none}
+  /* spacer(flex:1)는 넓은 화면에서 버튼을 오른쪽 끝으로 미는 장치인데, 줄바꿈이
+     생기면 자기가 한 줄을 통째로 먹어 버튼 폭이 제각각이 됩니다(가져오기 205px·
+     내보내기 336px 로 갈라졌습니다). 좁은 화면에선 접습니다. */
+  .scen-floor-hd .spacer{display:none}
+  .scen-floor-hd b{flex:1 1 100%}
+  .scen-floor-hd .minib{flex:1 1 calc(50% - 3px);min-width:0;min-height:38px}
+  /* 카드가 3열이면 390px 에서 한 칸이 100px 남짓이라 이름이 잘립니다 */
+  .scen-floor-list{grid-template-columns:1fr}
 }
 
 /* ===========================================================================

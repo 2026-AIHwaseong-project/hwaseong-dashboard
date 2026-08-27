@@ -111,6 +111,48 @@ body { padding-bottom: 72px; }
   .admrow { grid-template-columns: 1fr; gap: 6px; }
   .admrow .pval { padding-top: 0; }
   .admsavebar { flex-wrap: wrap; }
+
+  /* 표가 페이지를 뚫고 나가던 것 — 390px 화면에서 격자 판정 목록은 627px,
+     변경 이력은 562px 라 **페이지 전체가 264px 가로 스크롤**됐습니다(카드 안에
+     갇히지 않고 문서가 밀림).
+     가로 스크롤로 가두는 것만으로는 부족했습니다 — 7열이 좁은 칸에 눌려
+     "사분면 판/정" 처럼 글자가 세로로 쪼개지고 사유·일시는 잘려 나갔습니다.
+     좁은 화면에서는 **표를 카드로 접습니다**: 한 행이 한 장, 각 값 앞에 열
+     이름표(admin.js 의 data-label)를 붙입니다. 읽는 순서가 위→아래로 바뀔 뿐
+     정보는 하나도 줄지 않습니다. */
+  #gridOvList table.admtbl, #historyList table.admtbl { display: block; min-width: 0; }
+  .admtbl thead, .admtbl tr:first-child:has(th) { display: none; }   /* 머리글 행은 라벨이 대신합니다 */
+  .admtbl tbody { display: block; }
+  .admtbl tr { display: block; padding: 8px 0; border-top: 1px solid var(--line); }
+  .admtbl tr:first-child { border-top: 0; }
+  .admtbl tr.is-revoked { opacity: .45; }
+  .admtbl td { display: flex; gap: 8px; border: 0; padding: 2px 0;
+    white-space: normal; word-break: break-word; }
+  /* 라벨은 항상 왼쪽 — 표 열마다 text-align 이 달라(값 열은 우측) 라벨이
+     들쭉날쭉해 보였습니다. 값도 왼쪽으로 맞춰 읽는 선을 하나로 만듭니다. */
+  .admtbl td { text-align: left; }
+  .admtbl td::before { content: attr(data-label); flex: 0 0 62px; color: var(--ink3);
+    font-size: 10.5px; font-weight: 650; padding-top: 1px; text-align: left; }
+  .admtbl td:empty, .admtbl td.admtbl-act:empty { display: none; }
+  .admtbl td.admtbl-act { padding-top: 6px; }
+  .admtbl td.admtbl-act::before { content: ''; flex-basis: 62px; }
+
+  /* 데이터 상태는 2열(항목·값)이라 접지 않고 값만 줄바꿈시킵니다 —
+     "서버 var/admin/params_override.json" 같은 긴 경로가 잘리던 자리입니다. */
+  #dataState table { width: 100%; table-layout: fixed; }
+  #dataState td { white-space: normal; word-break: break-all; }
+
+  /* 격자 판정 입력줄 — 한 줄에 7개가 들어가 있어 좁은 화면에서 칸이 뭉갭니다.
+     입력은 전체 폭, 셀렉트는 두 개씩 나란히. */
+  #gridOvForm { flex-wrap: wrap; gap: 6px; }
+  #gridOvForm #govGrid, #gridOvForm #govReason { width: 100% !important; flex: 1 1 100%; min-width: 0; }
+  #gridOvForm select, #gridOvForm #govValueNum { flex: 1 1 calc(50% - 3px); min-width: 0; }
+  #gridOvForm #govSave { flex: 1 1 100%; }
+
+  /* 저장 위치 세그먼트·상단 버튼이 제목과 겹쳐 눌리지 않게 */
+  .admtop-act { flex-wrap: wrap; gap: 6px; }
+  .admseg { flex: 1 1 100%; }
+  .admseg .pbtn { flex: 1; }
 }
 
 /* ── 데이터 파일 올리기 ──────────────────────────────────────

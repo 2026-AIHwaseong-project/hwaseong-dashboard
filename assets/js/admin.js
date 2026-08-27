@@ -286,15 +286,21 @@
       host.innerHTML = '<p class="admhint">수정된 격자가 없습니다 — 지도·표의 판정은 전부 모델 산출값입니다.</p>';
       return;
     }
-    var html = '<table><tr><th>격자</th><th>시간대</th><th>항목</th><th>값</th><th>사유</th><th>일시</th><th></th></tr>';
+    /* data-label — 좁은 화면에서 이 표는 카드형으로 접힙니다(admin.css). 그때
+       각 칸 앞에 붙일 열 이름을 여기서 심어 둡니다. 넓은 화면에선 안 보입니다. */
+    var html = '<table class="admtbl"><tr><th>격자</th><th>시간대</th><th>항목</th><th>값</th>' +
+      '<th>사유</th><th>일시</th><th></th></tr>';
     recs.slice(0, 20).forEach(function (r) {
       var revoked = !!r.revokedAt;
-      html += '<tr' + (revoked ? ' style="opacity:.45"' : '') + '><td>' + esc(r.gridId) + '</td><td>' +
-        esc((GOV_PERIOD_KO[r.period] || r.period) + (r.daytype === 'we' ? '·주말' : '')) + '</td><td>' +
-        esc(GOV_FIELD_KO[r.field] || r.field) + '</td><td><span class="hchg">' +
-        esc(fmtGovVal(r.prev)) + ' → ' + esc(fmtGovVal(r.value)) + '</span>' +
-        (revoked ? ' (되돌림)' : '') + '</td><td>' + esc(r.reason || '') + '</td><td>' +
-        esc(fmtTs(r.at)) + '</td><td>' +
+      html += '<tr' + (revoked ? ' class="is-revoked"' : '') + '>' +
+        '<td data-label="격자">' + esc(r.gridId) + '</td>' +
+        '<td data-label="시간대">' + esc((GOV_PERIOD_KO[r.period] || r.period) + (r.daytype === 'we' ? '·주말' : '')) + '</td>' +
+        '<td data-label="항목">' + esc(GOV_FIELD_KO[r.field] || r.field) + '</td>' +
+        '<td data-label="값"><span class="hchg">' + esc(fmtGovVal(r.prev)) + ' → ' + esc(fmtGovVal(r.value)) + '</span>' +
+        (revoked ? ' (되돌림)' : '') + '</td>' +
+        '<td data-label="사유">' + esc(r.reason || '—') + '</td>' +
+        '<td data-label="일시">' + esc(fmtTs(r.at)) + '</td>' +
+        '<td class="admtbl-act">' +
         (!revoked && S.gridOv.canWrite !== false
           ? '<button type="button" class="btn sm" data-gov-revoke="' + esc(r.id) + '">되돌리기</button>' : '') +
         '</td></tr>';
@@ -349,7 +355,7 @@
 
   function renderHistory(items) {
     if (!items.length) { $('#historyList').innerHTML = '<p class="admhint">기록이 없습니다.</p>'; return; }
-    var html = '<table><tr><th>시각</th><th>종류</th><th>내용</th></tr>';
+    var html = '<table class="admtbl"><tr><th>시각</th><th>종류</th><th>내용</th></tr>';
     for (var i = 0; i < items.length; i++) {
       var ev = items[i];
       var kind = { 'param.set': '값 변경', 'refresh.start': '갱신 시작', 'refresh.done': '갱신 완료',
@@ -383,7 +389,9 @@
       } else if (ev.kind === 'upload.apply') {
         body = esc(ev.file || '') + ' 반영 · 백업 <code>' + esc(ev.backup || '') + '</code>';
       }
-      html += '<tr><td>' + esc(fmtTs(ev.ts)) + '</td><td class="hkind">' + esc(kind) + '</td><td>' + body + '</td></tr>';
+      html += '<tr><td data-label="시각">' + esc(fmtTs(ev.ts)) + '</td>' +
+        '<td class="hkind" data-label="종류">' + esc(kind) + '</td>' +
+        '<td data-label="내용">' + body + '</td></tr>';
     }
     $('#historyList').innerHTML = html + '</table>';
   }
