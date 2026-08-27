@@ -27,6 +27,26 @@
      모델이 임의 코드를 실행하지 않습니다. 화이트리스트고 값도 여기서 검증합니다.
      전부 화면 상태만 바꾸므로 되돌리기는 사용자가 클릭 한 번으로 합니다. */
   var PERIODS = ['am', 'day', 'pm', 'night'];
+  var MAX_ACTIONS = 4;     /* 한 응답이 화면을 네 번 넘게 바꾸면 사용자가 따라가지 못합니다 */
+
+  var DAYTYPES = ['wd', 'we'];
+  var TOOLS = ['stop', 'drt', 'freq'];
+  var STRATEGIES = ['efficiency', 'equity', 'balance', 'quick'];
+
+  /** 액션 여러 개를 순서대로 실행하고 안내 문구를 모읍니다.
+      "심야로 바꾸고 공급 레이어로 보여줘" 처럼 한 문장이 두 조작을 요구하는 일이
+      흔한데, 예전에는 action 하나 + nav.after 하나가 상한이라 절반만 됐습니다.
+      nav 는 페이지를 실제로 떠나므로 **그 뒤 액션은 실행되지 않습니다** — 남은
+      것은 nav.after 로 넘겨야 합니다(모델에게도 그렇게 지시합니다). */
+  function runActions(list) {
+    var notes = [];
+    for (var i = 0; i < list.length && i < MAX_ACTIONS; i++) {
+      var note = runAction(list[i]);
+      if (note) notes.push(note);
+      if (list[i] && list[i].type === 'nav') break;   /* 이 페이지는 곧 사라집니다 */
+    }
+    return notes.join(' · ');
+  }
 
   function runAction(act) {
     if (!act || act.type === 'none') return null;
@@ -35,6 +55,49 @@
       if (PERIODS.indexOf(act.value) < 0 || !h.setPeriod) return null;
       h.setPeriod(act.value);
       return '시간대를 바꿨습니다';
+    }
+    if (act.type === 'daytype') {
+      if (DAYTYPES.indexOf(act.value) < 0 || !h.setDaytype) return null;
+      h.setDaytype(act.value);
+      return act.value === 'we' ? '주말 기준으로 바꿨습니다' : '평일 기준으로 바꿨습니다';
+    }
+    if (act.type === 'select') {
+      if (typeof act.cellId !== 'string' || !act.cellId.trim() || !h.selectCell) return null;
+      return h.selectCell(act.cellId.trim()) ? '격자를 열었습니다' : null;
+    }
+    if (act.type === 'budget') {
+      /* 억 원 단위로 받습니다 — 사용자가 말하는 단위이고 화면 입력칸도 억입니다. */
+      var eok = Number(act.value);
+      if (!isFinite(eok) || eok < 0 || eok > 100000 || !h.setBudget) return null;
+      h.setBudget(eok);
+      return '예산 한도를 ' + eok + '억 원으로 바꿨습니다';
+    }
+    if (act.type === 'place') {
+      if (TOOLS.indexOf(act.tool) < 0 || typeof act.cellId !== 'string' || !h.place) return null;
+      var cnt = Math.max(1, Math.min(20, Math.round(Number(act.count) || 1)));
+      return h.place(act.tool, act.cellId.trim(), cnt);   /* 안내 문구는 화면이 만듭니다 */
+    }
+    if (act.type === 'undo') {
+      if (!h.undo) return null;
+      return h.undo() ? '마지막 배치를 되돌렸습니다' : null;
+    }
+    if (act.type === 'reset') {
+      if (!h.reset) return null;
+      return h.reset() ? '배치를 모두 지웠습니다' : null;
+    }
+    if (act.type === 'strategy') {
+      if (STRATEGIES.indexOf(act.value) < 0 || !h.setStrategy) return null;
+      return h.setStrategy(act.value);
+    }
+    if (act.type === 'scope') {
+      /* value 가 빈 문자열/none 이면 '화성시 전체'로 되돌립니다 */
+      if (!h.setScope) return null;
+      return h.setScope(typeof act.value === 'string' ? act.value.trim() : '');
+    }
+    if (act.type === 'report') {
+      if (!h.report) return null;
+      h.report();
+      return 'AI 보고서를 만듭니다';
     }
     if (act.type === 'layer') {
       if (!HW.MAP_LAYERS || !HW.MAP_LAYERS[act.value] || !h.setLayer) return null;
@@ -81,7 +144,8 @@
       var raw = global.sessionStorage.getItem(PENDING_KEY);
       if (!raw) return null;
       global.sessionStorage.removeItem(PENDING_KEY);
-      return JSON.parse(raw);
+      var v = JSON.parse(raw);
+      return Array.isArray(v) ? v : [v];      /* 도착 화면은 항상 배열로 받습니다 */
     } catch (e) { return null; }
   }
 
@@ -207,10 +271,10 @@
         msgs.push({ role: 'assistant', content: String(res.reply || acc || '') });
         persist();
         var note = '';
-        if (res.action) {
-          var done = runAction(res.action);
-          if (done) note = done;
-        }
+        /* actions(복수)를 먼저 봅니다. 구버전 서버는 action(단수)만 주므로 둘 다 받습니다 */
+        var list = Array.isArray(res.actions) ? res.actions
+                 : (res.action ? [res.action] : []);
+        if (list.length) note = runActions(list) || '';
         if (aiB) {
           $('.cm-t', aiB).textContent = reply;
           if (note) addNote(aiB, note);
@@ -384,5 +448,6 @@
     mountLauncher();
   }
 
-  HW.chat = { create: create, openHelp: openHelp, closeHelp: closeHelp, runAction: runAction, consumePending: consumePending };
+  HW.chat = {
+    runActions: runActions, create: create, openHelp: openHelp, closeHelp: closeHelp, runAction: runAction, consumePending: consumePending };
 })(window);

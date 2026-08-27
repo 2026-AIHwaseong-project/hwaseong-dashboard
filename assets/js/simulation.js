@@ -218,7 +218,7 @@
       /* 챗봇의 nav 액션이 이어서 할 일(예: recommend)을 남겨 놨으면 여기서 소비합니다.
          wireChatActions() 뒤라 HW.chatActions.recommend 가 준비돼 있습니다. */
       var pending = HW.chat && HW.chat.consumePending && HW.chat.consumePending();
-      if (pending) HW.chat.runAction(pending);
+      if (pending) HW.chat.runActions(pending);   /* 배열 — nav.after 가 복수일 수 있습니다 */
       /* 공유 링크(?scenario=) — 부트 직후라 로컬 배치가 없어 확인 없이 엽니다.
          실패해도 기준선 화면은 그대로 살립니다(빈 화면이 최악입니다). */
       var shareId = q.get('scenario');
@@ -1988,6 +1988,28 @@
   /* 도움 챗봇(chat.js)이 "지금 화면" 을 읽는 자리 — dashboard.js 와 같은 계약입니다.
      이게 없으면 chat.js 의 getBody() 가 빈 컨텍스트만 보내서, 시나리오를 짜 놓고
      "설명해줘" 라고 물어도 모델은 배치·예산·효과를 하나도 못 봅니다. */
+  /* 수단 선택 — 툴바 클릭과 챗봇(place 액션)이 같이 씁니다. 표시·무장·힌트는
+     syncToolButtons() 한 곳이 맡습니다(빼기 모드와의 배타 처리도 거기 있습니다) —
+     상태만 바꾸고 그 함수를 안 부르면 버튼과 지도가 서로 다른 말을 합니다. */
+  function setTool(t) {
+    S.tool = t || null;
+    if (S.tool) S.removeMode = false;      /* 놓기와 빼기는 동시에 켜지지 않습니다 */
+    syncToolButtons();
+  }
+
+  /** (수단, 격자)의 현재 배치 수량 — place 액션이 "실제로 늘었는가"를 확인합니다. */
+  function countOf(tool, cellId) {
+    for (var i = 0; i < S.placements.length; i++) {
+      if (S.placements[i].type === tool && S.placements[i].cellId === cellId) {
+        return S.placements[i].count;
+      }
+    }
+    return 0;
+  }
+
+  var STRAT_KO = { efficiency: '효율 최우선', equity: '교통약자 우선',
+                   balance: '지역 균형', quick: '즉시 착수' };
+
   function wireChatActions() {
     HW.chatActions = {
       period: function () { return S.period; },
@@ -2012,6 +2034,86 @@
       /* 버튼과 똑같은 함수를 그대로 재사용 — 전략 인자 없이 부르면 지금
          S.recStrategy(기본값)로 계산해, 버튼을 누른 것과 동일하게 동작합니다. */
       recommend: requestRecommendation,
+
+      /* ── 아래는 챗봇이 이 화면을 실제로 조작하는 자리 ────────────────────
+         원칙 셋:
+         ① 사용자가 클릭으로 하는 것과 **같은 함수**를 부른다(가드·표시·재계산이
+            한 벌로 따라오게 — 상태만 직접 만지면 화면이 서로 다른 말을 한다).
+         ② 못 한 일은 문구를 돌려주지 않는다(null·false) — 챗이 "했습니다" 라고
+            말해 놓고 화면은 그대로인 거짓말을 막는다.
+         ③ 되돌릴 수 있는 것만 연다. 서버에 쓰는 것(시나리오 저장·공유)은 주지
+            않는다 — 모델이 오해하면 되돌리기 어려운 쪽이다. */
+      setDaytype: function (dt) {
+        if (dt === S.daytype) return;
+        var b = $('#daytype [data-daytype="' + dt + '"]');
+        if (b) b.click();
+      },
+      setBudget: function (eok) {
+        var inp = $('#budgetInput');
+        if (!inp) return;
+        inp.value = eok;
+        /* change 를 직접 일으켜 renderBudgetInput 의 리스너를 그대로 태웁니다 —
+           클램프·집행률·정책 문구·재계산이 한 번에 따라옵니다. */
+        inp.dispatchEvent(new Event('change'));
+      },
+      /* 배치 — 지도 클릭과 같은 경로(onCellClick)를 타므로 수단별 커버리지 가드와
+         영역 제약이 그대로 걸립니다. 가드에 막히면 배치가 안 생기므로 그때는
+         null 을 돌려 챗이 성공을 주장하지 못하게 합니다.
+         **어디에 놓을지는 여전히 사용자(또는 recommend 알고리즘)가 정합니다** —
+         이 액션은 "말한 곳에 놓기"만 합니다. */
+      place: function (tool, cellId, count) {
+        var cell = S.map && S.map.cellById(cellId);
+        if (!cell) return null;
+        var before = countOf(tool, cellId);
+        setTool(tool);
+        for (var i = 0; i < count; i++) onCellClick(cell);
+        var after = countOf(tool, cellId);
+        if (after <= before) return null;          /* 가드에 막혔습니다 */
+        var label = (S.effects[tool] || {}).label || tool;
+        return label + ' ' + (after - before) + '개를 ' + (cell.name || cellId) + '에 놓았습니다';
+      },
+      undo: function () {
+        if (!S.placements.length) return false;
+        $('#btnUndo').click();
+        return true;
+      },
+      /* 초기화는 confirm 이 뜹니다 — 파괴적 조작이라 사람 확인을 남겨 둡니다
+         (챗이 조용히 다 지우면 그게 가장 놀라운 동작입니다). */
+      reset: function () {
+        if (!S.placements.length) return false;
+        var n = S.placements.length;
+        resetAll();
+        return S.placements.length < n;
+      },
+      setStrategy: function (v) {
+        if (v === 'balance' && (S.area || S.recRegion)) {
+          return null;   /* 범위가 지정되면 지역 균형은 성립하지 않습니다(서버 계약) */
+        }
+        requestRecommendation(v);
+        return (STRAT_KO[v] || v) + ' 기준으로 다시 짭니다';
+      },
+      /* 추천 범위 — 읍면동 이름이면 그 동으로, 비우면 화성시 전체로. 지도에서 끈
+         영역(S.area)이 있으면 그쪽이 우선이라 여기서 손대지 않습니다. */
+      setScope: function (name) {
+        if (S.area) return null;
+        if (!name) {
+          S.recRegion = null;
+          S.map.zoomReset();
+          paintRecScope();
+          return '추천 범위를 화성시 전체로 되돌렸습니다';
+        }
+        var ok = (S.map.cells() || []).some(function (c) { return c.region === name; });
+        if (!ok) return null;
+        S.recRegion = name;
+        if (S.recStrategy === 'balance') S.recStrategy = 'efficiency';
+        S.map.zoomToRegion(name);
+        paintRecScope();
+        return '추천 범위를 ' + name + '으로 좁혔습니다';
+      },
+      report: function () {
+        var b = document.querySelector('[data-report-open]');
+        if (b) b.click();
+      },
       /* 모델이 지금 짠 시나리오를 봐야 "이 배치 설명해줘" 에 답합니다.
          S.result 전체(격자별 배열)는 안 싣습니다 — 크기도 크고, 필요한 건
          요약 수치뿐입니다(saveCurrent 가 저장하는 summary 와 같은 선택). */
@@ -2073,9 +2175,7 @@
       var b = e.target.closest('[data-tool]');
       if (!b) return;
       var t = b.getAttribute('data-tool');
-      S.tool = (S.tool === t) ? null : t;
-      S.removeMode = false;
-      syncToolButtons();
+      setTool(S.tool === t ? null : t);      /* 같은 버튼 재클릭 = 해제(토글) */
     });
 
     $('#btnRemoveMode').addEventListener('click', function () {

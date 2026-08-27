@@ -132,7 +132,7 @@
       var focus = new URLSearchParams(location.search).get('focus');
       if (focus && HW.chatActions.search) HW.chatActions.search(focus);
       var pending = HW.chat && HW.chat.consumePending && HW.chat.consumePending();
-      if (pending) HW.chat.runAction(pending);
+      if (pending) HW.chat.runActions(pending);   /* 배열 — nav.after 가 복수일 수 있습니다 */
     }).catch(fail);
   }
 
@@ -1261,6 +1261,29 @@
         inp.value = q;
         var go = $('#regionGo');
         if (go) go.click();
+      },
+      /* 요일 전환 — 챗봇이 요일축을 읽기만 하던 때는 "주말은 어때?" 에 주말 수치로
+         답하면서 화면은 평일 그대로라 말과 화면이 어긋났습니다. 토글 버튼을 직접
+         눌러 상태·표시·재요청이 한 번에 가게 합니다(직접 loadPeriod 를 부르면
+         버튼 표시가 안 따라옵니다). */
+      setDaytype: function (dt) {
+        if (dt === S.daytype) return;
+        var b = $('#daytype [data-daytype="' + dt + '"]');
+        if (b) b.click();
+      },
+      /* 격자 열기 — 검색(show)은 이름으로 찾지만, 이건 격자 ID 로 바로 엽니다.
+         클릭과 같은 경로(enterCellFocus)라 노선 스트립·최근접 정류장 프로파일까지
+         함께 열립니다. 없는 ID 면 false 를 돌려 챗이 "했다"고 말하지 않게 합니다. */
+      selectCell: function (id) {
+        if (!cellById(id)) return false;
+        enterCellFocus(id);
+        return true;
+      },
+      /* 보고서 — 버튼과 같은 경로. 초안 생성은 수십 초 걸리므로 모달이 진행
+         상태를 보여줍니다(챗은 "만듭니다" 라고만 알립니다). */
+      report: function () {
+        var b = document.querySelector('[data-report-open]');
+        if (b) b.click();
       },
       /* 모델이 "지금 무엇을 보고 있는지" 알아야 "이 격자는 왜 빨간가" 에 답합니다 */
       context: function () {
