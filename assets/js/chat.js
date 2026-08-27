@@ -125,8 +125,16 @@
       if (!url) return null;
       if (global.location.pathname.split('/').pop() === url) return null;   /* 이미 그 화면 */
       var param = act.page === 'simulation' ? 'cell' : 'focus';
-      var qs = (typeof act.query === 'string' && act.query.trim())
-        ? ('?' + param + '=' + encodeURIComponent(act.query.trim())) : '';
+      var qp = [];
+      if (typeof act.query === 'string' && act.query.trim()) {
+        qp.push(param + '=' + encodeURIComponent(act.query.trim()));
+      }
+      /* 지금 보고 있는 시간대·요일을 함께 넘깁니다 — 안 넘기면 주말·심야를 보다
+         옮겨도 도착 화면이 평일·출근으로 시작해, 같은 질문의 답이 이동 한 번에
+         달라집니다(독립 검증 주의 7). 값은 도착 화면이 다시 검증합니다. */
+      if (h.period) qp.push('period=' + encodeURIComponent(h.period()));
+      if (h.daytype) qp.push('daytype=' + encodeURIComponent(h.daytype()));
+      var qs = qp.length ? ('?' + qp.join('&')) : '';
       if (act.after && typeof act.after === 'object') {
         try { global.sessionStorage.setItem(PENDING_KEY, JSON.stringify(act.after)); } catch (e) { /* 무시 */ }
       }

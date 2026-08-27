@@ -41,6 +41,12 @@
     C.mountTopnav('dashboard');
     C.initTheme();
     C.wireHelp();
+    /* 챗봇 nav 로 넘어왔을 때 보던 시간대·요일을 이어받습니다 — 첫 로드 전에
+       읽어야 그 상태로 바로 뜹니다(나중에 바꾸면 평일 화면이 한 번 깜빡입니다).
+       값은 meta 수신 뒤 renderPeriodTabs 에서 다시 검증합니다(주의 7). */
+    var q0 = new URLSearchParams(location.search);
+    if (q0.get('period')) S.period = q0.get('period');
+    if (q0.get('daytype') === 'we' || q0.get('daytype') === 'wd') S.daytype = q0.get('daytype');
     HW.report.mount();
     HW.report.setContextProvider(function () {
       return {
@@ -167,9 +173,16 @@
    * =================================================================== */
   function renderPeriodTabs(periods) {
     var host = $('#periods');
-    host.innerHTML = periods.map(function (p, i) {
-      return '<button class="pbtn' + (i === 0 ? ' on' : '') + '" data-period="' + esc(p.id) +
-        '" role="tab" aria-selected="' + (i === 0) + '"><b>' + esc(p.name) + '</b><span>' + esc(p.label) + '</span></button>';
+    /* URL(?period=)로 들어온 시간대가 있으면 그 탭이 켜져야 합니다 — 첫 탭을
+       무조건 켜면 화면은 심야인데 탭만 출근으로 보입니다. 메타에 없는 값이면
+       첫 시간대로 되돌립니다(값 검증도 여기서 한 번). */
+    if (!periods.some(function (p) { return p.id === S.period; })) {
+      S.period = periods[0] && periods[0].id;
+    }
+    host.innerHTML = periods.map(function (p) {
+      var on = p.id === S.period;
+      return '<button class="pbtn' + (on ? ' on' : '') + '" data-period="' + esc(p.id) +
+        '" role="tab" aria-selected="' + on + '"><b>' + esc(p.name) + '</b><span>' + esc(p.label) + '</span></button>';
     }).join('');
     host.addEventListener('click', function (e) {
       var b = e.target.closest('[data-period]');

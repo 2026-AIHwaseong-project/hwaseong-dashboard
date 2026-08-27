@@ -149,6 +149,10 @@
 
     var q = new URLSearchParams(location.search);
     if (q.get('period')) S.period = q.get('period');
+    /* 요일축도 승계합니다 — 대시보드에서 주말·심야를 보다가 챗봇으로 넘어오면
+       시뮬레이션이 평일로 시작해, 같은 질문의 답이 화면 이동 한 번에 바뀌었습니다
+       (독립 검증 주의 7). period 와 같은 자리에서 같은 방식으로 받습니다. */
+    if (q.get('daytype') === 'we' || q.get('daytype') === 'wd') S.daytype = q.get('daytype');
 
     api.meta().then(function (meta) {
       S.meta = meta;
@@ -194,6 +198,7 @@
          추가 요청 없이 첫 클릭부터 동작합니다. */
       S.baseCells[S.period] = r[2].cells;
       wireControls();
+      compactStoredScenarios();   /* 옛 뚱뚱한 저장본 정리 — 목록을 그리기 전에 */
       renderScenarioList();
       syncSideHeight();
       wireSideHeightSync();
@@ -472,6 +477,10 @@
       C.toast('분석 영역을 해제했습니다. 화성시 전체 기준으로 돌아갑니다.');
     }
     paintAreaChip();
+    /* 사이드바의 '추천 범위' 칩도 영역 상태를 그립니다 — 여기서 안 부르면 영역을
+       해제해도 "분석 영역 217칸"이 남고, 그 상태에서는 읍면동 범위 칩이 나타나지
+       않아 범위를 바꿀 수 없습니다(독립 검증 주의 5). */
+    paintRecScope();
     refreshEligible();
     /* 영역 KPI 는 4개 시간대 기준선 격자가 있어야 셀 수 있습니다 */
     ensureBaseCells().then(function () { return runSim(); }).catch(fail);
@@ -1345,9 +1354,55 @@
     try { return JSON.parse(localStorage.getItem(LS_SCENARIOS) || '[]'); }
     catch (e) { return []; }
   }
+
+  /** 이미 저장된 뚱뚱한 시나리오(추천 simulation 포함)를 한 번 정리합니다.
+      슬림 저장을 켜도 **옛 저장본은 그대로 용량을 먹고 있어서**, 고친 뒤에도
+      "3건에서 한도" 증상이 그대로인 사용자가 생깁니다. 부팅 때 조용히 줄이고
+      줄어든 게 있을 때만 알립니다(지우는 게 아니라 다시 계산되는 부분만 뺍니다). */
+  function compactStoredScenarios() {
+    var list = loadScenarios();
+    if (!list.length) return;
+    var fat = list.filter(function (x) { return x && x.recommendation && x.recommendation.simulation; });
+    if (!fat.length) return;
+    var before = (localStorage.getItem(LS_SCENARIOS) || '').length;
+    if (!saveScenarios(list.map(slimScenario))) return;
+    var after = (localStorage.getItem(LS_SCENARIOS) || '').length;
+    var savedKb = Math.round((before - after) / 1024);
+    if (savedKb > 100) {
+      C.toast('저장된 시나리오 ' + fat.length + '건에서 다시 계산되는 부분을 덜어 '
+        + savedKb.toLocaleString('ko-KR') + 'KB 를 비웠습니다 — 내용은 그대로입니다.', '', 7000);
+    }
+  }
+  /** 저장 성공 여부를 **돌려줍니다**. 예전에는 catch 가 토스트만 띄우고 예외를
+      삼켜서, 호출부가 실패를 모른 채 성공 토스트를 이어 띄웠습니다 — 화면에
+      "저장하지 못했습니다" 와 "저장했습니다" 가 나란히 뜨고 사용자는 뒤엣것을
+      믿습니다(독립 검증 P0-2). 저장 한도 자체보다 이쪽이 위험합니다. */
   function saveScenarios(list) {
-    try { localStorage.setItem(LS_SCENARIOS, JSON.stringify(list)); }
-    catch (e) { C.toast('시나리오를 저장하지 못했습니다(브라우저 저장 공간).', 'err'); }
+    try {
+      localStorage.setItem(LS_SCENARIOS, JSON.stringify(list));
+      return true;
+    } catch (e) {
+      C.toast('시나리오를 저장하지 못했습니다 — 브라우저 저장 공간이 찼습니다. '
+        + '저장된 시나리오를 지우거나 [내보내기]로 파일에 보관한 뒤 다시 시도하세요.', 'err', 8000);
+      return false;
+    }
+  }
+
+  /** 저장·내보내기에 실을 시나리오 한 벌. 추천 응답의 simulation 블록은 뺍니다.
+      cellsByPeriod 가 786격자 × 4시간대라 그것만 1.4MB 인데, 화면이 카드·복원에
+      쓰는 것은 이름·배치·예산·요약(합쳐 7KB)뿐입니다. 통째로 넣으면 localStorage
+      5MB 한도에 **3건**에서 닿아 "최대 12개" 안내가 거짓이 됩니다(독립 검증 P0-1).
+      불러오면 저장된 placements 로 서버가 다시 계산하므로 잃는 정보가 없습니다. */
+  function slimScenario(s) {
+    if (!s || !s.recommendation) return s;
+    var rec = {}, k;
+    for (k in s.recommendation) {
+      if (k !== 'simulation') rec[k] = s.recommendation[k];
+    }
+    var out = {};
+    for (k in s) out[k] = s[k];
+    out.recommendation = rec;
+    return out;
   }
 
   /* ── 시나리오 파일 내보내기/가져오기 ─────────────────────────────────
@@ -1362,8 +1417,10 @@
       C.toast('내보낼 저장 시나리오가 없습니다 — 먼저 [시나리오 저장]을 누르세요.');
       return;
     }
+    /* 파일에도 슬림본을 씁니다 — 옛 저장본(추천 simulation 포함)이 남아 있으면
+       내보내기 파일이 7.5MB 가 되고, 그걸 가져오기 하면 다시 한도에 부딪힙니다. */
     var doc = { format: SCEN_FILE_FORMAT, version: 1, exportedAt: C.nowStamp(),
-                scenarios: list };
+                scenarios: list.map(slimScenario) };
     C.downloadBlob(new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' }),
       /* toISOString 은 UTC — KST 오전 9시 이전에 내보내면 파일명만 전날이 됩니다.
          화면의 저장시각(C.nowStamp)과 같은 로컬 기준 헬퍼를 씁니다. */
@@ -1426,7 +1483,7 @@
         list.push(s);   /* 목록 앞자리는 이 브라우저의 최근 저장이 지킵니다 */
         added++;
       }
-      if (added) saveScenarios(list);
+      if (added && !saveScenarios(list.map(slimScenario))) return;   /* 실패 토스트는 위에서 */
       renderScenarioList();
       var parts = [added ? '<b>' + added + '건</b> 가져옴' : '가져온 시나리오가 없습니다'];
       if (dup) parts.push(dup + '건은 같은 이름이 있어 건너뜀');
@@ -1475,7 +1532,7 @@
         needDelta: (currentPeriodBlock() || {}).delta ? currentPeriodBlock().delta.needCells : 0
       }
     });
-    saveScenarios(list.slice(0, 12));
+    if (!saveScenarios(list.slice(0, 12).map(slimScenario))) return;   /* 실패 토스트는 위에서 */
     renderScenarioList();
     C.toast('시나리오 <b>' + esc(S.name) + '</b> 을(를) 저장했습니다.');
   }
@@ -1977,7 +2034,7 @@
     if (!s) return;
     if (!confirm('시나리오 「' + s.name + '」 을(를) 삭제할까요?')) return;
     list.splice(i, 1);
-    saveScenarios(list);
+    if (!saveScenarios(list)) return;
     renderScenarioList();
     C.toast('시나리오 <b>' + esc(s.name) + '</b> 을(를) 삭제했습니다.');
   }
