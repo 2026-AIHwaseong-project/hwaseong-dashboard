@@ -160,6 +160,53 @@
 
   /* -------------------------------------------------------------- 토스트 */
   var _toasts = null;
+  /* ── 확인 대화 ──────────────────────────────────────────────────────
+     브라우저 기본 confirm() 을 대신합니다. 세 가지 이유로 바꿨습니다.
+       ① 앱 전체가 커스텀 토스트·모달인데 여기만 OS 팝업이라 시각적으로 튑니다.
+       ② **화면 녹화와 자동화가 네이티브 대화상자에서 멈춥니다** — 발표 영상을
+          찍거나 E2E 를 돌릴 때 이 지점에서 끊깁니다(실제로 두 번 멈췄습니다).
+       ③ 문구에 굵게·줄바꿈을 넣을 수 없어 "되돌릴 수 없습니다" 같은 경고가
+          다른 문장과 같은 무게로 읽힙니다.
+     confirm() 은 동기라 `if (!confirm(...)) return;` 로 썼지만 이쪽은 비동기라
+     호출부가 .then() 을 받습니다 — 되돌아갈 수 없는 조작 앞이라 한 번 더 생각하게
+     되는 편이 낫습니다. Esc·배경 클릭은 '취소'입니다(기본값이 안전한 쪽). */
+  function ask(opt) {
+    if (typeof opt === 'string') opt = { message: opt };
+    return new Promise(function (resolve) {
+      var wrap = el('div', { 'class': 'modal ask-modal' });   /* el 의 2번째 인자는 속성 객체 */
+      wrap.innerHTML =
+        '<div class="veil" data-x></div>' +
+        '<div class="sheet ask-sheet" role="alertdialog" aria-modal="true" aria-labelledby="askt">' +
+        '<div class="ask-body"><p class="ask-t" id="askt">' + (opt.message || '계속할까요?') + '</p>' +
+        (opt.detail ? '<p class="ask-d">' + esc(opt.detail) + '</p>' : '') + '</div>' +
+        '<div class="ask-act">' +
+        '<button type="button" class="btn" data-no>' + esc(opt.cancelText || '취소') + '</button>' +
+        '<button type="button" class="btn ' + (opt.danger ? 'danger' : 'primary') + '" data-yes>' +
+        esc(opt.okText || '계속') + '</button></div></div>';
+      document.body.appendChild(wrap);
+      wrap.style.display = 'flex';
+      var done = false;
+      function close(v) {
+        if (done) return;
+        done = true;
+        document.removeEventListener('keydown', onKey);
+        wrap.remove();
+        resolve(v);
+      }
+      function onKey(e) {
+        if (e.key === 'Escape') close(false);
+        if (e.key === 'Enter') close(true);
+      }
+      wrap.querySelector('[data-yes]').addEventListener('click', function () { close(true); });
+      wrap.querySelector('[data-no]').addEventListener('click', function () { close(false); });
+      wrap.querySelector('[data-x]').addEventListener('click', function () { close(false); });
+      document.addEventListener('keydown', onKey);
+      /* 기본 포커스는 '취소' — 엔터를 무심코 눌러 되돌릴 수 없는 일이
+         일어나지 않게 합니다(위험한 조작일수록 한 손 더 가게). */
+      (opt.danger ? wrap.querySelector('[data-no]') : wrap.querySelector('[data-yes]')).focus();
+    });
+  }
+
   function toast(msg, kind, ms) {
     if (!_toasts) {
       _toasts = document.createElement('div');
@@ -973,7 +1020,7 @@
   HW.icon = icon;
 
   HW.core = {
-    $: $, $$: $$, el: el, esc: esc, icon: icon,
+    $: $, $$: $$, el: el, esc: esc, icon: icon, ask: ask,
     HELP: HELP, wireHelp: wireHelp,
     clamp: clamp, fmt: fmt, fmt1: fmt1, pct: pct, won: won, delta: delta,
     todayISO: todayISO, nowStamp: nowStamp, korDate: korDate,

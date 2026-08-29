@@ -2195,3 +2195,24 @@ button.rhead:hover .rkind{border-color:var(--brand)}
 .rp-archive[open] summary svg{transform:rotate(-90deg)}
 .rp-archive .rp-count{color:var(--ink3);font-weight:400}
 .rp-archive .scen-list{margin-top:4px}
+
+/* 추천 패널의 '설명·보고서' 뒤 힌트 — 예정 프로바이더임을 드러냅니다(실제 문서를
+   쓴 쪽은 보고서 메타에 찍히고, 다르면 문서 상단에 대체 모델 안내가 뜹니다). */
+.pb-hint{font-style:normal;color:var(--ink3);font-size:11px}
+
+/* ── 확인 대화(C.ask) ────────────────────────────────────────────────
+   브라우저 confirm() 대체. .modal/.sheet 를 그대로 쓰되 폭만 좁힙니다 —
+   보고서 모달과 같은 골격이라 새 시각 언어를 만들지 않습니다. */
+.ask-sheet{max-width:420px;width:100%}
+.ask-body{padding:18px 20px 4px}
+.ask-t{font-size:14.5px;font-weight:650;line-height:1.55;color:var(--ink);margin:0}
+.ask-t b{color:var(--bad)}
+.ask-d{font-size:12.5px;color:var(--ink3);line-height:1.6;margin:8px 0 0}
+.ask-act{display:flex;gap:8px;justify-content:flex-end;padding:14px 20px 18px}
+.ask-act .btn{min-width:84px;justify-content:center}
+.btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.danger:hover:not(:disabled){filter:brightness(.94)}
+@media (max-width:640px){
+  .ask-act{flex-direction:column-reverse}
+  .ask-act .btn{width:100%;min-height:40px}
+}

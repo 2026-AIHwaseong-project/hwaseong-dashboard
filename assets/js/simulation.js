@@ -659,11 +659,17 @@
    *   위치 선정은 서버의 최적화 알고리즘이 합니다(언어모델이 아닙니다).
    *   결과는 그대로 배치 목록에 들어가며, 사용자가 자유롭게 고칠 수 있습니다.
    * =================================================================== */
-  function requestRecommendation(strategy) {
+  /* confirmed=true 면 교체 확인을 이미 받은 것입니다(C.ask 는 비동기라 답을
+     받은 뒤 자기 자신을 다시 부릅니다). */
+  function requestRecommendation(strategy, confirmed) {
     /* 수동 배치나 사용자가 고친 추천안이 있으면 확인 없이 지우지 않습니다 */
     var manual = S.placements.some(function (p) { return !p.fromAI; });
-    if (S.placements.length && (manual || S.recEdited)) {
-      if (!confirm('현재 배치 ' + S.placements.length + '건이 추천안으로 교체됩니다. 계속할까요?')) return;
+    if (!confirmed && S.placements.length && (manual || S.recEdited)) {
+      C.ask({ message: '현재 배치 <b>' + S.placements.length + '건</b>이 추천안으로 교체됩니다.',
+              detail: '지금 짜 놓은 배치는 사라집니다. 필요하면 먼저 시나리오로 저장하세요.',
+              okText: '교체하고 추천받기', danger: true })
+        .then(function (ok) { if (ok) requestRecommendation(strategy, true); });
+      return;
     }
     if (strategy) S.recStrategy = strategy;
     /* 동 범위(읍면동 하나)에서만 '지역 균형'(동별 1건 상한 = 곧 1건 추천)이
@@ -888,7 +894,12 @@
     var pb = rec.producedBy;
     if (!pb) return '';
     return '<div class="rec-note rec-by">' +
-      '배치 산출 <b>' + esc(pb.placements) + '</b> · 설명·보고서 <b>' + esc(pb.narrative) + '</b>' +
+      /* '설명·보고서'는 **예정된** 프로바이더입니다 — 호출이 실패하면 서버가 폴백을
+         타므로 실제로 문서를 쓴 쪽과 다를 수 있습니다(보고서 메타에는 실제 값이
+         찍힙니다). 그 차이가 같은 화면에서 두 이름으로 보이던 자리라 '예정'임을
+         드러냅니다. */
+      '배치 산출 <b>' + esc(pb.placements) + '</b> · 설명·보고서 <b>' + esc(pb.narrative) +
+      '</b><i class="pb-hint"> (자동 선택 · 장애 시 대체 모델)</i>' +
       (pb.deterministicNote ? '<br>' + esc(pb.deterministicNote) : '') +
       '</div>';
   }
@@ -902,9 +913,13 @@
     });
   }
 
-  function resetAll() {
-    if (S.placements.length &&
-        !confirm('배치 ' + S.placements.length + '건을 모두 지웁니다. 되돌릴 수 없습니다. 계속할까요?')) return;
+  function resetAll(opts_confirmed) {
+    if (S.placements.length && !opts_confirmed) {
+      C.ask({ message: '배치 <b>' + S.placements.length + '건</b>을 모두 지웁니다.',
+              detail: '되돌릴 수 없습니다.', okText: '모두 지우기', danger: true })
+        .then(function (ok) { if (ok) resetAll(true); });
+      return false;
+    }
     S.placements = [];
     S.recommendation = null;
     S.recEdited = false;
@@ -1502,12 +1517,20 @@
     var dup = -1;
     list.forEach(function (s, idx) { if (dup < 0 && s.name === S.name) dup = idx; });
     if (dup >= 0) {
-      if (!confirm('같은 이름 「' + S.name + '」 이(가) 이미 있습니다. 덮어쓸까요?')) {
-        C.toast('이름을 바꾼 뒤 다시 저장하세요.');
-        return;
-      }
-      list.splice(dup, 1);
+      C.ask({ message: '같은 이름 「' + esc(S.name) + '」 이(가) 이미 있습니다.',
+              detail: '덮어쓰면 기존 저장본은 사라집니다.', okText: '덮어쓰기', danger: true })
+        .then(function (ok) {
+          if (ok) { list.splice(dup, 1); saveCurrentInto(list); }
+          else C.toast('이름을 바꾼 뒤 다시 저장하세요.');
+        });
+      return;
     }
+    saveCurrentInto(list);
+  }
+
+  /** 실제 저장 — 이름 충돌 확인을 마친 목록을 받아 씁니다(C.ask 가 비동기라
+      확인 뒤 이어지는 부분을 함수로 나눴습니다). */
+  function saveCurrentInto(list) {
     if (list.length >= 12) {
       C.toast('저장은 최대 12개입니다 — 가장 오래된 <b>' +
         esc(list[list.length - 1].name) + '</b> 이(가) 삭제됩니다.', 'err', 5000);
@@ -1979,12 +2002,16 @@
     C.toast('공유 시나리오 <b>' + esc(S.name || doc.id) + '</b> 을(를) 열었습니다.');
   }
 
-  function loadScenario(i) {
+  function loadScenario(i, confirmed) {
     var list = loadScenarios();
     var s = list[i];
     if (!s) return;
-    if (S.placements.length &&
-        !confirm('불러오면 현재 배치 ' + S.placements.length + '건이 교체됩니다. 계속할까요?')) return;
+    if (S.placements.length && !confirmed) {
+      C.ask({ message: '불러오면 현재 배치 <b>' + S.placements.length + '건</b>이 교체됩니다.',
+              okText: '불러오기', danger: true })
+        .then(function (ok) { if (ok) loadScenario(i, true); });
+      return;
+    }
     /* 저장된 추천 설명(rec-box)을 함께 복원합니다 — 수동 배치로 저장한
        시나리오는 애초에 recommendation 이 없어 null 그대로 남습니다. */
     S.recommendation = s.recommendation || null;
@@ -2028,11 +2055,16 @@
     C.toast('시나리오 <b>' + esc(s.name) + '</b> 을(를) 불러왔습니다.');
   }
 
-  function deleteScenario(i) {
+  function deleteScenario(i, confirmed) {
     var list = loadScenarios();
     var s = list[i];
     if (!s) return;
-    if (!confirm('시나리오 「' + s.name + '」 을(를) 삭제할까요?')) return;
+    if (!confirmed) {
+      C.ask({ message: '시나리오 「' + esc(s.name) + '」 을(를) 삭제할까요?',
+              okText: '삭제', danger: true })
+        .then(function (ok) { if (ok) deleteScenario(i, true); });
+      return;
+    }
     list.splice(i, 1);
     if (!saveScenarios(list)) return;
     renderScenarioList();
@@ -2270,7 +2302,10 @@
     });
     $('#btnAreaDone').addEventListener('click', function () { S.map.commitArea(); });
     $('#btnAreaClear').addEventListener('click', function () { S.map.clearArea(); });
-    $('#btnReset').addEventListener('click', resetAll);
+    /* 직접 바인딩하면 MouseEvent 가 첫 인자(확인 플래그)로 들어가 truthy 가 되어
+       **확인창 없이 바로 지워집니다** — requestRecommendation 에서 같은 사고를
+       겪고 남긴 주석이 바로 아래 있습니다. 감싸서 부릅니다. */
+    $('#btnReset').addEventListener('click', function () { resetAll(); });
     /* 직접 바인딩하면 MouseEvent 가 strategy 인자로 들어가 전략이 초기화됩니다 */
     $('#btnRecommend').addEventListener('click', function () { requestRecommendation(); });
 

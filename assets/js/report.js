@@ -950,13 +950,15 @@
       var del = ev.target.closest('[data-del]');
       if (del) {
         var did = del.getAttribute('data-del');
-        if (global.confirm('이 기록을 삭제할까요?')) {
-          removeRecord(did);
-          /* 지운 것이 지금 화면의 기록이면 연결을 끊습니다 — 안 끊으면
-             채팅으로 고칠 때 updateRecord 가 지운 기록을 되살립니다. */
-          if (currentRecId === did) currentRecId = null;
-          renderList();
-        }
+        C.ask({ message: '이 보고서 기록을 삭제할까요?', okText: '삭제', danger: true })
+          .then(function (ok) {
+            if (!ok) return;
+            removeRecord(did);
+            /* 지운 것이 지금 화면의 기록이면 연결을 끊습니다 — 안 끊으면
+               채팅으로 고칠 때 updateRecord 가 지운 기록을 되살립니다. */
+            if (currentRecId === did) currentRecId = null;
+            renderList();
+          });
         return;
       }
       var ld = ev.target.closest('[data-open]');
@@ -1031,6 +1033,24 @@
         '같은 이유로 되지 않습니다. 백엔드 폴더의 <code>.env</code> 에 ' +
         '<code>ANTHROPIC_API_KEY</code>(또는 OPENAI_API_KEY · GOOGLE_API_KEY) 를 넣고 ' +
         '서버를 다시 켠 뒤 [다시 생성] 을 누르세요.</div>';
+    }
+    /* 서버가 산문 속 수치를 입력과 대조해 의심 항목을 실어 보냅니다
+       (numberWarnings). 문장을 서버가 고치지는 않습니다 — 담당자가 판단할 수
+       있게 어디가 의심스러운지만 알립니다. 실제로 격자를 '500m'로, 단가
+       1.8억을 '18억'으로 적은 초안이 그대로 나간 적이 있습니다. */
+    if (draft.numberWarnings && draft.numberWarnings.length) {
+      h += '<div class="dwarn"><b>입력에서 확인되지 않는 수치가 있습니다 — ' +
+        esc(draft.numberWarnings.join(', ')) + '</b>' +
+        '본문에 쓰인 이 값들은 화면 데이터에서 찾지 못했습니다. 결재에 올리기 전 ' +
+        '해당 문장을 확인하시고, 필요하면 아래 채팅으로 고치세요.</div>';
+    }
+    /* 요청한 AI 가 아니라 대체 모델이 답한 경우 — 시뮬레이션 패널의 '설명·보고서'
+       표기와 이 문서의 생성 모델이 달라 보이던 자리입니다. */
+    if (draft.providerFallback) {
+      h += '<div class="dwarn"><b>대체 모델로 생성했습니다.</b>' +
+        esc(draft.providerFallback.requested) + ' 호출이 실패해 ' +
+        esc(draft.providerFallback.used) + ' 로 작성했습니다. 내용 자체는 같은 ' +
+        '입력으로 만들어졌습니다.</div>';
     }
     h += '<p class="dtitle">' + esc(draft.title) + '</p><div class="drule"></div>';
     h += '<p class="dlead">' + esc(DOC_LEAD) + '</p>';

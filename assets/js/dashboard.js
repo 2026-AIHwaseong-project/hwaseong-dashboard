@@ -499,7 +499,14 @@
         var c = cellById(r.cellId);
         return c && c.region === S.focusRegion;
       })[0];
-      if (top) selectCell(top.cellId, true);
+      if (top) {
+        selectCell(top.cellId, true);
+        /* 노선 카드도 그 격자로 맞춥니다 — selectCell 은 지도·표·프로파일만
+           건드리고 노선 카드는 enterCellFocus 의 몫이라, 여기서 안 부르면
+           "봉담읍을 검색했는데 노선 카드는 직전 격자(동탄7동)를 그대로 보여주는"
+           상태가 됩니다. 화면 두 곳이 서로 다른 격자를 말하는 셈입니다. */
+        renderCellRoutes(top.cellId);
+      }
     }
     paintRegions();
   }

@@ -966,30 +966,43 @@
       $('#gridOvList').addEventListener('click', function (ev) {
         var b = ev.target.closest('[data-gov-revoke]');
         if (!b) return;
-        if (!global.confirm('이 수정을 되돌릴까요? 원값이 복원되고 되돌림도 이력에 남습니다.')) return;
-        api.call('admin.gridOverrideRevoke', null,
-                 { id: b.getAttribute('data-gov-revoke'), actor: 'admin' })
-          .then(function () { C.toast('되돌렸습니다 — 원값이 복원됐습니다.'); return loadAll(); })
-          ['catch'](function (e) { C.toast(esc(api.humanize(e)), 'err', 6000); });
+        var ovId = b.getAttribute('data-gov-revoke');
+        C.ask({ message: '이 수정을 되돌릴까요?',
+                detail: '원값이 복원되고, 되돌렸다는 사실도 이력에 남습니다.',
+                okText: '되돌리기' }).then(function (ok) {
+          if (!ok) return;
+          api.call('admin.gridOverrideRevoke', null, { id: ovId, actor: 'admin' })
+            .then(function () { C.toast('되돌렸습니다 — 원값이 복원됐습니다.'); return loadAll(); })
+            ['catch'](function (e) { C.toast(esc(api.humanize(e)), 'err', 6000); });
+        });
       });
     }
     if ($('#btnApplyUpload')) {
       $('#btnApplyUpload').addEventListener('click', function () {
         var up = S.pendingUpload;
         if (!up) return;
-        if (!global.confirm('방금 검증한 파일을 라이브에 반영합니다.\n' +
-            '원본이 교체되고 조인→모델→검증→직렬화가 다시 돌아 화면 수치가 바뀔 수 있습니다.\n' +
-            '교체 전 자동으로 백업하며, 도중에 실패하면 이미 바꾼 것까지 되돌립니다.\n진행할까요?')) return;
-        startRefresh(null, '업로드 반영: ' + (up.label || ''),
-                     { uploadId: up.uploadId, apply: true });
+        C.ask({ message: '방금 검증한 파일을 <b>라이브에 반영</b>합니다.',
+                detail: '원본이 교체되고 조인→모델→검증→직렬화가 다시 돌아 화면 수치가 바뀔 수 있습니다. '
+                      + '교체 전 자동으로 백업하며, 도중에 실패하면 이미 바꾼 것까지 되돌립니다.',
+                okText: '라이브에 반영', danger: true }).then(function (ok) {
+          if (!ok) return;
+          startRefresh(null, '업로드 반영: ' + (up.label || ''),
+                       { uploadId: up.uploadId, apply: true });
+        });
       });
     }
     $('#btnReload').addEventListener('click', function () {
       startRefresh(['reload'], '관리자 콘솔 — 화면 반영');
     });
     $('#btnRecompute').addEventListener('click', function () {
-      if (!global.confirm('지표 재계산은 약 20초 걸리고, 완료되면 격자 지표·우선순위 수치가 바뀔 수 있습니다.\n스테이징에서 검증을 통과한 산출물만 반영되며, 실패해도 기존 데이터는 유지됩니다.\n진행할까요?')) return;
-      startRefresh(['join', 'model', 'validate', 'load', 'reload'], '관리자 콘솔 — 지표 재계산');
+      C.ask({ message: '지표 재계산을 시작합니다. <b>약 20초</b> 걸립니다.',
+              detail: '완료되면 격자 지표·우선순위 수치가 바뀔 수 있습니다. 스테이징에서 검증을 '
+                    + '통과한 산출물만 반영되며, 실패해도 기존 데이터는 그대로 유지됩니다.',
+              okText: '재계산 시작' }).then(function (ok) {
+        if (!ok) return;
+        startRefresh(['join', 'model', 'validate', 'load', 'reload'], '관리자 콘솔 — 지표 재계산');
+        focusJobLog();
+      });
     });
   }
 
