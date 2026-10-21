@@ -945,6 +945,7 @@
       })
     }).then(function (res) {
       S.result = res;
+      S.okPlacements = S.placements.map(function (p) { return Object.assign({}, p); });
       clearFail();
       try { localStorage.setItem(LS_LAST, JSON.stringify(slimSimulation(res))); } catch (e) { /* 용량 초과 등 */ }
       S.busy = false;
@@ -958,6 +959,14 @@
          화면과 배치 목록이 어긋난 채 남습니다. 최신 상태로 한 번 더 시도합니다. */
       var retry = S.pending;
       S.pending = false;
+      /* 보관판(녹화본 재생)은 녹화에 없는 배치를 계산할 수 없습니다 — 오류 상자
+         대신 직전에 계산된 배치로 되돌려 지도·목록·KPI 가 서로 맞게 둡니다. */
+      if (HW.CONFIG.ARCHIVE && err && err.status === 501) {
+        S.placements = (S.okPlacements || []).map(function (p) { return Object.assign({}, p); });
+        paintAll();
+        C.toast(esc(api.humanize(err)), 'err', 6000);
+        return;
+      }
       fail(err);
       if (retry) runSim();
     });

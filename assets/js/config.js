@@ -46,9 +46,12 @@
      ⚠️ 터널 주소(ngrok 등)는 여기에 적어 커밋하지 마세요. 재시작마다 바뀝니다.
         시연 때는 코드를 고치지 말고 ?server= 를 쓰세요(아래).
      ──────────────────────────────────────────────────────────────── */
+  /* 2026-10 — EC2 는 비용 때문에 내렸습니다. 후보에 남겨 두면 방문할 때마다
+     죽은 주소에서 2.5초씩 기다리므로 뺐습니다. 다시 켜면 ?server= 로 붙거나
+     여기에 한 줄 되돌리면 됩니다. 아무 후보도 응답하지 않으면 녹화본(보관판,
+     archive/)으로 뜹니다 — 아래 ready() 참고. */
   var SERVER_URLS = [
     '',                                 // 자동 — 백엔드가 /app/ 으로 직접 서빙 중일 때
-    'https://15-165-83-80.sslip.io',    // 배포된 EC2 (Cloudflare Pages 연동용 HTTPS)
     'http://localhost:8000'             // 로컬 백엔드
   ];
 
@@ -363,10 +366,16 @@
       return _ready;
     }
 
-    /* '' 는 자동 결정값으로 바꾸고, 같은 주소가 겹치면 한 번만 둡니다 */
+    /* '' 는 자동 결정값으로 바꾸고, 같은 주소가 겹치면 한 번만 둡니다.
+       공개 배포본(Pages)에서는 localhost 후보를 두드리지 않습니다 — 최신 Chrome 은
+       공개 사이트가 localhost 를 부르면 "로컬 네트워크 접근 허용" 권한 창을 띄워
+       방문자에게 그 창부터 보이게 됩니다. */
+    var pageLocal = location.protocol === 'file:' ||
+      /^(localhost|127\.|\[::1\]|10\.|192\.168\.)/.test(location.hostname);
     var seen = {}, list = [];
     for (var i = 0; i < SERVER_URLS.length; i++) {
       var u = SERVER_URLS[i] === '' ? autoBase() : SERVER_URLS[i];
+      if (!pageLocal && /^https?:\/\/(localhost|127\.)/.test(u)) continue;
       if (seen[u] === undefined) { seen[u] = 1; list.push(u); }
     }
 
@@ -390,17 +399,48 @@
         }
         return base;
       })['catch'](function () {
-        /* 전부 실패 — 첫 후보를 그대로 두고 진행합니다. api.js 가 평소의
-           "서버에 연결하지 못했습니다" 오류를 내도록 두는 편이, 여기서
-           조용히 삼키는 것보다 낫습니다. */
-        console.warn('[config] 서버 후보를 모두 두드렸지만 응답이 없습니다.\n  ' +
-          tried.join('\n  '));
         CONFIG.BASE_URL = list[0];
         CONFIG.EXTRA_HEADERS = headersFor(list[0]);
-        return CONFIG.BASE_URL;
+        /* 전부 실패 — 녹화본(archive/)이 있으면 보관판으로 뜹니다. 녹화본도
+           없으면 첫 후보를 그대로 두어 api.js 가 평소의 "서버에 연결하지
+           못했습니다" 오류를 내게 합니다(조용히 삼키는 것보다 낫습니다). */
+        return fetch(CONFIG.ARCHIVE_DIR + 'manifest.json').then(function (res) {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.json();
+        }).then(function (m) {
+          CONFIG.ARCHIVE = m;
+          console.info('[config] 서버 없음 — 보관판(녹화본 ' + m.recordedAt + ')으로 띄웁니다.');
+          showArchiveBanner(m);
+          return CONFIG.BASE_URL;
+        })['catch'](function () {
+          console.warn('[config] 서버 후보를 모두 두드렸지만 응답이 없습니다.\n  ' +
+            tried.join('\n  '));
+          return CONFIG.BASE_URL;
+        });
       });
     return _ready;
   };
+
+  /* 보관판(서버 없이 녹화본 재생) — api.js 가 CONFIG.ARCHIVE 를 보고 archive/
+     파일을 읽습니다. 녹화는 tools/record-archive.py. */
+  CONFIG.ARCHIVE = null;
+  CONFIG.ARCHIVE_DIR = 'archive/';
+
+  function showArchiveBanner(m) {
+    function put() {
+      if (document.getElementById('archiveBanner')) return;
+      var b = document.createElement('div');
+      b.id = 'archiveBanner';
+      b.className = 'archive-banner';
+      b.setAttribute('role', 'note');
+      b.innerHTML = '<b>포트폴리오 보관판</b> 실서버를 내린 뒤 녹화해 둔 응답으로 보여 드립니다' +
+        (m.recordedAt ? ' (' + m.recordedAt.slice(0, 10) + ' 녹화)' : '') +
+        '. 지도·분석·AI 추천안·보고서 예시는 그대로 볼 수 있고, ' +
+        '직접 고친 배치의 재계산·AI 도우미·저장은 꺼져 있습니다.';
+      document.body.insertBefore(b, document.body.firstChild);
+    }
+    if (document.body) put(); else document.addEventListener('DOMContentLoaded', put);
+  }
 
   global.HW = global.HW || {};
   global.HW.CONFIG = CONFIG;

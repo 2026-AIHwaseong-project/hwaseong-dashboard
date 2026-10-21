@@ -2216,3 +2216,8 @@ button.rhead:hover .rkind{border-color:var(--brand)}
   .ask-act{flex-direction:column-reverse}
   .ask-act .btn{width:100%;min-height:40px}
 }
+
+/* 보관판 띠 — 서버 없이 녹화본으로 뜰 때만 config.js 가 넣습니다 */
+.archive-banner{padding:8px 16px;font-size:12.5px;line-height:1.5;color:var(--ink2);
+  background:color-mix(in srgb,var(--warn) 12%,var(--card,#fff));border-bottom:1px solid color-mix(in srgb,var(--warn) 35%,transparent)}
+.archive-banner b{color:var(--warn);margin-right:6px}

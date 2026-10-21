@@ -202,7 +202,9 @@
     if (!op) return Promise.reject(ApiError('정의되지 않은 오퍼레이션: ' + opId, 0, opId));
     /* call() 과 같은 이유로 주소가 정해진 뒤에 나갑니다(그 함수 주석 참고). */
     if (typeof CONFIG.ready === 'function') {
-      return CONFIG.ready().then(function () { return streamRun(op, opId, body, onDelta); });
+      return CONFIG.ready().then(function () {
+        return CONFIG.ARCHIVE ? archiveCall(opId, null, body) : streamRun(op, opId, body, onDelta);
+      });
     }
     return streamRun(op, opId, body, onDelta);
   }
@@ -256,10 +258,127 @@
     });
   }
 
+  /* =====================================================================
+   * 보관판 — 서버가 없을 때 archive/ 의 녹화본을 서버 응답처럼 돌려줍니다.
+   *   config.js 가 서버 후보를 다 두드려도 응답이 없으면 CONFIG.ARCHIVE 를 켭니다.
+   *   녹화: tools/record-archive.py. 녹화된 조건 밖의 요청은 501 + 안내 문장으로
+   *   거절합니다 — humanize() 가 그 문장을 그대로 보여 줍니다.
+   * =================================================================== */
+  var archFiles = {};
+  function archRaw(name) {
+    if (!archFiles[name]) {
+      archFiles[name] = fetch(CONFIG.ARCHIVE_DIR + name).then(function (res) {
+        if (!res.ok) throw ApiError('보관판에 없는 자료입니다 (' + name + ')', 404);
+        return res.json();
+      });
+      archFiles[name]['catch'](function () { delete archFiles[name]; });
+    }
+    return archFiles[name];
+  }
+  /* 화면 코드가 응답을 고쳐 쓰는 곳이 있어(adaptSimulation 등) 녹화본은 복사해서 줍니다 */
+  function copy(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
+  function archFile(name) { return archRaw(name).then(copy); }
+  function archOff(why, opId) {
+    return Promise.reject(ApiError('포트폴리오 보관판이라 ' + why, 501, opId));
+  }
+
+  /* 녹화기(record-archive.py sim_key)와 같은 규칙 — 같은 (수단, 격자)는 수량을 합칩니다 */
+  function simKey(dt, placements) {
+    var agg = {};
+    (placements || []).forEach(function (p) {
+      var k = p.type + ':' + p.cellId;
+      agg[k] = (agg[k] || 0) + (Number(p.count) || 1);
+    });
+    return dt + '|' + Object.keys(agg).sort().map(function (k) { return k + ':' + agg[k]; }).join('|');
+  }
+
+  /* 요일 기준선 + 그 배치로 바뀐 격자 필드만 녹화돼 있습니다 — 덮어써서 복원 */
+  function archiveSim(body) {
+    var dt = body.daytype || 'wd';
+    var pl = body.placements || [];
+    return Promise.all([archFile('sim_base_' + dt + '.json'), archRaw('simulations.json')]).then(function (r) {
+      var res = r[0];
+      if (pl.length) {
+        var hit = r[1][simKey(dt, pl)];
+        if (!hit) throw ApiError('포트폴리오 보관판이라 직접 고친 배치는 다시 계산할 수 없습니다. ' +
+          'AI 추천안 그대로이거나 배치가 없을 때만 결과를 보여 드립니다.', 501, 'simulations.run');
+        hit = copy(hit);
+        for (var k in hit.top) res[k] = hit.top[k];
+        Object.keys(hit.cells).forEach(function (p) {
+          var cells = res.cellsByPeriod[p], at = {};
+          cells.forEach(function (c, i) { at[c.id] = i; });
+          Object.keys(hit.cells[p]).forEach(function (id) { Object.assign(cells[at[id]], hit.cells[p][id]); });
+        });
+      }
+      if (body.name) res.name = body.name;
+      return res;
+    });
+  }
+
+  /* 추천은 서버와 같이 요일축이 없습니다(항상 평일 기준). 녹화 조건 =
+     화성시 전체 · 기본 예산 · 세 수단 모두(즉시 착수는 정류장만) · 목적 4종 */
+  function archiveRec(body) {
+    var st = body.strategy || 'efficiency';
+    var types = (body.allowedTypes || ['stop', 'drt', 'freq']).slice().sort().join();
+    return Promise.all([archRaw('recommendations.json'), archRaw('meta.json')]).then(function (r) {
+      var rec = r[0][(body.period || 'am') + '|' + st];
+      var plain = !body.cellIds && !body.region && (st === 'quick' || types === 'drt,freq,stop') &&
+        (body.budgetKrw == null || body.budgetKrw === r[1].cost.defaultBudget);
+      if (!rec || !plain) throw ApiError('포트폴리오 보관판이라 추천은 화성시 전체 · 기본 예산 · ' +
+        '세 수단을 모두 켠 조건만 보여 드립니다.', 501, 'recommendations.run');
+      rec = copy(rec);
+      if (!rec.placements || !rec.placements.length) return rec;
+      return archiveSim({ daytype: 'wd', placements: rec.placements }).then(function (sim) {
+        rec.simulation = sim;
+        return rec;
+      });
+    });
+  }
+
+  function archiveCall(opId, params, body) {
+    params = params || {};
+    body = body || {};
+    var dt = params.daytype || 'wd';
+    switch (opId) {
+      case 'meta.get':    return archFile('meta.json');
+      case 'stops.list':  return archFile('stops.json');
+      case 'routes.list': return archFile('routes.json');
+      case 'grid.list':   return archFile('grid_' + params.period + '_' + dt + '.json');
+      case 'priorities.list':
+        return archFile('priorities_' + params.period + '_' + dt + '.json').then(function (r) {
+          r.items = r.items.slice(0, params.limit || 10);
+          return r;
+        });
+      case 'stops.profile':
+        return archRaw('profiles.json').then(function (all) {
+          if (!all[params.stopId]) throw ApiError('프로필 없음: ' + params.stopId, 404, opId);
+          return copy(all[params.stopId]);
+        });
+      case 'simulations.run':     return archiveSim(body);
+      case 'recommendations.run': return archiveRec(body);
+      case 'reports.draft':
+        return archRaw('reports.json').then(function (all) {
+          var d = all[(body.period || 'am') + '|' + ((body.context && body.context.daytype) || 'wd')];
+          if (!d) throw ApiError('포트폴리오 보관판이라 이 조건의 보고서 예시가 없습니다.', 501, opId);
+          return copy(d);
+        });
+      case 'chat.send':
+        return Promise.resolve({ ok: true, reply: '포트폴리오 보관판이라 AI 응답은 꺼져 있습니다. ' +
+          '지도·분석 화면과 AI 추천안·보고서 예시는 녹화본으로 그대로 보실 수 있습니다.' });
+      case 'admin.status':        return archRaw('admin.json').then(function (a) { return copy(a.status); });
+      case 'admin.params':        return archRaw('admin.json').then(function (a) { return copy(a.params); });
+      case 'admin.gridOverrides': return archRaw('admin.json').then(function (a) { return copy(a.gridOverrides); });
+      case 'admin.history':       return Promise.resolve({ items: [] });
+      default:
+        return archOff('저장·공유·재계산은 꺼져 있습니다.', opId);
+    }
+  }
+
   /* ------------------------------------------------------------ 진입점 */
   function call(opId, params, body, opts) {
     var op = OPS[opId];
     if (!op) return Promise.reject(ApiError('정의되지 않은 오퍼레이션: ' + opId, 0, opId));
+    if (CONFIG.ARCHIVE) return archiveCall(opId, params, body);
     /* 서버 주소가 정해진 뒤에 나갑니다. config.js 가 후보를 순서대로 두드려
        첫 응답에 붙이고, 그 결과를 CONFIG.BASE_URL 에 씁니다(CONFIG.url 이
        호출 시점에 읽으므로 여기서 기다리기만 하면 됩니다).
@@ -267,7 +386,7 @@
        구버전 config.js 와 섞여도 죽지 않게 존재 여부를 봅니다. */
     if (typeof CONFIG.ready === 'function') {
       return CONFIG.ready().then(function () {
-        return httpCall(op, opId, params, body, opts);
+        return CONFIG.ARCHIVE ? archiveCall(opId, params, body) : httpCall(op, opId, params, body, opts);
       });
     }
     return httpCall(op, opId, params, body, opts);
