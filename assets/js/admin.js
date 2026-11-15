@@ -1006,15 +1006,20 @@
     });
   }
 
-  /* 토큰이 어디로 전송되는지 로그인 카드에 표시한다 — ?server= 로 심어진
-     localStorage 주소(악성 링크 한 번이면 영속)로 토큰이 새는 것을 눈으로 잡는
-     최소 방어선. 저장된 주소가 있으면 경고를 함께 띄운다. */
+  /* 토큰이 어디로 전송되는지 로그인 카드에 표시한다. 허용 목록 밖의 주소는
+     config.js 가 이미 거르고(토큰도 붙지 않는다 — api.js), 여기서는 거른 사실과
+     지금 저장된 주소를 사람이 볼 수 있게 남긴다. */
   function showServerTarget() {
     var pinned = '';
     try { pinned = localStorage.getItem('hw.serverUrl') || ''; } catch (e) {}
     var el = $('#serverInfo');
     if (!el) return;
-    if (pinned) {
+    if (CONFIG.SERVER_REJECTED) {
+      el.textContent = '⚠ 허용되지 않은 서버 주소를 무시했습니다: ' + CONFIG.SERVER_REJECTED +
+        ' — 토큰은 그 주소로 전송되지 않습니다. 필요한 주소라면 config.js 의 ' +
+        'ALLOWED_SERVER_ORIGINS 에 추가하세요.';
+      el.classList.add('admerr');
+    } else if (pinned) {
       el.textContent = '⚠ 저장된 서버 주소로 접속합니다: ' + pinned +
         ' — 의도한 주소가 아니면 ?server= 로 초기화한 뒤 토큰을 입력하세요.';
       el.classList.add('admerr');
