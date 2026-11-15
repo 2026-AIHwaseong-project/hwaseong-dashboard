@@ -62,13 +62,23 @@ python3 tools/dev-server.py 5500          # → http://localhost:5500/
 전자는 캐시 헤더를 안 보내서 코드를 고쳐도 브라우저가 예전 `.js` 를 계속 씁니다.
 후자는 응답마다 `Cache-Control: no-store` 를 붙입니다.
 
-다른 PC·터널(ngrok)의 백엔드에 붙일 때는 **코드를 고치지 말고** 주소 뒤에 `?server=` 를 붙이세요.
+다른 PC 의 백엔드에 붙일 때는 주소 뒤에 `?server=` 를 붙이세요.
 `config.js` 의 하드코딩값보다 우선합니다.
 
 ```
-index.html?server=https://xxxx.ngrok-free.app   # 한 번 열면 브라우저에 기억됩니다
+index.html?server=http://192.168.0.10:8000      # 한 번 열면 브라우저에 기억됩니다
 index.html?server=                              # 기억된 주소 초기화
 ```
+
+**`?server=` 는 허용 목록에 든 출처만 받습니다.** 링크 하나로 심을 수 있는 값이라, 그대로
+믿으면 `admin.html?server=https://공격자` 한 번에 관리자 토큰이 그쪽으로 나갑니다.
+받아 주는 것은 같은 원점 · 루프백(`localhost`·`127.x`, 포트 무관) · 페이지를 로컬/사설망에서
+열었을 때의 사설망 주소 · `config.js` 의 `ALLOWED_SERVER_ORIGINS` 뿐입니다. 그 밖의 주소는
+저장하지 않고(이미 저장돼 있던 것도 지웁니다) 콘솔에 경고를 남깁니다. 관리자 토큰도 허용
+출처로 가는 요청에만 붙습니다(`api.js` `buildHeaders`).
+**ngrok 터널**은 누구나 서브도메인을 만들 수 있어 통째로 열지 않습니다 — 시연할 터널 주소를
+`ALLOWED_SERVER_ORIGINS` 에 한 줄 넣고 쓰세요(커밋하지 말 것). 회귀 검사는
+`node tools/test-server-allowlist.js`.
 
 ### 서버 없이 보기 — 보관판
 
@@ -91,7 +101,9 @@ REPORT_PROVIDER=claude python tools/record-archive.py http://127.0.0.1:8000
 
 `localhost` 대신 `127.0.0.1` 을 쓰세요 — Windows 에서는 `localhost` 가 IPv6 를 먼저
 두드려 요청마다 2초씩 늦어집니다(정류장 프로필 2,866건이라 차이가 큽니다).
-백엔드를 다시 켜면 `?server=` 로 붙거나 `config.js` 의 `SERVER_URLS` 에 주소를 되돌리면 됩니다.
+백엔드를 다시 켜면 `config.js` 의 `SERVER_URLS` 에 주소를 되돌리거나, `ALLOWED_SERVER_ORIGINS`
+에 넣고 `?server=` 로 붙으면 됩니다. 옛 EC2 주소(sslip.io)를 그대로 허용해 두지 마세요 —
+반납된 공인 IP 는 남에게 다시 배정됩니다.
 
 ---
 

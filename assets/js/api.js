@@ -96,15 +96,28 @@
 
   /* 헤더 구성 — 일반 호출과 스트리밍 호출이 같이 씁니다. 두 곳에 복붙해 두면
      ngrok 우회 헤더나 토큰 규칙이 바뀔 때 한쪽만 고치는 사고가 납니다. */
-  function buildHeaders(op, body, accept) {
+  /* 토큰을 거른 적이 있으면 한 번만 경고합니다(요청마다 찍으면 콘솔이 묻힙니다) */
+  var authWithheldWarned = false;
+
+  function buildHeaders(op, body, accept, url) {
     var headers = { 'Accept': accept ||
       (op.binary ? 'application/octet-stream, application/json' : 'application/json') };
     if (body) headers['Content-Type'] = 'application/json';
     /* ngrok 경고 페이지 우회 등 서버 주소에 따라 필요한 추가 헤더 (config.js) */
     for (var hk in (CONFIG.EXTRA_HEADERS || {})) headers[hk] = CONFIG.EXTRA_HEADERS[hk];
     if (CONFIG.AUTH && CONFIG.AUTH.enabled) {
+      /* 토큰은 허용 목록 출처로 가는 요청에만 붙입니다. config.js 가 ?server= 를
+         이미 거르지만, 주소는 useServer()·SERVER_URL 같은 다른 길로도 바뀔 수
+         있어서 실제로 나가는 URL 로 한 번 더 묻습니다. 판정 함수가 없는 구버전
+         config.js 와 섞이면 예전처럼 붙입니다. */
+      var allowed = typeof CONFIG.isAllowedServer !== 'function' || CONFIG.isAllowedServer(url);
       var tk = typeof CONFIG.AUTH.getToken === 'function' ? CONFIG.AUTH.getToken() : CONFIG.AUTH.getToken;
-      if (tk) headers[CONFIG.AUTH.header] = (CONFIG.AUTH.scheme ? CONFIG.AUTH.scheme + ' ' : '') + tk;
+      if (tk && allowed) {
+        headers[CONFIG.AUTH.header] = (CONFIG.AUTH.scheme ? CONFIG.AUTH.scheme + ' ' : '') + tk;
+      } else if (tk && !authWithheldWarned) {
+        authWithheldWarned = true;
+        console.warn('[api] 허용 목록 밖의 서버라 관리자 토큰을 붙이지 않았습니다: ' + url);
+      }
     }
     return headers;
   }
@@ -112,7 +125,7 @@
   /* --------------------------------------------------------- 실제 호출 */
   function httpCall(op, opId, params, body, opts) {
     var url = CONFIG.url(buildPath(op.path, params));
-    var headers = buildHeaders(op, body);
+    var headers = buildHeaders(op, body, null, url);
 
     var timeout = (opts && opts.timeout) || (op.long ? CONFIG.TIMEOUT_MS_REPORT : CONFIG.TIMEOUT_MS);
     var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -215,7 +228,7 @@
     sent.stream = true;
 
     var url = CONFIG.url(buildPath(op.path, null));
-    var headers = buildHeaders(op, sent, 'text/event-stream, application/json');
+    var headers = buildHeaders(op, sent, 'text/event-stream, application/json', url);
 
     /* 타임아웃은 **조각이 안 올 때만** 셉니다. 총량으로 재면 긴 답변이 중간에 잘립니다. */
     var idle = (CONFIG.TIMEOUT_MS_REPORT || 120000);

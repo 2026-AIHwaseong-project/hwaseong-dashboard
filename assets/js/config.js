@@ -24,9 +24,11 @@
    *      저장소를 클론한 모두가 죽은 주소를 보게 되고, 공개 저장소라면
    *      살아 있는 동안 누구나 그 PC 로 접근할 수 있습니다.
    *
-   *   시연 때는 코드를 고치지 말고 주소 뒤에 ?server= 를 붙이세요.
-   *      index.html?server=https://xxxx.ngrok-free.app
+   *   시연 때는 주소 뒤에 ?server= 를 붙이세요.
+   *      index.html?server=http://192.168.0.10:8000
    *   한 번 열면 브라우저에 기억되고, ?server= 만 붙이면 지워집니다.
+   *   단, **허용 목록에 든 출처만** 받습니다(아래 ALLOWED_SERVER_ORIGINS).
+   *   ngrok 같은 터널 주소는 그 목록에 한 줄 넣어야 붙습니다.
    * ================================================================== */
   /* ────────────────────────────────────────────────────────────────
      후보 목록 — 위에서부터 순서대로 두드려 보고 **먼저 응답하는 곳**에 붙습니다.
@@ -44,7 +46,7 @@
      즉 로컬이 항상 옳게 붙고, 배포본은 한 번 헛다리를 짚는 대신 항상 붙습니다.
 
      ⚠️ 터널 주소(ngrok 등)는 여기에 적어 커밋하지 마세요. 재시작마다 바뀝니다.
-        시연 때는 코드를 고치지 말고 ?server= 를 쓰세요(아래).
+        시연 때는 ALLOWED_SERVER_ORIGINS 에 넣고 ?server= 를 쓰세요(아래).
      ──────────────────────────────────────────────────────────────── */
   /* 2026-10 — EC2 는 비용 때문에 내렸습니다. 후보에 남겨 두면 방문할 때마다
      죽은 주소에서 2.5초씩 기다리므로 뺐습니다. 다시 켜면 ?server= 로 붙거나
@@ -59,6 +61,58 @@
      값이 있으면 탐색을 건너뛰고 그 주소로 고정합니다. */
   var SERVER_URL = '';
 
+  /* ── 서버 허용 목록 ─────────────────────────────────────────────────
+     ?server= 는 링크 하나로 심을 수 있고 localStorage 에 영속됩니다. 그대로
+     믿으면 admin.html?server=https://공격자 를 한 번 여는 것만으로 이후 모든
+     관리자 요청이 관리자 토큰을 달고 그쪽으로 나갑니다. 그래서 서버 주소로
+     받아 주는 출처를 정해 둡니다(관리자 토큰도 이 출처에만 붙습니다 — api.js).
+
+       · 이 페이지와 같은 원점          백엔드가 /app/ 으로 직접 서빙할 때
+       · 루프백(localhost·127.x·[::1]) 포트 무관 — 내 PC 안입니다
+       · 사설망(10.·172.16–31.·192.168.) 페이지 자체를 로컬/사설망에서 열었을 때만
+                                       (다른 PC 의 백엔드로 시연). 공개 배포본은 안 됩니다
+       · 아래 목록에 적은 출처
+
+     ngrok 같은 터널은 누구나 서브도메인을 만들 수 있으므로 와일드카드로 열지
+     않습니다. 시연에 쓸 터널 주소는 아래에 한 줄 넣으세요(커밋은 하지 말 것).
+     죽은 EC2 주소도 넣지 않습니다 — 클라우드 공인 IP 는 반납되면 남에게 다시
+     배정되므로, 그 주소를 허용해 두면 토큰을 남의 서버로 보내게 됩니다.
+     ──────────────────────────────────────────────────────────────── */
+  var ALLOWED_SERVER_ORIGINS = [
+    // 'https://xxxx.ngrok-free.app'    // 예) 시연용 터널 — 'https://호스트[:포트]' 형식
+  ];
+
+  var LOOPBACK_RE = /^(localhost|127(\.\d{1,3}){3}|\[::1\])$/;
+  var PRIVATE_RE = /^(10(\.\d{1,3}){3}|192\.168(\.\d{1,3}){2}|172\.(1[6-9]|2\d|3[01])(\.\d{1,3}){2})$/;
+
+  /** 페이지 자체가 내 PC·사설망에서 열렸나 */
+  function pageIsLocal() {
+    try {
+      return location.protocol === 'file:' ||
+        LOOPBACK_RE.test(location.hostname) || PRIVATE_RE.test(location.hostname);
+    } catch (e) { return false; }
+  }
+
+  function pageOrigin() {
+    try { return location.origin || (location.protocol + '//' + location.host); } catch (e) { return ''; }
+  }
+
+  /** 이 주소(서버 주소 또는 API 전체 URL)를 서버로 믿어도 되는가.
+      '' 와 상대 경로는 같은 원점입니다. */
+  function isAllowedServer(u) {
+    if (u === '' || u == null) return true;
+    var o;
+    try { o = new URL(String(u), (typeof location !== 'undefined' && location.href) || undefined); }
+    catch (e) { return false; }
+    if (o.protocol !== 'http:' && o.protocol !== 'https:') return false;
+    if (o.username || o.password) return false;      // https://허용호스트@공격자 류 혼동 차단
+    var origin = o.protocol + '//' + o.host;
+    if (origin === pageOrigin()) return true;
+    if (LOOPBACK_RE.test(o.hostname)) return true;
+    if (PRIVATE_RE.test(o.hostname) && pageIsLocal()) return true;
+    return ALLOWED_SERVER_ORIGINS.indexOf(origin) >= 0;
+  }
+
   /* URL 쿼리(?server=)로 덮어쓰기. 코드를 안 고치고 시연 대상을 바꾸기 위한 것.
      값이 있으면 localStorage 에 기억하고, 빈 값(?server=)이면 지웁니다.
      우선순위: ?server=(저장된 주소) → 위의 SERVER_URL → 자동 결정.
@@ -66,16 +120,30 @@
      SERVER_URL 이 채워져 있으면 ?server= 가 조용히 무시됐습니다. */
   /* 명시적으로 고정된 주소인가 — ?server= · localStorage · 위의 SERVER_URL.
      고정이면 탐색하지 않습니다. 사용자가 "이 서버를 봐라"라고 말한 것을
-     탐색이 뒤집으면 안 됩니다. */
+     탐색이 뒤집으면 안 됩니다. 단 허용 목록 밖의 주소는 고정하지 않습니다 —
+     ?server= 로 온 것은 저장하지 않고, 이미 저장돼 있던 것(이 방어가 생기기
+     전에 심어졌을 수 있습니다)은 지웁니다. */
   var PINNED = '';
+  var REJECTED = '';
   try {
     var _q = new URLSearchParams(location.search).get('server');
     if (_q !== null) {
-      if (_q) { localStorage.setItem('hw.serverUrl', _q); }
-      else { localStorage.removeItem('hw.serverUrl'); }
+      if (!_q) { localStorage.removeItem('hw.serverUrl'); }
+      else if (isAllowedServer(_q)) { localStorage.setItem('hw.serverUrl', _q); }
+      else { REJECTED = _q; }
     }
-    PINNED = localStorage.getItem('hw.serverUrl') || SERVER_URL || '';
+    var _saved = localStorage.getItem('hw.serverUrl') || '';
+    if (_saved && !isAllowedServer(_saved)) {
+      REJECTED = REJECTED || _saved;
+      localStorage.removeItem('hw.serverUrl');
+      _saved = '';
+    }
+    PINNED = _saved || SERVER_URL || '';
   } catch (e) { PINNED = SERVER_URL || ''; }
+  if (REJECTED) {
+    console.warn('[config] 허용 목록에 없는 서버 주소를 무시했습니다: ' + REJECTED +
+      '\n  필요한 주소라면 config.js 의 ALLOWED_SERVER_ORIGINS 에 추가하세요.');
+  }
 
   /* 자동 결정 규칙. 후보 목록의 '' 항목이 이 값으로 바뀝니다. */
   function autoBase() {
@@ -108,6 +176,9 @@
     /* 후보 목록과 고정 여부 — 화면에서 상태를 보여줄 때 씁니다 */
     SERVER_URLS: SERVER_URLS,
     SERVER_PINNED: !!PINNED,
+    /* 허용 목록 밖이라 무시한 ?server=(또는 저장돼 있던) 주소. 없으면 '' */
+    SERVER_REJECTED: REJECTED,
+    ALLOWED_SERVER_ORIGINS: ALLOWED_SERVER_ORIGINS,
 
     /* ------------------------------------------------------------------
      * [1-2] 추가 요청 헤더 (탐색 후 재계산됩니다)
@@ -301,6 +372,9 @@
     });
   };
 
+  /* 서버 허용 판정 — api.js 가 관리자 토큰을 붙이기 전에 요청 URL 로 다시 묻습니다 */
+  CONFIG.isAllowedServer = isAllowedServer;
+
   /* API 전체 URL 조합 */
   CONFIG.url = function (path) {
     var base = (CONFIG.BASE_URL || '').replace(/\/+$/, '');
@@ -370,8 +444,7 @@
        공개 배포본(Pages)에서는 localhost 후보를 두드리지 않습니다 — 최신 Chrome 은
        공개 사이트가 localhost 를 부르면 "로컬 네트워크 접근 허용" 권한 창을 띄워
        방문자에게 그 창부터 보이게 됩니다. */
-    var pageLocal = location.protocol === 'file:' ||
-      /^(localhost|127\.|\[::1\]|10\.|192\.168\.)/.test(location.hostname);
+    var pageLocal = pageIsLocal();
     var seen = {}, list = [];
     for (var i = 0; i < SERVER_URLS.length; i++) {
       var u = SERVER_URLS[i] === '' ? autoBase() : SERVER_URLS[i];
